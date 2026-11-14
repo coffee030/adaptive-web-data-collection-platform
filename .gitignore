@@ -1,0 +1,29 @@
+.m0-venv/
+.m0-venv-repro/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.env
+/.local/
+/logs/launcher/
+/var/evidence/
+/var/m2-postgres/
+/var/m4-closure-browsers/
+/var/m4-closure-captures/
+/var/m4-closure-*.yaml
+/var/m5-local/
+/Adaptive_Web_Data_Collection_Platform_Proposal(2).docx
+/ITP4524_Assignment_2627 v2 (2).docx
+
+# Impeccable local engine, runtime state, and per-developer overrides
+/.agents/skills/impeccable/scripts/bin/
+**/.impeccable/config.local.json
+**/.impeccable/hook.cache.json
+**/.impeccable/hook.pending.json
+**/.impeccable/*.png
+**/.impeccable/review/
+**/.impeccable/questions/
+**/.impeccable/mocks/
+**/.impeccable/live/*
+!**/.impeccable/live/config.json

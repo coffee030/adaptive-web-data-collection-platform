@@ -1,0 +1,4 @@
+interface:
+  display_name: "FYP Source Adapter"
+  short_description: "Build and test Scrapling collection adapters"
+  default_prompt: "Use $fyp-source-adapter to add a Scrapling adapter for our controlled product review website."

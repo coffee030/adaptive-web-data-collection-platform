@@ -1,0 +1,10 @@
+# M5 Issue and Progress Ledger
+
+| Batch | 狀態 | 實際進度及驗收證據 |
+| --- | --- | --- |
+| A — Baseline | COMPLETE | `feature/M5-core-stabilization` 自 `aabe865` 建立；無 remote；組員指引工作區 SHA-256 `895fdc22344e57bee7afc939b2fd267cd37f9fd7ef2082896842692c48ab355c`。`f36ae50` 記錄新的 [M4 決策](M4-final-closure-review.md#2026-11-14-使用者授權與驗收範圍更新)。實際 Docker image build 2.524 s（cached），初始化全新 PostgreSQL 至 API health 11.540 s（首次自動網段分配失敗，調整當次 project 的 subnet 後完成）。0006 head／drift check、Ruff、pip check、TS/Vite、Impeccable source、Chromium controlled 78/78 已通過。 [Architecture](../architecture/M5-core-architecture-review.md) |
+| B — Reliability and security | COMPLETE | 基線 backend 176 passed（216.18 s）。新 tests 首輪重現 robots 繞過、完整 URL logging、HTML 擷取結果放大；修正後 adapters／PostgreSQL M4 closure／M3 reliability & retry 共 120 passed（11.24 s）。Live baseline 13/14，trace 確認 Playwright 把 `DISPATCH_FAILED` 的錯誤明細列計入 event row count；修正為直接 event children 並核對每筆 error code，同一 outage fixture 重跑 2 passed（3.9 s）。 |
+| C — Evaluation | COMPLETE | 1／2 Linux prefork replicas 均完成 2 labelled＋12 warm Jobs，固定 fixture 預期、Evidence bytes、per-Job counts 及 replay 相符。4.30／4.40 Jobs/s，已記錄單／雙 replica RAM、CPU、timing 和 proposal target 差距。 [Plan](../evaluation/M5-core-evaluation-plan.md) · [Results](../evaluation/M5-core-evaluation-results.md) |
+| D — Reproducibility | COMPLETE | 已建置並驗證 fresh project、0006 migration、PostgreSQL 17.12／Redis 7.4.8、Celery task 和 Vite build。修正版六服務停止皆 exit 0／OOM=false；重啟到 health 5.623 s，6 個 JSON response bodies 相同，3 volumes 保留，CSV 真實 bytes 維持相同 SHA-256。 [Runbook](../demo/M5-core-demo-runbook.md) |
+| E — Contracts | COMPLETE | 對照即時 OpenAPI 的 18 個 path templates、30 個 components，以及 Python DTO／SQL constraints，完成 terminal-job consumption、必有／nullable 欄位、lineage 和 Proposal FR01–15／D1–9 matrix。延期實機檢查獨立追蹤。 |
+| F — RC | COMPLETE | **M5 CORE RC GO**。182 backend、78 Chromium controlled、14 Chromium live、Firefox／WebKit 各 6 live＋2 polling。TS/build、Ruff、Alembic、axe 56 次、Impeccable 44 次 renders 及 source scan 通過；最終 fresh Docker 11.295 s 到 health，兩個 M5 projects 均正常停止。 [Final tests](M5-test-results.md) · [Readiness](M5-readiness-review.md) |

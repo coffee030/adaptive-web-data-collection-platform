@@ -1,0 +1,15 @@
+-r experiments/scrapling_spike/requirements.txt
+annotated-types==0.8.0
+pydantic==2.14.3
+pydantic-core==2.50.4
+typing-inspection==0.4.5
+SQLAlchemy==2.0.57
+alembic==1.20.1
+psycopg[binary]==3.3.9
+python-dotenv==1.2.4
+fastapi==0.162.7
+uvicorn==0.54.0
+httpx2==2.16.0
+celery==5.6.3
+kombu==5.6.2
+redis==5.2.1

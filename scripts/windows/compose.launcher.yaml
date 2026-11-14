@@ -1,0 +1,27 @@
+x-owner: &owner
+  org.adaptive-web.launcher-owner: "${LAUNCHER_OWNER:?missing launcher owner}"
+
+x-backend: &backend
+  image: "${COMPOSE_PROJECT_NAME}-backend:local"
+  labels: *owner
+
+services:
+  postgres:
+    labels: *owner
+  redis:
+    labels: *owner
+  api: *backend
+  worker: *backend
+  dispatcher: *backend
+
+networks:
+  default:
+    labels: *owner
+
+volumes:
+  postgres_data:
+    labels: *owner
+  evidence_data:
+    labels: *owner
+  redis_data:
+    labels: *owner

@@ -1,0 +1,67 @@
+.job-create {
+  max-inline-size: 760px;
+}
+
+.job-create .profile-body {
+  max-inline-size: 100%;
+}
+
+.job-create select {
+  text-overflow: ellipsis;
+}
+
+.job-create textarea {
+  font-family: var(--mono);
+}
+
+.job-create .muted, .job-monitor {
+  text-wrap: pretty;
+}
+
+.job-entry {
+  padding-block-start: var(--md);
+  border-block-start: 1px solid var(--divider);
+}
+
+.job-form-note {
+  margin-block-start: var(--sm);
+  overflow-wrap: anywhere;
+}
+
+.job-monitor {
+  padding: var(--sm) var(--md);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 480px) {
+  .job-create :is(input, select, textarea) {
+    min-block-size: 44px;
+  }
+}
+
+.topic-options { margin: 0; padding: 0; min-inline-size: 0; border: 0; }
+.topic-options legend, .guided-step h3 { margin: 0 0 var(--sm); font-size: 1rem; font-weight: 650; }
+.topic-option {
+  display: flex;
+  align-items: start;
+  gap: var(--sm);
+  padding: 12px var(--sm);
+  border-block-start: 1px solid var(--divider);
+  cursor: pointer;
+}
+.topic-option:last-child { border-block-end: 1px solid var(--divider); }
+.topic-option:has(:checked) { background: var(--selected); }
+.topic-option:has(:disabled) { color: var(--text-secondary); cursor: default; }
+.topic-option > span { display: grid; font-size: 0.875rem; }
+.topic-option small { margin-block-start: var(--xs); }
+.guided-step, .guided-empty p + a { margin-block-start: var(--md); }
+.guided-empty a { display: inline-block; }
+.guided-step + .guided-step { padding-block-start: var(--md); border-block-start: 1px solid var(--divider); }
+.availability-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sm) var(--md); }
+.profile-review { display: grid; gap: var(--sm); padding: var(--md); background: var(--page); border-radius: var(--radius-compact); }
+.review-heading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sm) var(--md); }
+.review-heading h3 { margin: 0; font-size: 1rem; }
+.profile-review dl { display: grid; gap: var(--sm); overflow-wrap: anywhere; }
+.profile-review dt { font-size: 0.875rem; font-weight: 650; }
+.profile-review dd, .profile-review p { font-size: 0.875rem; }

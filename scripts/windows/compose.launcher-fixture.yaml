@@ -1,0 +1,10 @@
+services:
+  collection-fixture:
+    image: "${COMPOSE_PROJECT_NAME}-backend:local"
+    labels:
+      org.adaptive-web.launcher-owner: "${LAUNCHER_OWNER:?missing launcher owner}"
+
+networks:
+  fixtures:
+    labels:
+      org.adaptive-web.launcher-owner: "${LAUNCHER_OWNER:?missing launcher owner}"

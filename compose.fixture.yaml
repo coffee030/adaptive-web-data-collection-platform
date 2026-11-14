@@ -1,0 +1,37 @@
+services:
+  api:
+    environment:
+      M3_COMPOSE_FIXTURE: "1"
+    depends_on:
+      collection-fixture:
+        condition: service_healthy
+    networks:
+      - default
+      - fixtures
+
+  worker:
+    environment:
+      M3_COMPOSE_FIXTURE: "1"
+    depends_on:
+      collection-fixture:
+        condition: service_healthy
+    networks:
+      - default
+      - fixtures
+
+  collection-fixture:
+    stop_signal: SIGINT
+    build: .
+    image: collection-backend:local
+    command: ["python", "-m", "backend.tests.m3_fixture_site"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/robots.txt', timeout=2).close()"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - fixtures
+
+networks:
+  fixtures:
+    internal: true

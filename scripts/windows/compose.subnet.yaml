@@ -1,0 +1,5 @@
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: "${LAUNCHER_SUBNET:?missing launcher subnet}"

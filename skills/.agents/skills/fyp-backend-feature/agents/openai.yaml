@@ -1,0 +1,4 @@
+interface:
+  display_name: "FYP Backend Feature"
+  short_description: "Build FastAPI, PostgreSQL, and Celery features"
+  default_prompt: "Use $fyp-backend-feature to create a FastAPI endpoint to retrieve collection job events."

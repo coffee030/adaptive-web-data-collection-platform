@@ -1,0 +1,7 @@
+Key,Name,Count,Active,Note
+a1,North Trail,7,true,
+a2,River Walk,3,false,Open
+a1,Duplicate Trail,5,true,
+a3,,9,true,
+a4,Lake View,many,false,
+too,short

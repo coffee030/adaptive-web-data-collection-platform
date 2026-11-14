@@ -1,0 +1,5 @@
+networks:
+  fixtures:
+    ipam:
+      config:
+        - subnet: "${LAUNCHER_FIXTURE_SUBNET:?missing launcher fixture subnet}"
