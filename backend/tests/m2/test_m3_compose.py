@@ -454,16 +454,13 @@ def test_compose_multi_page_lineage_survives_worker_loss_and_postgres_restart(co
         wait_for(lambda: client.get("/api/v1/health").status_code == 200)
         assert command("ps", "-q", "postgres") == postgres_id
         assert snapshot(client, paths) == before
+        approved_id = UUID(approved["profile_version_id"])
         for capture, (location, raw) in zip(pages, PAGES.items(), strict=True):
             assert capture["original_location"] == origin + location
-            assert capture["profile_version_id"] == approved["profile_version_id"]
+            assert UUID(capture["profile_version_id"]) == approved_id
             evidence_id = UUID(capture["evidence_id"])
-            assert (
-                snapshot(client, [f"/api/v1/evidence/{evidence_id}"])[
-                    f"/api/v1/evidence/{evidence_id}"
-                ]
-                == capture
-            )
+            detail = f"/api/v1/evidence/{evidence_id}"
+            assert snapshot(client, [detail])[detail] == capture
             assert capture["content_hash"] == hashlib.sha256(raw).hexdigest()
             for service in ("api", "worker"):
                 assert (
