@@ -76,18 +76,14 @@ class JobExecutor:
             row = self.jobs._get_row(session, job.job_id, lock=True)
             if not self.jobs.owns_attempt(session, row, job.execution_attempt):
                 return job_from_row(row)
-            if (
-                status == "failed"
-                and result.error
-                and row.execution_attempt < MAX_ATTEMPTS
-            ):
+            if result.error and row.execution_attempt < MAX_ATTEMPTS:
                 delay = retry_delay(result.error, row.execution_attempt)
                 if delay is not None:
-                    if result.evidence:
+                    for evidence in result.all_evidence:
                         LOGGER.info(
                             "Job %s retry left unreferenced evidence %s",
                             row.id,
-                            result.evidence.evidence_id,
+                            evidence.evidence_id,
                         )
                     return self.jobs.retry(session, row, result.error, delay)
             publish_results(session, row, result, self.evidence)

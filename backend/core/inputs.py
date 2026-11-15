@@ -26,6 +26,7 @@ class CapturedInput:
     requested_location: str | None = None
     captured_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     retry_after_seconds: int | None = None
+    page_number: int = 1
 
 
 class InputError(ValueError):

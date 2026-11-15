@@ -61,10 +61,15 @@ class IngestionResult:
 
 
 def ingest(
-    candidates: list[CandidateRecord], schema: RecordSchema, source_id: str
+    candidates: list[CandidateRecord],
+    schema: RecordSchema,
+    source_id: str,
+    *,
+    seen: set[str] | None = None,
 ) -> IngestionResult:
     result = IngestionResult([], [], [])
-    seen = set()
+    if seen is None:
+        seen = set()
     names = {field.name for field in schema.fields}
     for candidate in candidates:
         problems = list(candidate.problems)

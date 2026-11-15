@@ -1,6 +1,7 @@
 """Read a single controlled HTML document through Scrapling."""
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from cssselect import SelectorSyntaxError
 from curl_cffi import CurlError
 from curl_cffi.curl import CURL_WRITEFUNC_ERROR
 from curl_cffi.requests.exceptions import Timeout
+from scrapling import Selector
 from scrapling.core.utils import reset_logger, set_logger
 from scrapling.fetchers import Fetcher
 
@@ -42,6 +44,9 @@ TIMEOUT_SECONDS = 2
 REDIRECTS = {301, 302, 303, 307, 308}
 PRIVATE_FETCH_LOG = logging.getLogger(__name__ + ".scrapling")
 PRIVATE_FETCH_LOG.disabled = True
+PERCENT_ESCAPE = re.compile(r"%([0-9a-fA-F]{2})")
+INVALID_ESCAPE = re.compile(r"%(?![0-9a-fA-F]{2})")
+UNRESERVED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
 
 
 def checked_url(source: Source, url: str) -> tuple[str, str]:
@@ -69,16 +74,22 @@ def checked_url(source: Source, url: str) -> tuple[str, str]:
 
 
 def capture_html(
-    source: Source, entry: WebInput, *, check_access: Callable[[], object] | None = None
+    source: Source,
+    entry: WebInput,
+    *,
+    check_access: Callable[[], object] | None = None,
+    visited: set[str] | None = None,
 ) -> CapturedInput:
     if source.approval_status != "approved":
         raise InputError("source_not_approved", "Source access is not authorized")
     current, origin = checked_url(source, entry.url)
     requested = current
+    if visited is not None:
+        _check_unvisited(current, visited)
     if check_access is not None:
         check_access()
     robots = _robots_policy(origin)
-    seen = {current}
+    seen = {url_key(current)}
     for hop in range(MAX_REDIRECTS + 1):
         if not robots.can_fetch(USER_AGENT, current):
             raise InputError(
@@ -86,6 +97,8 @@ def capture_html(
             )
         if check_access is not None:
             check_access()
+        if visited is not None:
+            visited.add(url_key(current))
         document, location, challenged = _get(current)
         document = replace(document, requested_location=requested)
         if challenged:
@@ -103,22 +116,23 @@ def capture_html(
                 capture=document,
             )
         try:
-            if any(ord(char) <= 32 or char in "\\\x7f" for char in location):
-                raise ValueError("Invalid redirect characters")
-            target, target_origin = checked_url(source, urljoin(current, location))
+            target = _same_origin_link(source, current, location)
         except ValueError as error:
             raise InputError(
                 "redirect_denied",
                 "Redirect destination is outside policy",
                 capture=document,
             ) from error
-        if target_origin != origin or target in seen:
+        target_key = url_key(target)
+        if target_key in seen:
             raise InputError(
                 "redirect_denied",
-                "Cross-origin redirect or redirect loop",
+                "Controlled redirect loop",
                 capture=document,
             )
-        seen.add(target)
+        if visited is not None:
+            _check_unvisited(target, visited, capture=document)
+        seen.add(target_key)
         current = target
 
     if document.http_status != 200:
@@ -136,6 +150,82 @@ def capture_html(
             capture=document,
         )
     return document
+
+
+def _same_origin_link(source: Source, current: str, reference: str) -> str:
+    if (
+        not reference
+        or len(reference) > 2048
+        or any(ord(char) <= 32 or char in "\\\x7f" for char in reference)
+        or INVALID_ESCAPE.search(reference)
+    ):
+        raise ValueError("Malformed link")
+    parts = urlsplit(reference)
+    if not parts.netloc and (parts.scheme or reference.startswith("//")):
+        raise ValueError("Malformed link authority")
+    target, _ = checked_url(source, urljoin(current, reference))
+    if urlsplit(target).netloc != urlsplit(current).netloc:
+        raise ValueError("Cross-origin link")
+    return target
+
+
+def url_key(url: str) -> str:
+    parts = urlsplit(url)
+
+    def normalize(match: re.Match[str]) -> str:
+        char = chr(int(match[1], 16))
+        return char if char in UNRESERVED else match[0].upper()
+
+    return parts._replace(
+        path=PERCENT_ESCAPE.sub(normalize, parts.path or "/"),
+        query=PERCENT_ESCAPE.sub(normalize, parts.query),
+        fragment="",
+    ).geturl()
+
+
+def _check_unvisited(
+    target: str, visited: set[str], *, capture: CapturedInput | None = None
+) -> None:
+    if url_key(target) in visited:
+        raise InputError(
+            "pagination_loop", "Pagination revisited a requested URL", capture=capture
+        )
+
+
+def next_page(
+    source: Source,
+    document: CapturedInput,
+    config: ExtractionConfiguration,
+    visited: set[str],
+) -> WebInput | None:
+    pagination = config.pagination
+    if pagination is None:
+        return None
+    page = Selector(
+        _decode_html(document), url=document.location, adaptive=False, huge_tree=False
+    )
+    try:
+        links = Query(config.selector_type, pagination.next_link_selector).select(page)
+    except (SelectorSyntaxError, TypeError, ValueError) as error:
+        raise InputError(
+            "invalid_next_selector", "Next-link selector is invalid"
+        ) from error
+    if not links:
+        return None
+    link = links.first
+    if len(links) != 1 or link.tag != "a" or not link.attrib.get("href"):
+        raise InputError(
+            "invalid_next_url",
+            "Next-link selector must match a single anchor with href",
+        )
+    try:
+        target = _same_origin_link(source, document.location, link.attrib["href"])
+    except ValueError as error:
+        raise InputError(
+            "invalid_next_url", "Next-page destination is outside policy or malformed"
+        ) from error
+    _check_unvisited(target, visited)
+    return WebInput(target)
 
 
 def _robots_policy(origin: str) -> RobotFileParser:
@@ -243,17 +333,20 @@ def _parse_content_type(document: CapturedInput) -> Message:
     return message
 
 
-def html_candidates(
-    document: CapturedInput, config: ExtractionConfiguration
-) -> list[CandidateRecord]:
+def _decode_html(document: CapturedInput) -> str:
     encoding = _parse_content_type(document).get_content_charset() or "utf-8"
     try:
-        html = document.body.decode(encoding)
+        return document.body.decode(encoding)
     except (LookupError, UnicodeDecodeError) as error:
         raise InputError(
             "invalid_encoding", "HTML bytes do not match the response encoding"
         ) from error
 
+
+def html_candidates(
+    document: CapturedInput, config: ExtractionConfiguration
+) -> list[CandidateRecord]:
+    html = _decode_html(document)
     rules = {
         field.name: Field(
             Query(field.selector_type or config.selector_type, field.selector),

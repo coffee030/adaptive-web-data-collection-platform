@@ -29,6 +29,7 @@ Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Scalar = str | int | float | bool | None
 AdapterType = Literal["web", "csv"]
 SchemaVersion = Literal["1"]
+MAX_HTML_PAGES = 5
 
 
 class Contract(BaseModel):
@@ -145,11 +146,20 @@ class ProfileConfiguration(Contract):
         return hashlib.sha256(canonical_json(self.model_dump(mode="json"))).hexdigest()
 
 
+class NextLinkPagination(Contract):
+    next_link_selector: SelectorText
+    max_pages: Annotated[int, Field(strict=True, ge=1, le=MAX_HTML_PAGES)]
+
+
 class ExtractionConfiguration(ProfileConfiguration):
     adapter_type: Literal["web"] = "web"
     selector_type: Literal["css", "xpath"]
     item_selector: SelectorText
     fields: Annotated[tuple[ExtractionField, ...], Field(min_length=1, max_length=64)]
+    # Omitting absent pagination preserves hashes of existing approved profiles.
+    pagination: NextLinkPagination | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("fields")
     @classmethod
@@ -288,6 +298,7 @@ class EvidenceReference(Contract):
     content_hash: Sha256
     http_status: int | None = None
     content_type: str | None = None
+    page_number: Positive = 1
 
 
 class Provenance(Contract):
@@ -312,6 +323,9 @@ class GenericRecord(Contract):
 class RecordRejection(Contract):
     source_position: SourcePosition
     problems: tuple[RecordProblem, ...]
+    evidence_reference: Name | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CollectionRunResult(Contract):
@@ -323,3 +337,10 @@ class CollectionRunResult(Contract):
     invalid: tuple[RecordRejection, ...] = ()
     duplicates: tuple[RecordRejection, ...] = ()
     error: CollectionError | None = None
+    additional_evidence: tuple[EvidenceReference, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+
+    @property
+    def all_evidence(self) -> tuple[EvidenceReference, ...]:
+        return ((self.evidence,) if self.evidence else ()) + self.additional_evidence

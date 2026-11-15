@@ -39,6 +39,11 @@ def get_job_evidence(request: Request, job_id: UUID):
     return request.app.state.results.job_evidence(job_id)
 
 
+@router.get("/collection-jobs/{job_id}/evidence-pages", response_model=list[Evidence])
+def list_job_evidence(request: Request, job_id: UUID):
+    return request.app.state.results.job_evidence_pages(job_id)
+
+
 @router.get(
     "/collection-jobs/{job_id}/quarantine", response_model=list[QuarantinedRecord]
 )

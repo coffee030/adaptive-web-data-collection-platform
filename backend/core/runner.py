@@ -1,6 +1,7 @@
 """Synchronous preview, validation, and controlled collection."""
 
 import hashlib
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -20,7 +21,7 @@ from .evidence import EvidenceError, LocalEvidenceStore
 from .ingestion import IngestionResult, ingest
 from .inputs import CapturedInput, CsvInput, InputError, WebInput
 from .profiles import ProfileError, ProfileRepository
-from .web_adapter import capture_html, html_candidates
+from .web_adapter import capture_html, html_candidates, next_page, url_key
 
 CollectionInput = WebInput | CsvInput
 
@@ -49,6 +50,12 @@ class CollectionRunner:
         try:
             document = self._capture(source, entry)
             result = self._process(draft, document)
+            config = draft.configuration
+            if isinstance(config, ExtractionConfiguration) and config.pagination:
+                visited = {url_key(document.location)}
+                if document.requested_location:
+                    visited.add(url_key(document.requested_location))
+                next_page(source, document, config, visited)
         except InputError as error:
             document = document or error.capture
             failure = error.error
@@ -73,35 +80,72 @@ class CollectionRunner:
         self, profile_version_id: str, entry: CollectionInput
     ) -> CollectionRunResult:
         run_id = uuid4().hex
-        evidence = None
+        evidence: list[EvidenceReference] = []
+        records = []
+        invalid = []
+        duplicates = []
+        failure = None
         try:
             profile, source = self.profiles.approved_for_run(profile_version_id)
-            try:
-                document = self._capture(source, entry)
-            except InputError as error:
-                if error.capture:
-                    evidence = self.evidence.save(error.capture, profile, run_id)
-                raise
-            evidence = self.evidence.save(document, profile, run_id)
-            processed = self._process(profile, document)
-        except InputError as error:
-            return self._failed(run_id, profile_version_id, error.error, evidence)
-        except (ProfileError, EvidenceError) as error:
-            return self._failed(
-                run_id,
-                profile_version_id,
-                CollectionError(code=error.code, message=str(error)),
-                evidence,
+            config = profile.configuration
+            pagination = (
+                config.pagination
+                if isinstance(config, ExtractionConfiguration)
+                else None
             )
+            max_pages = pagination.max_pages if pagination else 1
+            visited = set() if pagination else None
+            seen: set[str] = set()
+            for page_number in range(1, max_pages + 1):
+                try:
+                    document = self._capture(source, entry, visited=visited)
+                except InputError as error:
+                    if error.capture:
+                        evidence.append(
+                            self.evidence.save(
+                                replace(error.capture, page_number=page_number),
+                                profile,
+                                run_id,
+                            )
+                        )
+                    raise
+                capture = self.evidence.save(
+                    replace(document, page_number=page_number), profile, run_id
+                )
+                evidence.append(capture)
+                processed = self._process(profile, document, seen=seen)
+                records.extend(processed.records(config.record_schema, capture))
+                lineage = {"evidence_reference": capture.evidence_id}
+                invalid.extend(
+                    item.model_copy(update=lineage) for item in processed.invalid
+                )
+                duplicates.extend(
+                    item.model_copy(update=lineage) for item in processed.duplicates
+                )
 
-        failure = None
-        if not processed.valid:
+                if not isinstance(config, ExtractionConfiguration) or visited is None:
+                    break
+                following = next_page(source, document, config, visited)
+                if following is None:
+                    break
+                if page_number == max_pages:
+                    raise InputError(
+                        "page_limit_reached",
+                        "Next page exceeds the approved pagination limit",
+                    )
+                entry = following
+        except InputError as error:
+            failure = error.error
+        except (ProfileError, EvidenceError) as error:
+            failure = CollectionError(code=error.code, message=str(error))
+
+        if not records:
             status = "failed"
-            failure = CollectionError(
+            failure = failure or CollectionError(
                 code="no_valid_records",
                 message="All candidate records failed validation",
             )
-        elif processed.invalid:
+        elif failure or invalid:
             status = "partial"
         else:
             status = "completed"
@@ -109,19 +153,23 @@ class CollectionRunner:
             run_id=run_id,
             profile_version_id=profile_version_id,
             status=status,
-            evidence=evidence,
-            records=processed.records(profile.configuration.record_schema, evidence),
-            invalid=tuple(processed.invalid),
-            duplicates=tuple(processed.duplicates),
+            evidence=evidence[0] if evidence else None,
+            additional_evidence=tuple(evidence[1:]),
+            records=tuple(records),
+            invalid=tuple(invalid),
+            duplicates=tuple(duplicates),
             error=failure,
         )
 
-    def _capture(self, source: Source, entry: CollectionInput) -> CapturedInput:
+    def _capture(
+        self, source: Source, entry: CollectionInput, *, visited: set[str] | None = None
+    ) -> CapturedInput:
         if source.adapter_type == "web" and isinstance(entry, WebInput):
             return capture_html(
                 source,
                 entry,
                 check_access=lambda: self.profiles.require_authorized(source.source_id),
+                visited=visited,
             )
         if source.adapter_type == "csv" and isinstance(entry, CsvInput):
             return capture_csv(source, entry)
@@ -142,25 +190,15 @@ class CollectionRunner:
         raise InputError("input_adapter_mismatch", "Profile has an unsupported adapter")
 
     def _process(
-        self, profile: SourceProfileVersion, document: CapturedInput
+        self,
+        profile: SourceProfileVersion,
+        document: CapturedInput,
+        *,
+        seen: set[str] | None = None,
     ) -> IngestionResult:
         return ingest(
             self._candidates(profile, document),
             profile.configuration.record_schema,
             profile.source_id,
-        )
-
-    @staticmethod
-    def _failed(
-        run_id: str,
-        profile_version_id: str,
-        error: CollectionError,
-        evidence: EvidenceReference | None,
-    ) -> CollectionRunResult:
-        return CollectionRunResult(
-            run_id=run_id,
-            profile_version_id=profile_version_id,
-            status="failed",
-            evidence=evidence,
-            error=error,
+            seen=seen,
         )

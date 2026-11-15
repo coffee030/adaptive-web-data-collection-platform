@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.contracts import (
     Contract,
+    Positive,
     Provenance,
     RecordProblem,
     Scalar,
@@ -45,6 +46,7 @@ class Evidence(Contract):
     profile_version_id: UUID
     config_hash: Sha256
     run_id: UUID
+    page_number: Positive
     captured_at: datetime
     content_hash: Sha256
     content_type: str | None
@@ -98,6 +100,7 @@ def materialize_evidence(row: EvidenceRow, job: JobRow) -> Evidence:
         profile_version_id=job.profile_version_id,
         config_hash=job.config_hash,
         run_id=row.run_id,
+        page_number=row.page_number,
         captured_at=row.captured_at,
         content_hash=row.content_hash,
         content_type=row.content_type,
@@ -167,12 +170,18 @@ class Results:
             return materialize_evidence(*match)
 
     def job_evidence(self, job_id: UUID) -> Evidence | None:
+        pages = self.job_evidence_pages(job_id)
+        return pages[0] if pages else None
+
+    def job_evidence_pages(self, job_id: UUID) -> list[Evidence]:
         with self.sessions() as session:
             job = Jobs._get_row(session, job_id)
-            row = session.scalar(
-                select(EvidenceRow).where(EvidenceRow.job_id == job_id)
+            rows = session.scalars(
+                select(EvidenceRow)
+                .where(EvidenceRow.job_id == job_id)
+                .order_by(EvidenceRow.page_number)
             )
-            return materialize_evidence(row, job) if row is not None else None
+            return [materialize_evidence(row, job) for row in rows]
 
     def quarantine(
         self, job_id: UUID, limit: int, offset: int
@@ -181,8 +190,13 @@ class Results:
             job = Jobs._get_row(session, job_id)
             rows = session.scalars(
                 select(QuarantineRow)
+                .join(EvidenceRow, QuarantineRow.evidence_id == EvidenceRow.id)
                 .where(QuarantineRow.job_id == job_id)
-                .order_by(QuarantineRow.position_index, QuarantineRow.id)
+                .order_by(
+                    EvidenceRow.page_number,
+                    QuarantineRow.position_index,
+                    QuarantineRow.id,
+                )
                 .offset(offset)
                 .limit(limit)
             )
