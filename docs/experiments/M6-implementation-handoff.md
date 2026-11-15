@@ -28,6 +28,20 @@
 
 ## D. Testing Evidence
 
+### Draft PR HEAD 最終完整回歸
+
+2026-11-16（香港時間），針對 [Draft PR #1 的受測提交 `654134983654aaeabb63c4de7d36d4f3e5784c72`](https://github.com/coffee030/adaptive-web-data-collection-platform/commit/654134983654aaeabb63c4de7d36d4f3e5784c72) 執行完整 backend suite。**200 passed in 323.88s (0:05:23)**，pytest exit code `0`。JUnit 確認 200 項、0 失敗、0 錯誤、0 跳過。
+
+以 GitHub commit tree `7faadfa697c56c3beb1959750f43df30511aded9` 建立隔離快照，測試前後逐一核對 287 個檔案的 Git blob SHA。由該快照建立 Docker image，使用全新 PostgreSQL、Redis、Celery prefork worker 及 fixture 容器。Alembic 顯示 `0007 (head)`。首次 API 健康檢查收到空回應，改用有限次重試後取得 `{"status":"ok"}`，然後執行一次完整 pytest suite。pytest 使用 Python 3.12.14 與 pytest 9.2.0。
+
+```powershell
+& $python -m pytest -q -rs -s --tb=short --junitxml=../backend-regression.xml backend/tests
+```
+
+三個 live Compose 案例全數通過，涵蓋 Redis 中斷、prefork worker 強制終止及 PostgreSQL restart。多頁 Job `2f28f4c1-049a-453c-b710-872015ad3d91` 在第二次 attempt 復原並在重啟後保留三頁 Evidence。測試後已停止隔離 Compose project `collection-m3-test-m6-regression-6541349` 並保留其 named volumes。主機上的 `backend-regression.log` 和 `backend-regression.xml` 位於忽略目錄 `.local/m6-regression-6541349/`。
+
+### 實作期間的驗證紀錄
+
 | 實際命令 | 結果 |
 | --- | --- |
 | `.\.venv\Scripts\python.exe -m pytest -q -rs --tb=short backend/tests` | 修改前 135 passed，48 skipped |
@@ -75,7 +89,7 @@ Backend 使用 `M2_TEST_DATABASE_URL` 指向隔離 PostgreSQL (`127.0.0.1:55436`
 
 | 條件 | 狀態 | 實際證據 |
 | --- | --- | --- |
-| M5.5 Core、Dashboard 和 launcher 回歸 | PASS | Live HTML／CSV、86 項 Chrome 測試、23 項 launcher 測試 |
+| M5.5 Core、Dashboard 和 launcher 回歸 | PASS | PR HEAD 完整 backend suite 200 項全數通過，另有 Live HTML／CSV、86 項 Chrome 測試、23 項 launcher 測試 |
 | 一個 Job 遍歷至少三個受控 HTML 頁面 | PASS | Browser Job `9d3ea0d0-d827-4b9c-8813-603981ef2738`，3 個 Evidence objects |
 | Page limit、URL loop 與 authorized-origin／redirect 控制 | PASS | HTTP fixture 驗證下一頁未發送、fragment／encoding alias、跨源目標、redirect loop 及相對 URL |
 | Accepted Record 正確連回各頁 | PASS | 3 筆 Records 參照不同的 Page 1–3 Evidence |
