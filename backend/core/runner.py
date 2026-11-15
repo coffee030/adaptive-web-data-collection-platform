@@ -1,8 +1,10 @@
 """Synchronous preview, validation, and controlled collection."""
 
 import hashlib
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
+from os import environ
 from uuid import uuid4
 
 from .contracts import (
@@ -19,25 +21,32 @@ from .contracts import (
 from .csv_adapter import capture_csv, csv_candidates
 from .evidence import EvidenceError, LocalEvidenceStore
 from .ingestion import IngestionResult, ingest
-from .inputs import CapturedInput, CsvInput, InputError, WebInput
+from .inputs import CapturedInput, CsvInput, InputError, KeywordInput, WebInput
+from .origin_rate import OriginRate
 from .profiles import ProfileError, ProfileRepository
+from .search import SearchTraversal, initial_input
 from .web_adapter import capture_html, html_candidates, next_page, url_key
 
-CollectionInput = WebInput | CsvInput
+CollectionInput = WebInput | KeywordInput | CsvInput
 
 
 class CollectionRunner:
     def __init__(
-        self, profiles: ProfileRepository, evidence: LocalEvidenceStore
+        self,
+        profiles: ProfileRepository,
+        evidence: LocalEvidenceStore,
+        *,
+        rate: OriginRate | None = None,
     ) -> None:
         self.profiles = profiles
         self.evidence = evidence
+        self.rate = rate
 
     def preview(
         self, profile_version_id: str, entry: CollectionInput
     ) -> tuple[CandidateRecord, ...]:
         draft, source = self.profiles.draft_for_preview(profile_version_id)
-        document = self._capture(source, entry)
+        document = self._sample(draft, source, entry)
         return tuple(self._candidates(draft, document)[:5])
 
     def validate(
@@ -48,7 +57,7 @@ class CollectionRunner:
         result = None
         failure = None
         try:
-            document = self._capture(source, entry)
+            document = self._sample(draft, source, entry)
             result = self._process(draft, document)
             config = draft.configuration
             if isinstance(config, ExtractionConfiguration) and config.pagination:
@@ -88,32 +97,42 @@ class CollectionRunner:
         try:
             profile, source = self.profiles.approved_for_run(profile_version_id)
             config = profile.configuration
-            pagination = (
-                config.pagination
-                if isinstance(config, ExtractionConfiguration)
-                else None
+            search = self._search(source, config)
+            if isinstance(config, ExtractionConfiguration):
+                if isinstance(entry, CsvInput):
+                    raise InputError(
+                        "input_adapter_mismatch",
+                        "Input type does not match the approved source adapter",
+                    )
+                entry = initial_input(source, config, entry)
+            documents = (
+                search.documents(entry)
+                if search
+                else self._documents(source, config, entry)
             )
-            max_pages = pagination.max_pages if pagination else 1
-            visited = set() if pagination else None
             seen: set[str] = set()
-            for page_number in range(1, max_pages + 1):
-                try:
-                    document = self._capture(source, entry, visited=visited)
-                except InputError as error:
-                    if error.capture:
-                        evidence.append(
-                            self.evidence.save(
-                                replace(error.capture, page_number=page_number),
-                                profile,
-                                run_id,
-                            )
-                        )
-                    raise
+            for page_number, (document, extract_records) in enumerate(
+                documents, start=1
+            ):
                 capture = self.evidence.save(
                     replace(document, page_number=page_number), profile, run_id
                 )
                 evidence.append(capture)
-                processed = self._process(profile, document, seen=seen)
+                if not extract_records:
+                    continue
+                try:
+                    processed = self._process(profile, document, seen=seen)
+                except InputError as error:
+                    if search and error.error.code in {
+                        "no_records",
+                        "invalid_selector",
+                        "invalid_encoding",
+                        "row_limit",
+                        "extraction_size_limit",
+                    }:
+                        search.failure = search.failure or error
+                        continue
+                    raise
                 records.extend(processed.records(config.record_schema, capture))
                 lineage = {"evidence_reference": capture.evidence_id}
                 invalid.extend(
@@ -123,17 +142,8 @@ class CollectionRunner:
                     item.model_copy(update=lineage) for item in processed.duplicates
                 )
 
-                if not isinstance(config, ExtractionConfiguration) or visited is None:
-                    break
-                following = next_page(source, document, config, visited)
-                if following is None:
-                    break
-                if page_number == max_pages:
-                    raise InputError(
-                        "page_limit_reached",
-                        "Next page exceeds the approved pagination limit",
-                    )
-                entry = following
+            if search and search.failure:
+                failure = search.failure.error
         except InputError as error:
             failure = error.error
         except (ProfileError, EvidenceError) as error:
@@ -160,6 +170,59 @@ class CollectionRunner:
             duplicates=tuple(duplicates),
             error=failure,
         )
+
+    def _search(self, source: Source, config) -> SearchTraversal | None:
+        if not isinstance(config, ExtractionConfiguration) or not config.search:
+            return None
+        rate = self.rate or OriginRate(
+            environ.get("CELERY_BROKER_URL") or "redis://127.0.0.1:6379/0"
+        )
+        return SearchTraversal(
+            source,
+            config,
+            rate,
+            lambda: self.profiles.require_authorized(source.source_id),
+        )
+
+    def _sample(
+        self, draft: SourceProfileVersion, source: Source, entry: CollectionInput
+    ) -> CapturedInput:
+        config = draft.configuration
+        if isinstance(config, ExtractionConfiguration) and not isinstance(
+            entry, CsvInput
+        ):
+            entry = initial_input(source, config, entry)
+            if search := self._search(source, config):
+                return search.sample(entry)
+        return self._capture(source, entry)
+
+    def _documents(
+        self, source: Source, config, entry: CollectionInput
+    ) -> Iterator[tuple[CapturedInput, bool]]:
+        pagination = (
+            config.pagination if isinstance(config, ExtractionConfiguration) else None
+        )
+        max_pages = pagination.max_pages if pagination else 1
+        visited = set() if pagination else None
+        for page_number in range(1, max_pages + 1):
+            try:
+                document = self._capture(source, entry, visited=visited)
+            except InputError as error:
+                if error.capture:
+                    yield error.capture, False
+                raise
+            yield document, True
+            if visited is None:
+                return
+            following = next_page(source, document, config, visited)
+            if following is None:
+                return
+            if page_number == max_pages:
+                raise InputError(
+                    "page_limit_reached",
+                    "Next page exceeds the approved pagination limit",
+                )
+            entry = following
 
     def _capture(
         self, source: Source, entry: CollectionInput, *, visited: set[str] | None = None

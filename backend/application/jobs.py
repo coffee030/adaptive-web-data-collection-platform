@@ -9,7 +9,13 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.core.contracts import CollectionError, Contract, canonical_json
+from backend.core.contracts import (
+    MAX_JOB_ATTEMPTS,
+    CollectionError,
+    Contract,
+    ExtractionConfiguration,
+    canonical_json,
+)
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.persistence.models import EventRow, JobRow
 from backend.persistence.profiles import (
@@ -23,7 +29,7 @@ from .inputs import Entry, check_entry
 JobStatus = Literal["pending", "running", "succeeded", "partial", "failed"]
 TERMINAL = frozenset({"succeeded", "partial", "failed"})
 LEASE_DURATION = timedelta(seconds=90)
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = MAX_JOB_ATTEMPTS
 LOGGER = logging.getLogger(__name__)
 
 
@@ -124,7 +130,7 @@ class Jobs:
             ProfileRepository.from_snapshot(source, version).approved_for_run(
                 version.profile_version_id
             )
-            check_entry(source, entry.collection_input())
+            check_entry(source, version.configuration, entry.collection_input())
             row = JobRow(
                 id=uuid4(),
                 source_id=source_id,
@@ -257,8 +263,9 @@ class Jobs:
         delay: timedelta,
         *,
         kind: str = "RETRY_SCHEDULED",
+        attempt_limit: int | None = None,
     ) -> Job:
-        if row.execution_attempt >= MAX_ATTEMPTS:
+        if row.execution_attempt >= (attempt_limit or self.attempt_limit(session, row)):
             return self._finish(session, row, "failed", error=error)
         row.status = "pending"
         row.started_at = None
@@ -268,6 +275,16 @@ class Jobs:
         row.dispatch_due_at = row.next_attempt_at
         self._add_event(session, row, kind, error=error)
         return job_from_row(row)
+
+    @staticmethod
+    def attempt_limit(session: Session, row: JobRow) -> int:
+        profile = ProfileStorage(session).profile(row.source_id, row.profile_version_id)
+        if profile.configuration.get("search"):
+            configuration = ExtractionConfiguration.model_validate(
+                profile.configuration
+            )
+            return configuration.search.max_attempts
+        return MAX_ATTEMPTS
 
     def _finish(
         self,

@@ -1,5 +1,6 @@
 """Run M1 profile rules against transaction-scoped snapshots."""
 
+from functools import cached_property
 from hashlib import sha256
 from uuid import UUID
 
@@ -8,8 +9,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.contracts import Configuration, Sha256, Source, canonical_json
 from backend.core.evidence import LocalEvidenceStore
+from backend.core.origin_rate import OriginRate
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.core.runner import CollectionInput, CollectionRunner
+from backend.persistence.database import settings
 from backend.persistence.models import ProfileRow, SourceRow
 from backend.persistence.profiles import (
     ProfileStorage,
@@ -21,6 +24,12 @@ from backend.persistence.profiles import (
 class Profiles:
     def __init__(self, sessions: sessionmaker[Session]):
         self.sessions = sessions
+
+    @cached_property
+    def rate(self) -> OriginRate:
+        return OriginRate(
+            settings().get("CELERY_BROKER_URL") or "redis://127.0.0.1:6379/0"
+        )
 
     def register_source(self, source: Source) -> Source:
         with self.sessions.begin() as session:
@@ -126,7 +135,9 @@ class Profiles:
         evidence: LocalEvidenceStore,
     ):
         repo, _ = self._read_snapshot(source_id, version_id)
-        return CollectionRunner(repo, evidence).preview(version_id.hex, entry)
+        return CollectionRunner(repo, evidence, rate=self.rate).preview(
+            version_id.hex, entry
+        )
 
     def validate(
         self,
@@ -136,7 +147,9 @@ class Profiles:
         evidence: LocalEvidenceStore,
     ):
         repo, revision = self._read_snapshot(source_id, version_id)
-        report = CollectionRunner(repo, evidence).validate(version_id.hex, entry)
+        report = CollectionRunner(repo, evidence, rate=self.rate).validate(
+            version_id.hex, entry
+        )
         with self.sessions.begin() as session:
             storage, row, current = self._locked_snapshot(
                 session, source_id, version_id

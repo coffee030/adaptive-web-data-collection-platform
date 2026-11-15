@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.contracts import (
+    CaptureKind,
     Contract,
     Positive,
     Provenance,
@@ -47,6 +48,7 @@ class Evidence(Contract):
     config_hash: Sha256
     run_id: UUID
     page_number: Positive
+    capture_kind: CaptureKind
     captured_at: datetime
     content_hash: Sha256
     content_type: str | None
@@ -101,6 +103,7 @@ def materialize_evidence(row: EvidenceRow, job: JobRow) -> Evidence:
         config_hash=job.config_hash,
         run_id=row.run_id,
         page_number=row.page_number,
+        capture_kind=row.capture_kind,
         captured_at=row.captured_at,
         content_hash=row.content_hash,
         content_type=row.content_type,

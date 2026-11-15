@@ -89,7 +89,7 @@ def test_http_error_envelope_and_input_limit(pg_engine, tmp_path):
                 "source_name": "Web",
                 "adapter_type": "web",
                 "permission_reference": "fixture",
-                "allowed_origins": ["https://example.com"],
+                "allowed_origins": ["https://127.0.0.1"],
             },
         )
         assert denied.status_code == 400

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from email.message import Message
 from email.utils import parsedate_to_datetime
 from math import ceil
+from time import monotonic
 from urllib.parse import unquote, urldefrag, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
@@ -15,6 +16,7 @@ from cssselect import SelectorSyntaxError
 from curl_cffi import CurlError
 from curl_cffi.curl import CURL_WRITEFUNC_ERROR
 from curl_cffi.requests.exceptions import Timeout
+from lxml.etree import XPathError
 from scrapling import Selector
 from scrapling.core.utils import reset_logger, set_logger
 from scrapling.fetchers import Fetcher
@@ -22,9 +24,12 @@ from scrapling.fetchers import Fetcher
 from .contracts import (
     CandidateRecord,
     ExtractionConfiguration,
+    KeywordSearch,
+    NextLinkPagination,
     Source,
     SourcePosition,
     controlled_origin,
+    path_segments,
 )
 from .html_extraction import (
     ExtractionConfig,
@@ -34,6 +39,9 @@ from .html_extraction import (
     extract,
 )
 from .inputs import CapturedInput, InputError, WebInput
+from .origin_rate import OriginRate
+from .public_network import public_get, resolve_public
+from .robots import RobotsPolicy, parse_policy
 
 USER_AGENT = "FYP-Collection-Core/1.0"
 MAX_BODY_BYTES = 1024 * 1024
@@ -65,6 +73,28 @@ def checked_url(source: Source, url: str) -> tuple[str, str]:
         raise InputError(
             "destination_denied", "URL is outside the authorized controlled origins"
         )
+    if origin.startswith("https://") or origin in source.allowed_paths:
+        try:
+            if not url.isascii() or INVALID_ESCAPE.search(parts.query):
+                raise ValueError("Invalid URL encoding")
+            segments = path_segments(parts.path or "/")
+        except ValueError as error:
+            raise InputError(
+                "destination_denied", "Invalid controlled URL encoding or path"
+            ) from error
+        prefixes = source.allowed_paths.get(origin, ())
+        if prefixes and not any(
+            segments[: len(prefix)] == prefix
+            for prefix in (
+                path_segments(value)[:-1]
+                if value.endswith("/")
+                else path_segments(value)
+                for value in prefixes
+            )
+        ):
+            raise InputError(
+                "destination_denied", "URL path is outside the Source allowlist"
+            )
     # Reject ambiguous segments before robots sees a different path from the fetcher.
     for segment in parts.path.split("/"):
         decoded = unquote(segment)
@@ -79,27 +109,39 @@ def capture_html(
     *,
     check_access: Callable[[], object] | None = None,
     visited: set[str] | None = None,
+    requests: "SearchRequests | None" = None,
+    duplicate_code: str = "pagination_loop",
+    forbidden: set[str] | None = None,
 ) -> CapturedInput:
     if source.approval_status != "approved":
         raise InputError("source_not_approved", "Source access is not authorized")
     current, origin = checked_url(source, entry.url)
+    if requests is None and origin.startswith("https://"):
+        raise InputError(
+            "keyword_required", "Public HTTPS requires a keyword search profile"
+        )
     requested = current
     if visited is not None:
-        _check_unvisited(current, visited)
+        _check_unvisited(current, visited, code=duplicate_code)
     if check_access is not None:
         check_access()
-    robots = _robots_policy(origin)
+    robots = requests.robots(origin) if requests is not None else _robots_policy(origin)
+    max_redirects = (
+        requests.config.max_redirects if requests is not None else MAX_REDIRECTS
+    )
     seen = {url_key(current)}
-    for hop in range(MAX_REDIRECTS + 1):
+    for hop in range(max_redirects + 1):
         if not robots.can_fetch(USER_AGENT, current):
             raise InputError(
                 "robots_denied", "Controlled robots policy disallows the URL"
             )
-        if check_access is not None:
+        if check_access is not None and requests is None:
             check_access()
         if visited is not None:
             visited.add(url_key(current))
-        document, location, challenged = _get(current)
+        document, location, challenged = (
+            requests.get(origin, current) if requests is not None else _get(current)
+        )
         document = replace(document, requested_location=requested)
         if challenged:
             raise InputError(
@@ -109,7 +151,7 @@ def capture_html(
             )
         if document.http_status not in REDIRECTS:
             break
-        if not location or hop == MAX_REDIRECTS:
+        if not location or hop == max_redirects:
             raise InputError(
                 "redirect_denied",
                 "Missing Location or redirect limit exceeded",
@@ -124,6 +166,12 @@ def capture_html(
                 capture=document,
             ) from error
         target_key = url_key(target)
+        if forbidden is not None and target_key in forbidden:
+            raise InputError(
+                "invalid_detail_url",
+                "Detail redirected to a search page",
+                capture=document,
+            )
         if target_key in seen:
             raise InputError(
                 "redirect_denied",
@@ -131,7 +179,7 @@ def capture_html(
                 capture=document,
             )
         if visited is not None:
-            _check_unvisited(target, visited, capture=document)
+            _check_unvisited(target, visited, capture=document, code=duplicate_code)
         seen.add(target_key)
         current = target
 
@@ -164,7 +212,7 @@ def _same_origin_link(source: Source, current: str, reference: str) -> str:
     if not parts.netloc and (parts.scheme or reference.startswith("//")):
         raise ValueError("Malformed link authority")
     target, _ = checked_url(source, urljoin(current, reference))
-    if urlsplit(target).netloc != urlsplit(current).netloc:
+    if urlsplit(target)[:2] != urlsplit(current)[:2]:
         raise ValueError("Cross-origin link")
     return target
 
@@ -184,11 +232,15 @@ def url_key(url: str) -> str:
 
 
 def _check_unvisited(
-    target: str, visited: set[str], *, capture: CapturedInput | None = None
+    target: str,
+    visited: set[str],
+    *,
+    capture: CapturedInput | None = None,
+    code: str = "pagination_loop",
 ) -> None:
     if url_key(target) in visited:
         raise InputError(
-            "pagination_loop", "Pagination revisited a requested URL", capture=capture
+            code, "Collection traversal revisited a requested URL", capture=capture
         )
 
 
@@ -197,8 +249,10 @@ def next_page(
     document: CapturedInput,
     config: ExtractionConfiguration,
     visited: set[str],
+    *,
+    search_pagination: NextLinkPagination | None = None,
 ) -> WebInput | None:
-    pagination = config.pagination
+    pagination = search_pagination or config.pagination
     if pagination is None:
         return None
     page = Selector(
@@ -206,7 +260,7 @@ def next_page(
     )
     try:
         links = Query(config.selector_type, pagination.next_link_selector).select(page)
-    except (SelectorSyntaxError, TypeError, ValueError) as error:
+    except (SelectorSyntaxError, XPathError, TypeError, ValueError) as error:
         raise InputError(
             "invalid_next_selector", "Next-link selector is invalid"
         ) from error
@@ -264,13 +318,118 @@ def _robots_policy(origin: str) -> RobotFileParser:
     return robots
 
 
-def _get(url: str) -> tuple[CapturedInput, str | None, bool]:
+class SearchRequests:
+    def __init__(
+        self,
+        source: Source,
+        config: KeywordSearch,
+        rate: OriginRate,
+        check_access: Callable[[], object],
+    ):
+        self.config = config
+        self.rate = rate
+        self.check_access = check_access
+        self.deadline = monotonic() + config.max_seconds
+        self.remaining = config.max_requests
+        self.interval_ms = source.min_request_interval_ms
+        self.policy: RobotsPolicy | None = None
+
+    def robots(self, origin: str) -> RobotsPolicy:
+        if self.policy is None:
+            self.get(origin, f"{origin}/robots.txt", robots=True)
+        assert self.policy is not None
+        return self.policy
+
+    def get(
+        self, origin: str, url: str, *, robots: bool = False
+    ) -> tuple[CapturedInput, str | None, bool]:
+        if not self.remaining:
+            raise InputError(
+                "request_limit_reached",
+                "Collection exhausted its approved request budget",
+            )
+        self.remaining -= 1
+        if monotonic() >= self.deadline:
+            raise InputError(
+                "collection_deadline", "Collection exhausted its approved time budget"
+            )
+        document = None
+        try:
+            with self.rate.request(origin, self.interval_ms, self.deadline) as cooldown:
+                self.check_access()
+                deadline = min(self.deadline, monotonic() + self.config.timeout_seconds)
+                addresses = ()
+                if origin.startswith("https://"):
+                    addresses = resolve_public(
+                        urlsplit(origin).netloc, self._time_left(deadline)
+                    )
+                document, location, challenge = _get(
+                    url,
+                    timeout=self._time_left(deadline),
+                    max_body=self.config.max_body_bytes,
+                    addresses=addresses,
+                )
+                if document.http_status == 429:
+                    cooldown.retry_after_ms = (
+                        max(30, document.retry_after_seconds or 0) * 1000
+                    )
+                if robots:
+                    self.policy = self._read_policy(document, challenge)
+                    self.interval_ms = max(self.interval_ms, self.policy.interval_ms)
+                    cooldown.interval_ms = self.interval_ms
+        except InputError as error:
+            if document is not None and not robots and error.capture is None:
+                raise InputError(
+                    error.error.code, str(error), capture=document
+                ) from error
+            raise
+        return document, location, challenge
+
+    @staticmethod
+    def _time_left(deadline: float) -> float:
+        remaining = deadline - monotonic()
+        if remaining < 0.001:
+            raise InputError("timeout", "Controlled request exhausted its time budget")
+        return remaining
+
+    @staticmethod
+    def _read_policy(document: CapturedInput, challenge: bool) -> RobotsPolicy:
+        if challenge or document.http_status in (401, 403):
+            raise InputError(
+                "access_blocked",
+                "Site blocked access to robots.txt",
+                http_status=document.http_status,
+            )
+        if document.http_status in (404, 410):
+            return RobotsPolicy()
+        if (
+            document.http_status != 200
+            or _parse_content_type(document).get_content_type() != "text/plain"
+        ):
+            raise InputError(
+                "robots_unavailable",
+                "Could not obtain a supported robots.txt policy",
+                http_status=document.http_status,
+                retry_after_seconds=document.retry_after_seconds,
+            )
+        return parse_policy(document.body, USER_AGENT.split("/", 1)[0])
+
+
+def _get(
+    url: str,
+    *,
+    timeout: float | None = None,
+    max_body: int | None = None,
+    addresses: tuple[str, ...] = (),
+) -> tuple[CapturedInput, str | None, bool]:
+    timeout = TIMEOUT_SECONDS if timeout is None else timeout
+    max_body = MAX_BODY_BYTES if max_body is None else max_body
     body = bytearray()
     too_large = False
 
     def receive(chunk: bytes) -> int:
         nonlocal too_large
-        if len(body) + len(chunk) > MAX_BODY_BYTES:
+        if len(body) + len(chunk) > max_body:
             too_large = True
             return CURL_WRITEFUNC_ERROR
         body.extend(chunk)
@@ -279,23 +438,27 @@ def _get(url: str) -> tuple[CapturedInput, str | None, bool]:
     # Scrapling can log the full request or redirect URL. Keep that data in Evidence.
     token = set_logger(PRIVATE_FETCH_LOG)
     try:
-        response = Fetcher.get(
-            url,
-            timeout=TIMEOUT_SECONDS,
-            retries=1,
-            follow_redirects=False,
-            stealthy_headers=False,
-            impersonate=None,
-            headers={"User-Agent": USER_AGENT},
-            proxies={"all": ""},
-            content_callback=receive,
-        )
+        if addresses:
+            response, status = public_get(url, timeout, receive, USER_AGENT, addresses)
+        else:
+            response = Fetcher.get(
+                url,
+                timeout=timeout,
+                retries=1,
+                follow_redirects=False,
+                stealthy_headers=False,
+                impersonate=None,
+                headers={"User-Agent": USER_AGENT},
+                proxies={"all": ""},
+                content_callback=receive,
+            )
+            status = response.status
     except Timeout as error:
         raise InputError("timeout", "Controlled HTTP request timed out") from error
     except CurlError as error:
         if too_large:
             raise InputError(
-                "input_too_large", "HTTP response exceeds the 1 MiB limit"
+                "input_too_large", "HTTP response exceeds the configured byte limit"
             ) from error
         raise InputError("transport_error", "Controlled HTTP request failed") from error
     finally:
@@ -303,7 +466,7 @@ def _get(url: str) -> tuple[CapturedInput, str | None, bool]:
     document = CapturedInput(
         bytes(body),
         url,
-        http_status=response.status,
+        http_status=status,
         content_type=response.headers.get("content-type"),
         retry_after_seconds=_retry_after(response.headers.get("retry-after")),
     )
@@ -372,7 +535,7 @@ def html_candidates(
         ) from error
     except OverflowError as error:
         raise InputError("row_limit", "HTML exceeds the 10,000 item limit") from error
-    except (SelectorSyntaxError, TypeError, ValueError) as error:
+    except (SelectorSyntaxError, XPathError, TypeError, ValueError) as error:
         raise InputError(
             "invalid_selector", "Configured selectors could not select HTML nodes"
         ) from error

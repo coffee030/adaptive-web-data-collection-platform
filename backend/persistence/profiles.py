@@ -72,7 +72,13 @@ class ProfileStorage:
             "permission_reference": source.permission_reference,
             "approval_status": source.approval_status,
             "access_policy": source.model_dump(
-                mode="json", include={"allowed_origins", "allowed_datasets"}
+                mode="json",
+                include={
+                    "allowed_origins",
+                    "allowed_datasets",
+                    "allowed_paths",
+                    "min_request_interval_ms",
+                },
             ),
         }
 

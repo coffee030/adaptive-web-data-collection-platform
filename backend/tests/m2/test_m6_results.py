@@ -105,6 +105,7 @@ def test_upgrade_preserves_legacy_evidence_records_and_quarantine(
     first = results.job_evidence(job.job_id)
     assert results.job_evidence_pages(job.job_id) == [first]
     assert first.page_number == 1 and first.evidence_id == evidence_id
+    assert first.capture_kind == "input"
     assert (
         first.profile_version_id == version
         and first.content_hash == capture.content_hash

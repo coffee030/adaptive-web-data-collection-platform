@@ -41,6 +41,7 @@ class LocalEvidenceStore:
             http_status=document.http_status,
             content_type=document.content_type,
             page_number=document.page_number,
+            capture_kind=document.capture_kind,
         )
         try:
             self.root.mkdir(parents=True, exist_ok=True)

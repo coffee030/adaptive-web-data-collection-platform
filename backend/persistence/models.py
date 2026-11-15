@@ -212,6 +212,10 @@ class EvidenceRow(Base):
         sa.UniqueConstraint("job_id", "id", name="uq_evidence_job_id"),
         sa.CheckConstraint("page_number > 0", name="ck_evidence_page_number"),
         sa.CheckConstraint(
+            "capture_kind IN ('input', 'search', 'detail')",
+            name="ck_evidence_capture_kind",
+        ),
+        sa.CheckConstraint(
             "adapter_type IN ('web', 'csv')", name="ck_evidence_adapter"
         ),
     )
@@ -220,6 +224,7 @@ class EvidenceRow(Base):
     job_id: Mapped[UUID] = mapped_column(sa.ForeignKey("collection_jobs.id"))
     run_id: Mapped[UUID]
     page_number: Mapped[int] = mapped_column(server_default="1")
+    capture_kind: Mapped[str] = mapped_column(server_default="input")
     storage_reference: Mapped[str] = mapped_column(sa.String(42))
     captured_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True))
     content_type: Mapped[str | None] = mapped_column(sa.Text)

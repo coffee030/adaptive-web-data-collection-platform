@@ -1,11 +1,13 @@
 """Verify the full Compose profile using its running API, containers and volumes."""
 
 import hashlib
+import json
 import os
 import shlex
 import subprocess
 from contextlib import contextmanager
 from datetime import datetime
+from itertools import pairwise
 from time import monotonic, sleep
 from uuid import UUID, uuid4
 
@@ -16,6 +18,7 @@ from test_vertical_slice import create_approved_source, submit_job
 
 from backend.core.contracts import COMPOSE_FIXTURE_ORIGIN
 from backend.tests.m6_fixture import CONFIGURATION, PAGES, ROOT_PATH
+from backend.tests.m7_fixture import KEYWORD, search_config
 
 
 @pytest.fixture
@@ -120,6 +123,131 @@ def snapshot(client, paths):
         assert response.status_code == 200, response.text
         result[path] = response.json()
     return result
+
+
+def test_m7_two_compose_workers_share_origin_and_preserve_detail_lineage(compose):
+    prefix, url = compose
+    origin = COMPOSE_FIXTURE_ORIGIN
+
+    def metrics():
+        return json.loads(
+            compose_command(
+                prefix,
+                "exec",
+                "-T",
+                "collection-fixture",
+                "python",
+                "-c",
+                "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/m7-metrics').read().decode())",
+            )
+        )
+
+    with httpx2.Client(base_url=url, timeout=30, trust_env=False) as client:
+        registered = [
+            create_approved_source(
+                client,
+                {
+                    "adapter_type": "web",
+                    "allowed_origins": [origin],
+                    "allowed_paths": {origin: [f"/m7/{layout}"]},
+                },
+                search_config(origin, layout),
+                {"adapter_type": "web", "keyword": "quick"},
+            )
+            for layout in ("cards", "catalog")
+        ]
+        before = len(metrics())
+        compose_command(
+            prefix,
+            "up",
+            "-d",
+            "--no-build",
+            "--no-recreate",
+            "--scale",
+            "worker=2",
+            "worker",
+        )
+        try:
+            workers = compose_command(
+                prefix, "ps", "--status", "running", "--quiet", "worker"
+            ).splitlines()
+            assert len(workers) == 2
+            jobs = [
+                submit_job(
+                    client,
+                    approved,
+                    {"adapter_type": "web", "keyword": KEYWORD},
+                    uuid4(),
+                )[0]["job_id"]
+                for approved in registered
+            ]
+            paths = [f"/api/v1/collection-jobs/{job}" for job in jobs]
+
+            def states():
+                return [client.get(path).json() for path in paths]
+
+            wait_for(
+                lambda: all(item["status"] == "running" for item in states()),
+                seconds=15,
+            )
+            wait_for(
+                lambda: all(item["status"] == "partial" for item in states()),
+                seconds=40,
+            )
+            for job, path, approved, layout in zip(
+                jobs, paths, registered, ("cards", "catalog"), strict=True
+            ):
+                pages = client.get(path + "/evidence-pages").json()
+                assert [item["capture_kind"] for item in pages] == [
+                    "search",
+                    "search",
+                    "detail",
+                    "detail",
+                    "detail",
+                ]
+                assert all(
+                    UUID(item["profile_version_id"])
+                    == UUID(approved["profile_version_id"])
+                    for item in pages
+                )
+                assert client.get(path + "/evidence").json() == pages[0]
+                results = client.get("/api/v1/records", params={"job_id": job}).json()
+                assert {
+                    record["payload"]["title"]: record["evidence_reference"]
+                    for record in results
+                } == {
+                    "Alpha": pages[2]["evidence_id"],
+                    "Beta": pages[3]["evidence_id"],
+                }
+                assert pages[-1]["original_location"].endswith(
+                    f"/m7/{layout}/detail/bad"
+                )
+                assert (
+                    client.get(path + "/quarantine").json()[0]["evidence_reference"]
+                    == pages[-1]["evidence_id"]
+                )
+
+            requests = sorted(metrics()[before:], key=lambda request: request[1])
+            assert len(requests) == 12
+            gaps = [
+                next_request[1] - previous[2]
+                for previous, next_request in pairwise(requests)
+            ]
+            assert min(gaps) >= 0.97, gaps
+            print(
+                f"M7 worker jobs {jobs}; {len(requests)} requests; minimum completed-to-start gap {min(gaps):.3f}s"
+            )
+        finally:
+            compose_command(
+                prefix,
+                "up",
+                "-d",
+                "--no-build",
+                "--no-recreate",
+                "--scale",
+                "worker=1",
+                "worker",
+            )
 
 
 def test_compose_html_csv_broker_stop_and_named_volume_restart(compose, config):

@@ -31,7 +31,12 @@ def publish_results(
             raise EvidenceError(
                 "evidence_not_found", "Collection result lacks its source evidence"
             )
-        return by_id[reference]
+        row = by_id[reference]
+        if row.capture_kind == "search":
+            raise EvidenceError(
+                "evidence_integrity_error", "Records require input or detail evidence"
+            )
+        return row
 
     session.flush()
     session.add_all(
@@ -101,6 +106,7 @@ def _evidence_row(
         job_id=job.id,
         run_id=UUID(evidence.run_id),
         page_number=page_number,
+        capture_kind=evidence.capture_kind,
         storage_reference=f"{evidence_id.hex}/input.bin",
         captured_at=evidence.captured_at,
         content_type=evidence.content_type,
