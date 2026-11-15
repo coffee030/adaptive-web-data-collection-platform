@@ -65,3 +65,6 @@
 .profile-review dl { display: grid; gap: var(--sm); overflow-wrap: anywhere; }
 .profile-review dt { font-size: 0.875rem; font-weight: 650; }
 .profile-review dd, .profile-review p { font-size: 0.875rem; }
+.job-evidence-list {
+  list-style-position: inside;
+}

@@ -31,7 +31,7 @@ const record: GenericRecord = {
 };
 const evidence: EvidenceMetadata = {
   ...lineage, evidence_id: evidenceId, run_id: jobId, config_hash: configHash,
-  captured_at: timestamp,
+  captured_at: timestamp, page_number: 1,
   adapter_type: 'web', content_hash: 'f'.repeat(64), content_type: 'text/html',
   original_location: 'http://127.0.0.1:8001/collection?token=secret',
   requested_location: 'http://username:password@127.0.0.1:8001/first#fragment', http_status: 200,
@@ -74,7 +74,7 @@ async function routeJson(page: Page, path: string, json: unknown, status = 200) 
 async function mockLineage(page: Page) {
   await routeJson(page, jobPath, job);
   await routeJson(page, jobPath + '/events', []);
-  await routeJson(page, jobPath + '/evidence', evidence);
+  await routeJson(page, jobPath + '/evidence-pages', [evidence]);
   await routeJson(page, '/sources', [source]);
   await routeJson(page, sourcePath, source);
   await routeJson(page, sourcePath + '/versions', [profile]);

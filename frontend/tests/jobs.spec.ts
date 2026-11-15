@@ -42,7 +42,7 @@ async function mockList(page: Page, jobs: CollectionJob[] = [partialJob]) {
 }
 
 async function mockDetail(page: Page, job = partialJob, related = [record], timeline = events) {
-  await page.route(api + jobUrl + '/evidence', route => route.fulfill({ json: null }));
+  await page.route(api + jobUrl + '/evidence-pages', route => route.fulfill({ json: [] }));
   await page.route(url => url.pathname === api + jobUrl, route => route.fulfill({ json: job }));
   await page.route(url => url.pathname === api + jobUrl + '/events', route => route.fulfill({ json: timeline }));
   await page.route(url => url.pathname === api + '/records', route => route.fulfill({ json: related }));

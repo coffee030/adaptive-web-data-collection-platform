@@ -49,6 +49,7 @@ export interface QuarantineEntry extends ResultEntry {
 
 export interface EvidenceMetadata extends Lineage {
   evidence_id: string;
+  page_number: number;
   run_id: string;
   config_hash: string;
   captured_at: string;
@@ -89,8 +90,8 @@ export function getEvidence(id: string, signal: AbortSignal) {
   return apiGet<EvidenceMetadata>(evidenceDetailPath(id), signal);
 }
 
-export function getJobEvidence(id: string, signal: AbortSignal) {
-  return apiGet<EvidenceMetadata | null>(`${jobPath(id)}/evidence`, signal);
+export function listJobEvidence(id: string, signal: AbortSignal) {
+  return apiGet<EvidenceMetadata[]>(`${jobPath(id)}/evidence-pages`, signal);
 }
 
 export function listQuarantine(id: string, pageSize: number, offset: number, signal: AbortSignal) {

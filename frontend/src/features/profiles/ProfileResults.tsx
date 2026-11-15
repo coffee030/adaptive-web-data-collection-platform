@@ -64,6 +64,11 @@ export function ConfigurationSummary({ configuration: config }: { configuration:
       <div><dt>Record schema</dt><dd>{config.record_schema.schema_version}</dd></div>
       {web && <div className="source-policy"><dt>Item selector ({config.selector_type})</dt>
         <dd><code>{config.item_selector}</code></dd></div>}
+      {web && config.pagination && <>
+        <div className="source-policy"><dt>Next-link selector ({config.selector_type})</dt>
+          <dd><code>{config.pagination.next_link_selector}</code></dd></div>
+        <div><dt>Maximum HTML pages</dt><dd>{config.pagination.max_pages}</dd></div>
+      </>}
     </dl>
     <TableRegion label="Configuration fields table">
       <table className="profile-table">

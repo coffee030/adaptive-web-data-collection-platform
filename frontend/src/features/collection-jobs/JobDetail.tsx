@@ -5,7 +5,7 @@ import { getJob, jobsPath, listEvents, maxOffset } from './api';
 import type { CollectionJob, ExecutionEvent } from './api';
 import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
 import { profilePath } from '../profiles/api';
-import { getJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
+import { listJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
 import { EvidenceLink, PayloadPreview } from '../results/presentation';
 import { sourcePath } from '../sources/api';
 import { ErrorDetails, ResultCounts } from './presentation';
@@ -130,7 +130,7 @@ function JobOverview({ job }: { job: CollectionJob }) {
       {(job.status === 'partial' || job.status === 'failed' || job.error) && (
         <div className="notice outcome" data-status={job.status}>
           <strong>{job.status === 'partial' ? 'Partial result' : job.status === 'failed' ? 'Job failed' : 'Reported error'}</strong>
-          {job.status === 'partial' && <p>See quarantine for rejected candidates.</p>}
+          {job.status === 'partial' && job.invalid_count > 0 && <p>See quarantine for rejected candidates.</p>}
           {job.error && <ErrorDetails error={job.error} />}
         </div>
       )}
@@ -189,15 +189,20 @@ function EventTimeline({ result, retry }: {
 const recordsPageSize = 10;
 
 function JobEvidence({ id, revision }: { id: string; revision: number }) {
-  const load = useCallback((signal: AbortSignal) => getJobEvidence(id, signal), [id]);
+  const load = useCallback((signal: AbortSignal) => listJobEvidence(id, signal), [id]);
   const { result, retry } = useResource(load, revision);
   return (
     <section className="panel detail-panel" aria-labelledby="job-evidence-title">
       <div className="panel-heading"><h2 id="job-evidence-title">Capture evidence</h2></div>
       {result.state === 'loading' && <Loading>Loading capture evidence…</Loading>}
       {result.state === 'error' && <RequestProblem error={result.error} resource="capture evidence" retry={retry} />}
-      {result.state === 'ready' && (result.data
-        ? <p className="notice"><EvidenceLink id={result.data.evidence_id} /></p>
+      {result.state === 'ready' && (result.data.length > 0
+        ? <ul className="notice job-evidence-list">
+          {result.data.map(evidence => <li key={evidence.evidence_id}>
+            {evidence.adapter_type === 'web' ? `Page ${evidence.page_number} ` : ''}
+            <EvidenceLink id={evidence.evidence_id} />
+          </li>)}
+        </ul>
         : <p className="notice">No capture evidence was saved for this job.</p>)}
     </section>
   );

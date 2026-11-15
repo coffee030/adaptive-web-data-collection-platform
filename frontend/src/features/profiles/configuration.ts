@@ -13,6 +13,8 @@ export interface Draft {
   identity: number | null;
   selectorType: SelectorType;
   itemSelector: string;
+  nextLinkSelector: string;
+  maxPages: number;
   fields: Field[];
 }
 export const emptyField = (): Field => ({
@@ -21,12 +23,15 @@ export const emptyField = (): Field => ({
 });
 export function draftFrom(configuration?: Configuration): Draft {
   const schema = configuration?.record_schema;
+  const pagination = configuration?.adapter_type === 'web' ? configuration.pagination : undefined;
   const identity = schema?.fields.findIndex(field => field.name === schema.identity_field) ?? -1;
   return {
     recordType: schema?.record_type ?? '',
     identity: identity >= 0 ? identity : null,
     selectorType: configuration?.adapter_type === 'web' ? configuration.selector_type : 'css',
     itemSelector: configuration?.adapter_type === 'web' ? configuration.item_selector : '',
+    nextLinkSelector: pagination?.next_link_selector ?? '',
+    maxPages: pagination?.max_pages ?? 3,
     fields: schema?.fields.map(field => {
       const base = { ...emptyField(), ...field };
       if (configuration?.adapter_type === 'csv') {
@@ -74,6 +79,12 @@ export function compileDraft(draft: Draft, adapter: Adapter) {
   } : {
     ...base, adapter_type: 'web', selector_type: draft.selectorType,
     item_selector: text(draft.itemSelector, 'item-selector', 1024, 'an item selector'),
+    ...(draft.nextLinkSelector.trim() && {
+      pagination: {
+        next_link_selector: text(draft.nextLinkSelector, 'next-link-selector', 1024, 'a next-link selector'),
+        max_pages: draft.maxPages,
+      },
+    }),
     fields: draft.fields.map((field, index) => ({
       name: fields[index]!.name,
       selector: text(field.mapping, `mapping-${index}`, 1024, 'a field selector'),

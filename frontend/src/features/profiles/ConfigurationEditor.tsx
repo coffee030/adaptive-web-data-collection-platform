@@ -1,7 +1,7 @@
 import { emptyField } from './configuration';
 import type { Draft } from './configuration';
 import type { Adapter } from '../sources/api';
-import { selectorTypes, valueTypes } from './api';
+import { paginationLimits, selectorTypes, valueTypes } from './api';
 
 type Props = {
   draft: Draft; adapter: Adapter; errors: Record<string, string>;
@@ -60,6 +60,17 @@ export function ConfigurationEditor({ draft, adapter, errors, change }: Props) {
           <input {...invalid('item-selector')} value={draft.itemSelector} required
             onChange={event => change({ ...draft, itemSelector: event.target.value })} />
           {error('item-selector')}
+        </label>
+        <label>Next-link selector (optional)
+          <input {...invalid('next-link-selector')} value={draft.nextLinkSelector}
+            onChange={event => change({ ...draft, nextLinkSelector: event.target.value })} />
+          {error('next-link-selector')}
+        </label>
+        <label>Maximum HTML pages
+          <select value={draft.maxPages} disabled={!draft.nextLinkSelector.trim()}
+            onChange={event => change({ ...draft, maxPages: Number(event.target.value) })}>
+            {paginationLimits.map(limit => <option key={limit} value={limit}>{limit}</option>)}
+          </select>
         </label>
       </div>}
       <h3>Output fields</h3>

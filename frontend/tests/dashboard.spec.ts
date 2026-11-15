@@ -121,7 +121,7 @@ test('Guided collection offers only eligible sources and recovers a lost respons
   });
   await route(page, jobs + '/' + jobId, job);
   await route(page, jobs + '/' + jobId + '/events', [{ ...job, event_id: jobId, occurred_at: timestamp, kind: 'PARTIAL' }]);
-  await route(page, jobs + '/' + jobId + '/evidence', null);
+  await route(page, jobs + '/' + jobId + '/evidence-pages', []);
   await route(page, '/records', [record]);
   await page.goto(jobs + '/new');
   await expect(page.getByRole('radio', { name: /HTML pages/ })).toBeDisabled();

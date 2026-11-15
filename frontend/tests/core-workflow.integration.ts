@@ -117,6 +117,65 @@ function jobResponse(page: Page) {
   return page.waitForResponse(reply => new URL(reply.url()).pathname === api + jobs && reply.request().method() === 'POST');
 }
 
+test('M6 browser workflow approves pagination and follows page-level evidence', async ({ page, request }) => {
+  test.setTimeout(60_000);
+  const registered = await registerSource(page, 'web');
+  const authorization = await request.patch(api + registered.path + '/authorization', {
+    data: { approval_status: 'approved' },
+  });
+  expect(authorization.status()).toBe(200);
+  await page.reload();
+  await page.getByRole('link', { name: 'Create draft', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Record type' }).fill('paginated_listing');
+  await page.getByRole('textbox', { name: 'Item selector' }).fill('article');
+  await page.getByRole('textbox', { name: /Next-link selector/ }).fill('a.next');
+  await page.getByRole('combobox', { name: 'Maximum HTML pages' }).selectOption('3');
+  await page.getByRole('textbox', { name: 'Output field name' }).fill('title');
+  await page.getByRole('textbox', { name: 'Field selector', exact: true }).fill('h2');
+  await page.getByRole('combobox', { name: 'Identity field' }).selectOption('0');
+  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+  const sample = page.getByRole('textbox', { name: 'Document path' });
+  await sample.fill('/pagination/1');
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('table', { name: /Preview candidates/ })).toContainText('Alpha');
+  await page.getByRole('button', { name: 'Validate sample' }).click();
+  await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Approver label' }).fill('M6 fixture operator');
+  await page.getByRole('checkbox', { name: /confirm approval/ }).check();
+  await page.getByRole('button', { name: 'Approve version' }).click();
+  await expect(page.getByText('Read only', { exact: true })).toBeVisible();
+  await expect(page.getByText('Next-link selector (css)', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'New Collection Job', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Document path' }).fill('/pagination/1');
+  const submitted = jobResponse(page);
+  await page.getByRole('button', { name: 'Submit job', exact: true }).click();
+  const confirmation = await submitted;
+  expect(confirmation.status()).toBe(201);
+  const job: CollectionJob = await confirmation.json();
+  const jobPath = `${jobs}/${job.job_id}`;
+  await expect(page).toHaveURL(jobPath);
+  await expect(page.getByRole('region', { name: 'Run overview' }).getByText('Partial', { exact: true })).toBeVisible();
+  const captureList = page.getByRole('region', { name: 'Capture evidence' });
+  await expect(captureList.getByRole('listitem')).toHaveText([/^Page 1 /, /^Page 2 /, /^Page 3 /]);
+  const captures = await get<EvidenceMetadata[]>(request, jobPath + '/evidence-pages');
+  const third = captures[2]!;
+  await captureList.getByRole('link', { name: 'Open evidence ' + third.evidence_id }).click();
+  await expect(page.getByRole('heading', { name: 'Evidence Metadata' })).toBeVisible();
+  await expect(page.getByText(origin + '/pagination/3', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(third.content_hash, { exact: true })).toBeVisible();
+  await page.goBack();
+  await page.getByRole('link', { name: 'View quarantine' }).click();
+  await expect(page.getByRole('heading', { name: 'HTML item 2', exact: true })).toHaveCount(2);
+  for (const evidence of captures.slice(1)) {
+    await expect(page.getByRole('link', { name: 'Open evidence ' + evidence.evidence_id })).toBeVisible();
+  }
+  const records = await get<GenericRecord[]>(request, `/records?job_id=${job.job_id}`);
+  expect(Object.fromEntries(records.map(record => [record.payload.title, record.evidence_reference]))).toEqual({
+    Alpha: captures[0]!.evidence_id, Beta: captures[1]!.evidence_id, Gamma: third.evidence_id,
+  });
+  console.log(`M6 browser Job ${job.job_id}: three evidence pages, three records and two quarantine entries`);
+});
+
 for (const adapter of ['web', 'csv'] as const) {
   test(`Core ${adapter} workflow registers, configures, approves, submits and traces a real Job`, async ({ page, request, baseURL }) => {
     test.setTimeout(180_000);

@@ -5,6 +5,7 @@ import type { CollectionInput } from '../sources/collectionInput';
 
 export const valueTypes = ['string', 'integer', 'number', 'boolean'] as const;
 export const selectorTypes = ['css', 'xpath'] as const;
+export const paginationLimits = [1, 2, 3, 4, 5] as const;
 type ValueType = typeof valueTypes[number];
 export type SelectorType = typeof selectorTypes[number];
 export interface RecordField { name: string; value_type: ValueType; required: boolean }
@@ -16,7 +17,10 @@ interface Extraction {
 interface BaseConfiguration { config_schema_version: '1'; record_schema: Schema }
 export type Configuration = BaseConfiguration & (
   | { adapter_type: 'csv'; columns: { name: string; column: string }[] }
-  | { adapter_type: 'web'; selector_type: SelectorType; item_selector: string; fields: Extraction[] }
+  | {
+    adapter_type: 'web'; selector_type: SelectorType; item_selector: string; fields: Extraction[];
+    pagination?: { next_link_selector: string; max_pages: number };
+  }
 );
 export interface Profile extends ProfileVersion {
   revision: number;

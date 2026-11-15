@@ -50,7 +50,7 @@ async function mock(page: Page, submit: (route: Route, data: Payload) => Promise
   });
   await page.route(api + jobs + '/' + id, route => route.fulfill({ json: job }));
   await page.route(api + jobs + '/' + id + '/events', route => route.fulfill({ json: [] }));
-  await page.route(api + jobs + '/' + id + '/evidence', route => route.fulfill({ json: null }));
+  await page.route(api + jobs + '/' + id + '/evidence-pages', route => route.fulfill({ json: [] }));
   await page.route(url => url.pathname === api + '/records', route => route.fulfill({ json: [] }));
   return sent;
 }
