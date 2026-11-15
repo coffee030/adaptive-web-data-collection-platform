@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from curl_cffi import CurlOpt
-from curl_cffi.requests.exceptions import ConnectionError
+from curl_cffi.requests.exceptions import ConnectionError, Timeout
 from pydantic import ValidationError
 
 from backend.core import public_network, web_adapter
@@ -382,3 +382,51 @@ Disallow: /%70rivate
     assert policy.can_fetch("", HTTPS + "/elsewhere")
     with pytest.raises(InputError, match="exceeds"):
         parse_policy(b"User-agent: *\nCrawl-delay: 90", "FYP-Collection-Core")
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "expected"),
+    [
+        (200, b"User-agent: *\nDisallow: /m7/\n", "robots_denied"),
+        (200, b"\xff", "robots_unavailable"),
+        (403, b"Forbidden", "access_blocked"),
+        (503, b"Unavailable", "robots_unavailable"),
+    ],
+)
+def test_public_robots_denial_or_unavailable_never_fetches_search(
+    monkeypatch, status, body, expected
+):
+    config = ExtractionConfiguration.model_validate(search_config(HTTPS, "cards"))
+    approved = source(HTTPS)
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *args: [(0, 0, 0, "", ("1.1.1.1", 443))]
+    )
+
+    def get(url, timeout, receive, ua, pins):
+        assert url == HTTPS + "/robots.txt"
+        receive(body)
+        return type(
+            "Response", (), {"headers": {"content-type": "text/plain"}}
+        )(), status
+
+    monkeypatch.setattr(web_adapter, "public_get", get)
+    requests = web_adapter.SearchRequests(
+        approved, config.search, TestRate(), lambda: None
+    )
+    with pytest.raises(InputError) as denied:
+        web_adapter.capture_html(
+            approved,
+            initial_input(approved, config, KeywordInput("quick")),
+            requests=requests,
+        )
+    assert denied.value.error.code == expected
+
+
+def test_pinned_https_timeout_is_reported_without_raw_transport_context(monkeypatch):
+    def timeout(*args):
+        raise Timeout("untrusted upstream detail")
+
+    monkeypatch.setattr(web_adapter, "public_get", timeout)
+    with pytest.raises(InputError, match="Controlled HTTP request timed out") as error:
+        web_adapter._get(HTTPS, addresses=("1.1.1.1",))
+    assert error.value.error.code == "timeout" and error.value.capture is None

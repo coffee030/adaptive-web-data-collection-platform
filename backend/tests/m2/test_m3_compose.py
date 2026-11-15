@@ -604,3 +604,94 @@ def test_compose_multi_page_lineage_survives_worker_loss_and_postgres_restart(co
         print(
             f"M6 Job {job_id} recovered on attempt 2 and retained three evidence pages after restart"
         )
+
+
+def test_m7_recovers_after_worker_loss_and_keeps_terminal_lineage(compose):
+    prefix, url = compose
+    origin = COMPOSE_FIXTURE_ORIGIN
+    with httpx2.Client(base_url=url, trust_env=False, timeout=25) as client:
+        approved = create_approved_source(
+            client,
+            {"adapter_type": "web", "allowed_origins": [origin]},
+            search_config(origin, "cards"),
+            {"adapter_type": "web", "keyword": "quick"},
+        )
+        try:
+            with block_evidence_publication(prefix):
+                job, _ = submit_job(
+                    client,
+                    approved,
+                    {"adapter_type": "web", "keyword": KEYWORD},
+                    uuid4(),
+                )
+                job_id = UUID(job["job_id"])
+                path = f"/api/v1/collection-jobs/{job_id}"
+                wait_for(lambda: evidence_lock_exists(prefix, granted=False))
+                compose_command(prefix, "kill", "-s", "SIGKILL", "worker")
+            assert client.get(path + "/evidence-pages").json() == []
+            # Exercise recovery without waiting for the already tested 90-second lease.
+            compose_command(
+                prefix,
+                *PSQL,
+                "psql",
+                "-c",
+                "UPDATE collection_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' "
+                f"WHERE id = '{job_id}' AND status = 'running'",
+            )
+        finally:
+            compose_command(prefix, "up", "-d", "--wait", "worker")
+
+        wait_for(lambda: client.get(path).json()["status"] == "partial", seconds=40)
+        pages_path = path + "/evidence-pages"
+        records_path = f"/api/v1/records?job_id={job_id}"
+        events_path = path + "/events"
+        paths = [path, pages_path, records_path, events_path, path + "/quarantine"]
+        before = snapshot(client, paths)
+        assert before[path]["execution_attempt"] == 2
+        pages = before[pages_path]
+        assert [page["capture_kind"] for page in pages] == [
+            "search",
+            "search",
+            "detail",
+            "detail",
+            "detail",
+        ]
+        assert {record["evidence_reference"] for record in before[records_path]} == {
+            pages[2]["evidence_id"],
+            pages[3]["evidence_id"],
+        }
+        assert [event["kind"] for event in before[events_path]].count(
+            "WORKER_LOST"
+        ) == 1
+        assert [event["kind"] for event in before[events_path]].count("PARTIAL") == 1
+        compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "dispatcher",
+            "python",
+            "-c",
+            "from sys import argv; from uuid import UUID; "
+            "from backend.queue.dispatcher import publish_job; publish_job(UUID(argv[1]))",
+            str(job_id),
+        )
+        skipped = f"Collection job {job_id} skipped (job_not_pending)".encode()
+        wait_for(
+            lambda: skipped in compose_command(prefix, "logs", "--no-color", "worker")
+        )
+        compose_command(prefix, "restart", "redis", "postgres", "api")
+        wait_for(lambda: client.get("/api/v1/health").status_code == 200)
+        assert snapshot(client, paths) == before
+        for page in pages:
+            raw = compose_command(
+                prefix,
+                "exec",
+                "-T",
+                "api",
+                "cat",
+                f"/data/evidence/{UUID(page['evidence_id']).hex}/input.bin",
+            )
+            assert hashlib.sha256(raw).hexdigest() == page["content_hash"]
+        print(
+            f"M7 Job {job_id} recovered on attempt 2, ignored a duplicate and retained five captures after restart"
+        )
