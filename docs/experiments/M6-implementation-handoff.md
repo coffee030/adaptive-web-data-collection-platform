@@ -69,7 +69,7 @@ Backend 使用 `M2_TEST_DATABASE_URL` 指向隔離 PostgreSQL (`127.0.0.1:55436`
 - `1af3200fa6552ecc3ab5e97433f8f328223d4537` — Configure pagination and inspect page evidence in the dashboard。
 - `0b6dbe221d8e65d1a8449ce4af7d9474efc5821e` — Compare profile pin UUIDs in the live recovery test。
 - 工作樹保留 A 節列出的兩項原有修改。原 M5.5 分支仍指向初始 commit。未修改或合併 `main`，未部署。
-- Git CLI checkout 未設定 remote 或可用的 HTTPS credentials。GitHub connector 可讀取目標 private repository，並確認 GitHub `main` 為 `2f880f9ae1e30fa3fff7e11261194873b8ccd2de`。該 repo 沒有本機 baseline commit，已核對 M6 改動的基礎檔案及主要依賴共 35 個，檔案 blob 均相同。自動權限審查拒絕把本地實作檔案上傳為 GitHub tree，理由是未認定此遠端發布有可信的明確授權。未建立遠端分支或 Draft PR。
+- 使用者明確授權後，透過 GitHub connector 發布 `feature/M6-multi-page-evidence` 並開啟 [Draft PR #1](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/1)。遠端以 `main` 的 `2f880f9ae1e30fa3fff7e11261194873b8ccd2de` 為基準，本機 M5.5 commit 不在遠端歷史中。發布前核對 35 個基礎檔案及主要依賴的 blob，內容一致。四個 M6 提交在遠端依序為 `7eea6cc`、`acb9d86`、`fa8fa3b`、`d22a5a1`，建立 PR 前比對 32 個變更檔案，內容與本機 M6 提交一致。
 
 ## H. Acceptance Checklist
 
@@ -86,8 +86,8 @@ Backend 使用 `M2_TEST_DATABASE_URL` 指向隔離 PostgreSQL (`127.0.0.1:55436`
 | API 兼容與 PostgreSQL 重啟後持久性 | PASS | 舊單物件 Evidence API 回傳 Page 1，重啟後核對全部 M6 snapshot、Evidence SHA-256 和原始檔 |
 | 實際 Compose 與瀏覽器 walkthrough | PASS | API health、Chrome Profile→Job→Evidence workflow |
 | M6 scope 與技術限制 | PASS | 合約、測試與本報告，未修改 M7–M10 功能 |
-| Draft PR 發布（有條件的交付項） | FAIL | GitHub tree 上傳在自動權限審查被拒絕 |
+| Draft PR 發布（有條件的交付項） | PASS | GitHub 確認 [PR #1](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/1) 為 open draft，目標為 `main` |
 
 ## I. Recommendation
 
-M6 已達本機功能驗收門檻，可由 ChatGPT 或隊友以本機 M6 分支作獨立審查。指定私人 GitHub repository 的 Draft PR 仍待明確的遠端發布授權。M7 待 M6 審查及使用者核准。
+M6 已達本機功能驗收門檻，可由 ChatGPT 或隊友從 [Draft PR #1](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/1) 進行獨立審查。M7 待 M6 審查及使用者核准。
