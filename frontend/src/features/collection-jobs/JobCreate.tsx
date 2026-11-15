@@ -97,6 +97,7 @@ function JobFields({ source, requestedProfile, jobsSearch, lockSource, guidedVer
 
   const all = guidedVersions ?? (versions.result.state === 'ready' ? versions.result.data : []);
   const profile = all.find(item => sameId(chosenProfile, item.profile_version_id));
+  const search = profile?.configuration?.adapter_type === 'web' ? profile.configuration.search : undefined;
   const eligible = profile?.approval_status === 'approved';
   const approved = all.some(item => item.approval_status === 'approved');
   const web = source.adapter_type === 'web';
@@ -138,10 +139,10 @@ function JobFields({ source, requestedProfile, jobsSearch, lockSource, guidedVer
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (unconfirmed || source.approval_status !== 'approved' || !eligible || !profile) return;
-    const input = compileCollectionInput(source, target, content);
+    const input = compileCollectionInput(source, search?.origin ?? target, content, !!search);
     if (input.error) {
       setProblem(input.error);
-      setInputError(allowed.includes(target) ? 'content' : 'target');
+      setInputError(allowed.includes(search?.origin ?? target) ? 'content' : 'target');
       return;
     }
     if (input.entry) void send({ newInput: {
@@ -188,16 +189,16 @@ function JobFields({ source, requestedProfile, jobsSearch, lockSource, guidedVer
             {eligible && profile.configuration && <ProfileReview profile={profile} source={source} />}
             {!approved && <div><Link to={sourcePath(source.source_id)}>Open Source profile versions</Link></div>}
             {eligible && <div className="job-entry profile-form">
-              <label>{web ? 'Allowed origin' : 'Allowed dataset ID'}
+              {search ? <p className="muted">Search origin {search.origin}</p> : <label>{web ? 'Allowed origin' : 'Allowed dataset ID'}
                 <select required value={target} aria-invalid={targetError || undefined}
                   aria-describedby={targetError ? 'job-submit-error' : undefined}
                   onChange={event => { setTarget(event.target.value); clearError(); }}>
                   <option value="">Select a permitted input</option>
                   {allowed.map(item => <option key={item} value={item}>{item}</option>)}
                 </select>
-              </label>
-              <label>{web ? 'Document path' : 'CSV content'}
-                {web ? <input required value={content} placeholder="/table.html"
+              </label>}
+              <label>{search ? 'Keyword' : web ? 'Document path' : 'CSV content'}
+                {web ? <input required value={content} placeholder={search ? undefined : '/table.html'}
                   aria-invalid={contentError || undefined} aria-describedby={contentError ? 'job-submit-error' : undefined}
                   onChange={event => { setContent(event.target.value); clearError(); }} />
                   : <textarea required rows={7} value={content} aria-invalid={contentError || undefined}

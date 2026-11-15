@@ -1,8 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
-import { adapterLabels, getSource, listVersions, sourcesPath } from './api';
+import { adapterLabels, getSource, listVersions, setSourceAuthorization, sourcesPath } from './api';
 import { profilePath } from '../profiles/api';
 import { jobSubmissionPath } from '../collection-jobs/api';
 import { allowedInputs } from './collectionInput';
@@ -22,6 +22,29 @@ export function SourceDetail() {
   const source = result.state === 'ready' ? result.data : undefined;
   const web = source?.adapter_type === 'web';
   const policy = web ? source?.allowed_origins : source?.allowed_datasets;
+  const [authorizationProblem, setAuthorizationProblem] = useState('');
+  const [savingAuthorization, setSavingAuthorization] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), [sourceId]);
+  const localOperator = __LOCAL_PROFILE_APPROVAL__ && window.location.protocol === 'http:'
+    && window.location.hostname === '127.0.0.1';
+
+  async function changeAuthorization(status: 'approved' | 'revoked') {
+    if (request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setAuthorizationProblem('');
+    setSavingAuthorization(true);
+    try {
+      await setSourceAuthorization(sourceId, status, controller.signal);
+      if (!controller.signal.aborted) retry();
+    } catch {
+      if (!controller.signal.aborted) setAuthorizationProblem('Could not confirm Source authorization. Reload the Source before trying again.');
+    } finally {
+      request.current = null;
+      if (!controller.signal.aborted) setSavingAuthorization(false);
+    }
+  }
 
   return (
     <>
@@ -44,15 +67,23 @@ export function SourceDetail() {
           <dl className="source-metadata">
             <div><dt>Access authorization</dt><dd><Status value={source.approval_status} /></dd>
               {source.approval_status !== 'approved' && <dd className="muted">Collection requires source authorization.</dd>}
+              {web && localOperator && <dd><button type="button" disabled={savingAuthorization}
+                onClick={() => void changeAuthorization(source.approval_status === 'approved' ? 'revoked' : 'approved')}>
+                {source.approval_status === 'approved' ? 'Revoke Source access' : 'Authorize Source access'}
+              </button></dd>}
+              {authorizationProblem && <dd role="alert">{authorizationProblem}</dd>}
             </div>
             <div><dt>Adapter</dt><dd>{adapterLabels[source.adapter_type]}</dd></div>
             <div><dt>Source ID</dt><dd className="identifier">{source.source_id}</dd></div>
             <div><dt>Permission reference</dt><dd>{source.permission_reference || 'Not recorded'}</dd></div>
             <div className="source-policy"><dt>{web ? 'Allowed origins' : 'Allowed dataset IDs'}</dt>
               <dd>{policy?.length ? <ul>{policy.map((item, index) => (
-                <li className="identifier" key={index}>{item}</li>
+                <li className="identifier" key={index}>{item}{source.allowed_paths?.[item] &&
+                  <ul>{source.allowed_paths[item].map(path => <li key={path}>{path}</li>)}</ul>}</li>
               ))}</ul> : <span className="muted">None recorded</span>}</dd>
             </div>
+            {web && source.min_request_interval_ms !== undefined &&
+              <div><dt>Minimum request interval</dt><dd>{source.min_request_interval_ms} ms</dd></div>}
           </dl>
         </section>
         <ProfileVersions key={source.source_id} id={source.source_id}

@@ -50,6 +50,7 @@ export interface QuarantineEntry extends ResultEntry {
 export interface EvidenceMetadata extends Lineage {
   evidence_id: string;
   page_number: number;
+  capture_kind?: 'input' | 'search' | 'detail';
   run_id: string;
   config_hash: string;
   captured_at: string;

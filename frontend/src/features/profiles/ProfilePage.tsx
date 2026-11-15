@@ -204,7 +204,7 @@ function Workspace({ source, initial, reload }: { source: Source; initial?: Prof
         }
       }}>
         <fieldset className="profile-form" disabled={!!busy}>
-          <ConfigurationEditor draft={draft} adapter={source.adapter_type} errors={errors}
+          <ConfigurationEditor draft={draft} adapter={source.adapter_type} origins={source.allowed_origins} errors={errors}
             change={next => {
               setDraft(next); setDirty(true); setErrors({}); setStatus('');
               if (!locked) setFailure('');

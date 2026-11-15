@@ -41,6 +41,8 @@ export function EvidenceDetail() {
             <div className="panel-heading"><h2 id="evidence-capture-title">Capture details</h2></div>
             <dl className="result-metadata">
               <Metadata label="Adapter">{evidence.adapter_type === 'web' ? 'HTML' : 'CSV'}</Metadata>
+              {evidence.capture_kind === 'search' && <Metadata label="Capture type">Search results page</Metadata>}
+              {evidence.capture_kind === 'detail' && <Metadata label="Capture type">Detail page</Metadata>}
               {evidence.adapter_type === 'web' && <Metadata label="Page">{evidence.page_number}</Metadata>}
               <Metadata label="Captured (UTC)"><Timestamp value={evidence.captured_at} /></Metadata>
               {evidence.content_type != null && <Metadata label="Content type">{evidence.content_type}</Metadata>}

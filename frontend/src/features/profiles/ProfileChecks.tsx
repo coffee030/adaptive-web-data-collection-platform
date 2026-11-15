@@ -18,6 +18,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
   };
 }) {
   const web = source.adapter_type === 'web';
+  const search = profile.configuration.adapter_type === 'web' ? profile.configuration.search : undefined;
   const allowed = allowedInputs(source);
   const [target, setTarget] = useState(allowed[0] ?? '');
   const [content, setContent] = useState('');
@@ -39,7 +40,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
     if (busy || disabled) return;
     const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'validate'
       ? 'validate' : 'preview';
-    const input = compileCollectionInput(source, target, content);
+    const input = compileCollectionInput(source, search?.origin ?? target, content, !!search);
     if (!input.entry) {
       setError(input.error);
       return;
@@ -56,7 +57,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
     }
   }
 
-  const disabled = dirty || locked || source.approval_status !== 'approved' || !allowed.includes(target);
+  const disabled = dirty || locked || source.approval_status !== 'approved' || !allowed.includes(search?.origin ?? target);
   const localDemo = __LOCAL_PROFILE_APPROVAL__ && window.location.protocol === 'http:'
     && window.location.hostname === '127.0.0.1';
   const eligible = report?.passed && report.config_hash === profile.config_hash
@@ -74,13 +75,13 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
         {locked && <p>Reload the server version before running sample checks.</p>}
         <form onSubmit={submit}>
           <fieldset className="profile-form" disabled={busy || disabled}>
-            <label>{web ? 'Allowed origin' : 'Allowed dataset ID'}
+            {search ? <p className="muted">Samples use the first detail result from {search.origin}.</p> : <label>{web ? 'Allowed origin' : 'Allowed dataset ID'}
               <select value={target} onChange={event => { setTarget(event.target.value); clearResults(); }}>
                 {allowed.map((item, index) => <option key={index} value={item}>{item}</option>)}
               </select>
-            </label>
-            <label>{web ? 'Document path' : 'CSV sample'}
-              {web ? <input value={content} placeholder="/table.html" aria-invalid={!!error || undefined}
+            </label>}
+            <label>{search ? 'Sample keyword' : web ? 'Document path' : 'CSV sample'}
+              {web ? <input value={content} placeholder={search ? undefined : '/table.html'} aria-invalid={!!error || undefined}
                 aria-describedby={error ? 'sample-error' : undefined}
                 onChange={event => { setContent(event.target.value); clearResults(); }} />
                 : <textarea rows={5} value={content} aria-invalid={!!error || undefined}

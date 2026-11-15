@@ -56,6 +56,7 @@ export function ValidationResult({ report }: { report: Report }) {
 
 export function ConfigurationSummary({ configuration: config }: { configuration: Configuration }) {
   const web = config.adapter_type === 'web';
+  const search = web ? config.search : undefined;
   return <>
     <dl className="source-metadata">
       <div><dt>Record type</dt><dd>{config.record_schema.record_type}</dd></div>
@@ -68,6 +69,21 @@ export function ConfigurationSummary({ configuration: config }: { configuration:
         <div className="source-policy"><dt>Next-link selector ({config.selector_type})</dt>
           <dd><code>{config.pagination.next_link_selector}</code></dd></div>
         <div><dt>Maximum HTML pages</dt><dd>{config.pagination.max_pages}</dd></div>
+      </>}
+      {search && <>
+        <div className="source-policy"><dt>Keyword search</dt><dd><code>{search.origin}{search.path}</code></dd></div>
+        <div><dt>Keyword parameter</dt><dd><code>{search.keyword_parameter}</code></dd></div>
+        <div><dt>Search result item selector</dt><dd><code>{search.result_item_selector}</code></dd></div>
+        <div><dt>Detail link selector</dt><dd><code>{search.detail_link_selector}</code></dd></div>
+        {search.pagination && <div><dt>Search next-link selector</dt><dd><code>{search.pagination.next_link_selector}</code></dd></div>}
+        <div><dt>Maximum search pages</dt><dd>{search.pagination?.max_pages ?? 1}</dd></div>
+        <div><dt>Maximum detail pages</dt><dd>{search.max_detail_pages}</dd></div>
+        <div><dt>Maximum HTTP requests</dt><dd>{search.max_requests}</dd></div>
+        <div><dt>Request timeout</dt><dd>{search.timeout_seconds ?? 2} seconds</dd></div>
+        <div><dt>Collection time budget</dt><dd>{search.max_seconds ?? 45} seconds</dd></div>
+        <div><dt>Response size limit</dt><dd>{search.max_body_bytes ?? 1048576} bytes</dd></div>
+        <div><dt>Maximum redirects per document</dt><dd>{search.max_redirects ?? 2}</dd></div>
+        <div><dt>Maximum execution attempts</dt><dd>{search.max_attempts ?? 3}</dd></div>
       </>}
     </dl>
     <TableRegion label="Configuration fields table">

@@ -1,15 +1,19 @@
-import { emptyField } from './configuration';
+import { emptyField, emptySearch } from './configuration';
 import type { Draft } from './configuration';
 import type { Adapter } from '../sources/api';
-import { paginationLimits, selectorTypes, valueTypes } from './api';
+import { paginationLimits, selectorTypes, valueTypes, type KeywordSearch } from './api';
 
 type Props = {
-  draft: Draft; adapter: Adapter; errors: Record<string, string>;
+  draft: Draft; adapter: Adapter; origins: string[]; errors: Record<string, string>;
   change: (draft: Draft) => void;
 };
 
-export function ConfigurationEditor({ draft, adapter, errors, change }: Props) {
+export function ConfigurationEditor({ draft, adapter, origins, errors, change }: Props) {
   const web = adapter === 'web';
+  const search = draft.search;
+  function patchSearch(patch: Partial<KeywordSearch>) {
+    if (search) change({ ...draft, search: { ...search, ...patch } });
+  }
   function patchField(index: number, patch: Partial<Draft['fields'][number]>) {
     change({ ...draft, fields: draft.fields.map((field, position) =>
       index === position ? { ...field, ...patch } : field) });
@@ -49,6 +53,41 @@ export function ConfigurationEditor({ draft, adapter, errors, change }: Props) {
         </label>
       </div>
       <p className="muted">Configuration and record schema use version 1.</p>
+      {web && <label>Collection mode
+        <select value={search ? 'search' : 'document'} onChange={event => change({
+          ...draft, search: event.target.value === 'search' ? emptySearch(origins[0] ?? '') : undefined,
+        })}>
+          <option value="document">Controlled document</option>
+          <option value="search">Keyword search and detail pages</option>
+        </select>
+      </label>}
+      {search && <div className="profile-grid">
+        <label>Search origin
+          <select {...invalid('search-origin')} value={search.origin} onChange={event => patchSearch({ origin: event.target.value })}>
+            <option value="">Choose a registered origin</option>
+            {origins.map(origin => <option key={origin} value={origin}>{origin}</option>)}
+          </select>
+          {error('search-origin')}
+        </label>
+        {([
+          ['path', 'search-path', 'Search path'], ['keyword_parameter', 'keyword-parameter', 'Keyword parameter'],
+          ['result_item_selector', 'search-result-selector', 'Search result item selector'],
+          ['detail_link_selector', 'detail-link-selector', 'Detail link selector'],
+        ] as const).map(([key, id, label]) => <label key={id}>{label}
+          <input {...invalid(id)} value={search[key]} required onChange={event => patchSearch({ [key]: event.target.value })} />
+          {error(id)}
+        </label>)}
+        <label>Maximum detail pages
+          <input {...invalid('maximum-details')} type="number" min={1} max={10} required value={search.max_detail_pages || ''}
+            onChange={event => patchSearch({ max_detail_pages: Number(event.target.value) })} />
+          {error('maximum-details')}
+        </label>
+        <label>Maximum HTTP requests
+          <input {...invalid('maximum-requests')} type="number" min={3} max={20} required value={search.max_requests || ''}
+            onChange={event => patchSearch({ max_requests: Number(event.target.value) })} />
+          {error('maximum-requests')}
+        </label>
+      </div>}
       {web && <div className="profile-grid">
         <label>Selector type
           <select value={draft.selectorType} onChange={event =>
@@ -56,17 +95,17 @@ export function ConfigurationEditor({ draft, adapter, errors, change }: Props) {
             {selectorTypes.map(type => <option key={type} value={type}>{type === 'css' ? 'CSS' : 'XPath'}</option>)}
           </select>
         </label>
-        <label>Item selector
+        <label>{search ? 'Detail item selector' : 'Item selector'}
           <input {...invalid('item-selector')} value={draft.itemSelector} required
             onChange={event => change({ ...draft, itemSelector: event.target.value })} />
           {error('item-selector')}
         </label>
-        <label>Next-link selector (optional)
+        <label>{search ? 'Search next-link selector (optional)' : 'Next-link selector (optional)'}
           <input {...invalid('next-link-selector')} value={draft.nextLinkSelector}
             onChange={event => change({ ...draft, nextLinkSelector: event.target.value })} />
           {error('next-link-selector')}
         </label>
-        <label>Maximum HTML pages
+        <label>{search ? 'Maximum search pages' : 'Maximum HTML pages'}
           <select value={draft.maxPages} disabled={!draft.nextLinkSelector.trim()}
             onChange={event => change({ ...draft, maxPages: Number(event.target.value) })}>
             {paginationLimits.map(limit => <option key={limit} value={limit}>{limit}</option>)}

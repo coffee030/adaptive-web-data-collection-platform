@@ -38,24 +38,28 @@ export function apiGet<T>(path: string, signal: AbortSignal) {
   return request<T>(path, signal);
 }
 
-export function apiPost<T>(path: string, body: object, signal: AbortSignal) {
-  return sendJson<T>('POST', path, body, signal);
+export function apiPost<T>(path: string, body: object, signal: AbortSignal, requestTimeout?: number) {
+  return sendJson<T>('POST', path, body, signal, requestTimeout);
 }
 
 export function apiPut<T>(path: string, body: object, signal: AbortSignal) {
   return sendJson<T>('PUT', path, body, signal);
 }
 
-function sendJson<T>(method: 'POST' | 'PUT', path: string, body: object, signal: AbortSignal) {
+export function apiPatch<T>(path: string, body: object, signal: AbortSignal) {
+  return sendJson<T>('PATCH', path, body, signal);
+}
+
+function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: object, signal: AbortSignal, requestTimeout?: number) {
   return request<T>(path, signal, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, requestTimeout);
 }
 
-async function request<T>(path: string, signal: AbortSignal, init?: RequestInit): Promise<T> {
-  const timeout = AbortSignal.timeout(timeoutMs);
+async function request<T>(path: string, signal: AbortSignal, init?: RequestInit, requestTimeout = timeoutMs): Promise<T> {
+  const timeout = AbortSignal.timeout(requestTimeout);
   const combinedSignal = AbortSignal.any([signal, timeout]);
   try {
     const response = await fetch(`${baseUrl}${path}`, {

@@ -7,7 +7,7 @@ import { createSource, sourcePath, sourcesPath } from './api';
 import type { Adapter, CreateSourceInput } from './api';
 import { SourcesBreadcrumb } from './SourceDetail';
 
-type Field = 'source_name' | 'adapter_type' | 'permission_reference' | 'policy';
+type Field = 'source_name' | 'adapter_type' | 'permission_reference' | 'policy' | 'paths' | 'interval';
 type Errors = Partial<Record<Field, string>>;
 type Problem = { message: string; fields: Errors };
 
@@ -16,6 +16,8 @@ const labels: Record<Field, string> = {
   adapter_type: 'Adapter',
   permission_reference: 'Permission reference',
   policy: 'Allowed inputs',
+  paths: 'Allowed path prefixes',
+  interval: 'Minimum request interval',
 };
 
 function validateName(value: string, label: string) {
@@ -25,7 +27,8 @@ function validateName(value: string, label: string) {
 
 function validOrigin(value: string) {
   const port = /^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})$/.exec(value)?.[1];
-  return value === 'http://collection-fixture:8001' || (port !== undefined && Number(port) <= 65535);
+  return /^https:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value)
+    || value === 'http://collection-fixture:8001' || (port !== undefined && Number(port) <= 65535);
 }
 
 function submissionProblem(error: unknown): Problem {
@@ -83,6 +86,9 @@ export function SourceCreate() {
     const permission = String(values.get('permission_reference') ?? '').trim();
     const selected = values.get('adapter_type');
     const policy = String(values.get(adapter) ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+    const prefixes = String(values.get('paths') ?? '').split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+    const interval = Number(values.get('interval') ?? 1000);
+    const allowedPaths: Record<string, string[]> = {};
     const fields: Errors = {};
     const nameError = validateName(name, 'a source name');
     const permissionError = validateName(permission, 'a permission reference');
@@ -92,9 +98,23 @@ export function SourceCreate() {
     if (policy.length === 0) fields.policy = adapter === 'web' ? 'Enter an allowed origin.' : 'Enter an allowed dataset ID.';
     else if (new Set(policy).size < policy.length) fields.policy = 'Remove duplicate entries.';
     else if (adapter === 'web' && policy.some(value => !validOrigin(value))) {
-      fields.policy = 'Use a controlled origin such as http://127.0.0.1:8001, with no path or trailing slash.';
+      fields.policy = 'Use a controlled origin such as https://example.com or http://127.0.0.1:8001, with no path or trailing slash.';
     } else if (adapter === 'csv' && policy.some(value => Array.from(value).length > 128)) {
       fields.policy = 'Use 128 characters or fewer per dataset ID.';
+    }
+    if (adapter === 'web') {
+      for (const value of prefixes) {
+        const origin = policy.find(item => value.startsWith(item + '/'));
+        const path = origin && value.slice(origin.length);
+        if (!origin || !path || path.includes('//') || /[\x00-\x20?#\\]/.test(path)) {
+          fields.paths = 'Enter a registered origin and path, such as https://example.com/catalog.';
+          break;
+        }
+        (allowedPaths[origin] ??= []).push(path);
+      }
+      if (!Number.isInteger(interval) || interval < 1000 || interval > 10_000) {
+        fields.interval = 'Enter a whole number from 1000 to 10000 milliseconds.';
+      }
     }
     if (Object.keys(fields).length) {
       setProblem({ message: 'Review the highlighted fields.', fields });
@@ -110,6 +130,8 @@ export function SourceCreate() {
       const input: CreateSourceInput = {
         source_name: name, adapter_type: adapter, permission_reference: permission,
         ...(adapter === 'web' ? { allowed_origins: policy } : { allowed_datasets: policy }),
+        ...(adapter === 'web' && prefixes.length > 0 && { allowed_paths: allowedPaths }),
+        ...(adapter === 'web' && interval !== 1000 && { min_request_interval_ms: interval }),
       };
       const previous = unconfirmed.current;
       const { request_key: _key, ...previousInput } = previous?.body ?? {};
@@ -202,12 +224,21 @@ export function SourceCreate() {
                   {...(active ? fieldProps('policy', 'policy-help') : {})} />
                 {active && <>
                   <p id="policy-help" className="muted">{type === 'web'
-                    ? 'One controlled origin per line, such as http://127.0.0.1:8001. Use the Compose fixture origin only in the fixture environment.'
+                    ? 'One HTTPS origin per line, such as https://example.com. Loopback and Compose fixture origins are also supported for local tests.'
                     : 'One dataset ID per line. IDs are case-sensitive.'}</p>
                   {fieldError('policy')}
                 </>}
               </div>;
             })}
+            {adapter === 'web' && <>
+              <label htmlFor="paths">Allowed path prefixes (optional)</label>
+              <textarea name="paths" rows={2} {...fieldProps('paths', 'paths-help')} />
+              <p id="paths-help" className="muted">Enter one origin and path per line. An origin without listed prefixes permits all its paths.</p>
+              {fieldError('paths')}
+              <label htmlFor="interval">Minimum request interval (ms)</label>
+              <input name="interval" type="number" min={1000} max={10000} defaultValue={1000} {...fieldProps('interval')} />
+              {fieldError('interval')}
+            </>}
             <div className="source-actions">
               <button type="submit" className="primary">Create source</button>
               <Link className="control" to={sourcesPath}>Cancel</Link>

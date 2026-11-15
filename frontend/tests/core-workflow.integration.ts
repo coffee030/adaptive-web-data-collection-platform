@@ -117,6 +117,64 @@ function jobResponse(page: Page) {
   return page.waitForResponse(reply => new URL(reply.url()).pathname === api + jobs && reply.request().method() === 'POST');
 }
 
+test('M7 browser workflow authorizes a source and traces keyword results to detail captures', async ({ page, request }) => {
+  test.setTimeout(65_000);
+  await page.goto('/sources/new');
+  await page.getByRole('textbox', { name: 'Source name' }).fill(`M7 cards ${randomUUID().slice(0, 8)}`);
+  await page.getByRole('combobox', { name: 'Adapter' }).selectOption('web');
+  await page.getByRole('textbox', { name: 'Permission reference' }).fill('M7 controlled fixture');
+  await page.getByRole('textbox', { name: 'Allowed origins' }).fill(origin);
+  await page.getByRole('textbox', { name: /Allowed path prefixes/ }).fill(`${origin}/m7/cards`);
+  await page.getByRole('button', { name: 'Create source' }).click();
+  await page.getByRole('button', { name: 'Authorize Source access' }).click();
+  await expect(page.getByRole('button', { name: 'Revoke Source access' })).toBeVisible();
+  await page.getByRole('link', { name: 'Create draft', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Record type' }).fill('search_fixture');
+  await page.getByRole('combobox', { name: 'Collection mode' }).selectOption('search');
+  await page.getByRole('textbox', { name: 'Search path' }).fill('/m7/cards/search');
+  await page.getByRole('textbox', { name: 'Search result item selector' }).fill('li.result');
+  await page.getByRole('textbox', { name: 'Detail link selector' }).fill('a.item');
+  await page.getByRole('textbox', { name: 'Detail item selector' }).fill('article');
+  await page.getByRole('textbox', { name: /Search next-link selector/ }).fill('a.next');
+  await page.getByRole('combobox', { name: 'Maximum search pages' }).selectOption('2');
+  await page.getByRole('textbox', { name: 'Output field name' }).fill('title');
+  await page.getByRole('textbox', { name: 'Field selector', exact: true }).fill('h2');
+  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+  const keyword = 'C++ & 茶#/';
+  await page.getByRole('textbox', { name: 'Sample keyword' }).fill(keyword);
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('table', { name: /Preview candidates/ })).toContainText('Alpha', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Validate sample' }).click();
+  await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('textbox', { name: 'Approver label' }).fill('M7 fixture operator');
+  await page.getByRole('checkbox', { name: /confirm approval/ }).check();
+  await page.getByRole('button', { name: 'Approve version' }).click();
+  await expect(page.getByText('Read only', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'New Collection Job', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
+  const submitted = jobResponse(page);
+  await page.getByRole('button', { name: 'Submit job', exact: true }).click();
+  const confirmation = await submitted;
+  expect(confirmation.status()).toBe(201);
+  expect(confirmation.request().postDataJSON().entry).toEqual({ adapter_type: 'web', keyword });
+  const job: CollectionJob = await confirmation.json();
+  const jobPath = `${jobs}/${job.job_id}`;
+  await expect(page.getByRole('region', { name: 'Run overview' }).getByText('Succeeded', { exact: true })).toBeVisible({ timeout: 25_000 });
+  const captures = await get<EvidenceMetadata[]>(request, jobPath + '/evidence-pages');
+  expect(captures.map(capture => capture.capture_kind)).toEqual(['search', 'search', 'detail', 'detail', 'detail']);
+  const records = await get<GenericRecord[]>(request, `/records?job_id=${job.job_id}`);
+  expect(Object.fromEntries(records.map(record => [record.payload.title, record.evidence_reference]))).toEqual({
+    Alpha: captures[2]!.evidence_id, Beta: captures[3]!.evidence_id, Bad: captures[4]!.evidence_id,
+  });
+  const evidence = page.getByRole('region', { name: 'Capture evidence' });
+  await expect(evidence.getByRole('listitem')).toHaveText([/^Search results/, /^Search results/, /^Detail/, /^Detail/, /^Detail/]);
+  await evidence.getByRole('link', { name: 'Open evidence ' + captures[2]!.evidence_id }).click();
+  await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
+  await expect(page.getByText(captures[2]!.content_hash, { exact: true })).toBeVisible();
+  await scan(page, 'm7-detail-evidence', [1440, 390]);
+  console.log(`M7 browser Job ${job.job_id}: five captures and three detail-linked records`);
+});
+
 test('M6 browser workflow approves pagination and follows page-level evidence', async ({ page, request }) => {
   test.setTimeout(60_000);
   const registered = await registerSource(page, 'web');

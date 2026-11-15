@@ -199,6 +199,7 @@ function JobEvidence({ id, revision }: { id: string; revision: number }) {
       {result.state === 'ready' && (result.data.length > 0
         ? <ul className="notice job-evidence-list">
           {result.data.map(evidence => <li key={evidence.evidence_id}>
+            {evidence.capture_kind === 'search' ? 'Search results · ' : evidence.capture_kind === 'detail' ? 'Detail · ' : ''}
             {evidence.adapter_type === 'web' ? `Page ${evidence.page_number} ` : ''}
             <EvidenceLink id={evidence.evidence_id} />
           </li>)}

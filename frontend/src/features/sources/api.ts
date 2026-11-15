@@ -1,4 +1,4 @@
-import { ApiError, apiGet, apiPost } from '../../lib/api';
+import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
 import type { Profile } from '../profiles/api';
 
 export const sourcesPath = '/sources';
@@ -12,10 +12,12 @@ export interface Source {
   approval_status: 'pending' | 'approved' | 'revoked';
   allowed_origins: string[];
   allowed_datasets: string[];
+  allowed_paths?: Record<string, string[]>;
+  min_request_interval_ms?: number;
 }
 
 export type CreateSourceInput = Pick<Source, 'source_name' | 'adapter_type' | 'permission_reference'>
-  & Partial<Pick<Source, 'allowed_origins' | 'allowed_datasets'>>;
+  & Partial<Pick<Source, 'allowed_origins' | 'allowed_datasets' | 'allowed_paths' | 'min_request_interval_ms'>>;
 
 export interface ProfileVersion {
   profile_version_id: string;
@@ -30,6 +32,8 @@ export const sourcePath = (id: string) => `${sourcesPath}/${encodeURIComponent(i
 
 export const listSources = (signal: AbortSignal) => apiGet<Source[]>(sourcesPath, signal);
 export const getSource = (id: string, signal: AbortSignal) => apiGet<Source>(sourcePath(id), signal);
+export const setSourceAuthorization = (id: string, approval_status: 'approved' | 'revoked', signal: AbortSignal) =>
+  apiPatch<Source>(`${sourcePath(id)}/authorization`, { approval_status }, signal);
 export const listVersions = (id: string, signal: AbortSignal) =>
   apiGet<Profile[]>(`${sourcePath(id)}/versions`, signal);
 
