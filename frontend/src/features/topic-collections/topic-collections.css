@@ -2,3 +2,37 @@
   min-inline-size: 0;
   overflow-wrap: anywhere;
 }
+
+.request-summary, .request-job-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--xs) var(--md);
+}
+
+.request-summary .timestamp span,
+.request-job-timing .timestamp span {
+  display: inline;
+  margin-inline-start: var(--xs);
+}
+
+.request-job-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--md);
+  margin: 0;
+  padding: var(--md);
+  list-style: none;
+}
+
+.request-job {
+  display: grid;
+  align-content: start;
+  gap: var(--sm);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  padding: var(--md);
+}
+
+.request-job h3, .request-job p { margin: 0; }
+.request-job-heading .status { white-space: nowrap; }

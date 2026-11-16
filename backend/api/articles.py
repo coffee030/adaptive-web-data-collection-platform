@@ -47,9 +47,15 @@ def get_version(request: Request, article_id: UUID, version_id: UUID):
 
 @router.get("/{article_id}/observations", response_model=list[Observation])
 def list_observations(
-    request: Request, article_id: UUID, limit: PageLimit = 50, offset: PageOffset = 0
+    request: Request,
+    article_id: UUID,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
+    request_id: UUID | None = None,
 ):
-    return request.app.state.articles.observations(article_id, limit, offset)
+    return request.app.state.articles.observations(
+        article_id, limit, offset, request_id=request_id
+    )
 
 
 @router.get("/{article_id}/observations/{record_id}", response_model=ObservationDetail)

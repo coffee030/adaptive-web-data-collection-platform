@@ -1,7 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Profile, Report } from '../src/features/profiles/api';
+import type { GenericRecord } from '../src/features/results/api';
 import type { ArticleSummary, CollectionRequest, Observation, VersionInfo } from '../src/features/topic-collections/api';
 
 const root = '/api/v1';
@@ -33,8 +36,57 @@ async function checkLayout(page: Page, checkAxe: boolean) {
   })).toBe(0);
 }
 
-test('M8 operator catalog and multi-source collection trace history and manual refresh', async ({ page, request, baseURL, browserName }) => {
-  test.setTimeout(120_000);
+async function persistedRecords(request: APIRequestContext, jobIds: string[]) {
+  const records: GenericRecord[] = [];
+  for (const jobId of jobIds) {
+    for (let offset = 0; ; offset++) {
+      const reply = await request.get(root + '/records', { params: { job_id: jobId, limit: 1, offset } });
+      expect(reply.ok()).toBe(true);
+      const rows: GenericRecord[] = await reply.json();
+      if (!rows.length) break;
+      records.push(rows[0]!);
+    }
+  }
+  return records.sort((first, second) =>
+    Date.parse(first.created_at) - Date.parse(second.created_at) || first.record_id.localeCompare(second.record_id));
+}
+
+async function checkDownloads(page: Page, expected: GenericRecord[], filenamePrefix: string) {
+  for (const format of ['csv', 'json'] as const) {
+    const received = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download ' + format.toUpperCase() }).click();
+    const download = await received;
+    const filename = filenamePrefix + '-records.' + format;
+    expect(download.suggestedFilename()).toBe(filename);
+    const file = test.info().outputPath(filename);
+    await download.saveAs(file);
+    if (format === 'json') {
+      expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(expected);
+    } else {
+      const parsed = execFileSync(process.env.M9_TEST_PYTHON || 'python', [
+        '-X', 'utf8', '-c',
+        'import csv, json, sys; f = open(sys.argv[1], encoding="utf-8", newline=""); print(json.dumps(list(csv.DictReader(f))))',
+        file,
+      ], { encoding: 'utf8' });
+      const rows = JSON.parse(parsed) as Record<string, string>[];
+      expect(rows).toHaveLength(expected.length);
+      for (const [index, record] of expected.entries()) {
+        const row = rows[index]!;
+        expect(Object.keys(row).sort()).toEqual(Object.keys(record).sort());
+        for (const [key, value] of Object.entries(record)) {
+          if (value !== null && typeof value === 'object') {
+            expect(JSON.parse(row[key]!)).toEqual(value);
+          } else {
+            expect(row[key]).toBe(value === null ? '' : String(value));
+          }
+        }
+      }
+    }
+  }
+}
+
+test('operator configures two sources, traces collection history and downloads persisted records', async ({ page, request, baseURL, browserName }) => {
+  test.setTimeout(180_000);
   // Keep the interaction and layout checks independent of the axe runtime.
   const checkAxe = browserName === 'chromium';
   const suffix = randomUUID().slice(0, 8);
@@ -66,8 +118,9 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   const version = await post<Profile>(request, `/sources/${catalog.id}/versions`, {
     configuration: {
       adapter_type: 'web', config_schema_version: '1', selector_type: 'xpath', item_selector: '//main/dl',
-      fields: [{ name: 'headline', selector: './dt' }],
-      record_schema: { record_type: 'article_fixture', schema_version: '1', fields: [{ name: 'headline' }] },
+      fields: [{ name: 'headline', selector: './dt' }, { name: 'count', selector: './dd' }],
+      record_schema: { record_type: 'catalog_fixture', schema_version: '1',
+        fields: [{ name: 'headline' }, { name: 'count', value_type: 'integer' }] },
       search: {
         origin, path: '/m7/catalog/search', keyword_parameter: 'term',
         result_item_selector: '//tbody/tr', detail_link_selector: './td/a',
@@ -102,26 +155,45 @@ test('M8 operator catalog and multi-source collection trace history and manual r
     await expect(page.getByRole('link', { name: `${source.name} · Version 1` })).toBeVisible();
   }
 
-  await page.getByRole('link', { name: 'New Collection', exact: true }).click();
-  await page.getByRole('link', { name: 'Collect by topic', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption({ label: categoryName });
-  await page.getByRole('combobox', { name: 'Topic', exact: true }).selectOption({ label: topicName });
-  await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill('quick');
-  for (const source of [cards, catalog]) {
-    await page.getByRole('checkbox', { name: `${source.name} · Version 1` }).check();
+  async function prepareCollection(keyword: string) {
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Collect by topic' }).click();
+    await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption({ label: categoryName });
+    await page.getByRole('combobox', { name: 'Topic', exact: true }).selectOption({ label: topicName });
+    for (const source of [cards, catalog]) {
+      await page.getByRole('checkbox', { name: `${source.name} · Version 1` }).check();
+    }
+    await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
   }
+  async function submitCollection() {
+    const created = page.waitForResponse(reply => reply.request().method() === 'POST' &&
+      new URL(reply.url()).pathname === root + '/collection-requests');
+    await page.getByRole('button', { name: 'Start topic collection' }).press('Enter');
+    const reply = await created;
+    expect(reply.status()).toBe(201);
+    return await reply.json() as CollectionRequest;
+  }
+  await prepareCollection('quick');
   await checkLayout(page, checkAxe);
-  const created = page.waitForResponse(reply => reply.request().method() === 'POST' &&
-    new URL(reply.url()).pathname === root + '/collection-requests');
-  await page.getByRole('button', { name: 'Start topic collection' }).click();
-  const initialReply = await created;
-  expect(initialReply.status()).toBe(201);
-  const initial: CollectionRequest = await initialReply.json();
+  const initial = await submitCollection();
   expect(initial.jobs).toHaveLength(2);
   await expect(page.getByRole('heading', { name: `${topicName} · quick` })).toBeVisible();
-  const jobTable = page.getByRole('table').filter({ hasText: cards.name }).first();
-  await expect(jobTable.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
+  const jobs = page.getByRole('list', { name: 'Source jobs' });
+  await expect(jobs.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
   const initialArticles: ArticleSummary[] = await (await request.get(`${root}/articles?request_id=${initial.id}`)).json();
+  await expect(page.getByText('2 source jobs', { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 768, height: 900 });
+  await checkLayout(page, checkAxe);
+  await page.screenshot({ path: test.info().outputPath('request-tablet.png'), fullPage: true });
+  await page.getByRole('link', { name: 'View request records' }).click();
+  await expect(page.getByText('Records from this collection request')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Alpha · View record' })).toHaveCount(2);
+  await page.getByRole('link', { name: 'Alpha · View record' }).first().click();
+  await expect(page.getByRole('link', { name: 'Article history' })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to Records' }).click();
+  await expect(page).toHaveURL(new RegExp(`request_id=${initial.id}`));
+  await page.getByRole('link', { name: 'Browse articles' }).click();
+  await expect(page.getByRole('heading', { name: 'Articles observed in this run' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Collection request' }).click();
 
   const refresh = page.waitForResponse(reply => reply.request().method() === 'POST' && reply.url().endsWith('/refresh'));
   await page.getByRole('button', { name: 'Refresh collection' }).click();
@@ -131,7 +203,7 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   expect(second.refresh_of).toBe(initial.id);
   expect(second.jobs.map(item => item.job.profile_version_id)).toEqual(initial.jobs.map(item => item.job.profile_version_id));
   await expect(page.getByRole('link', { name: 'View previous run' })).toHaveAttribute('href', `/collection-requests/${initial.id}`);
-  await expect(jobTable.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
+  await expect(jobs.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
 
   await page.getByRole('link', { name: 'View previous run' }).click();
   const refreshedArticles: ArticleSummary[] = await (await request.get(`${root}/articles?request_id=${second.id}`)).json();
@@ -151,6 +223,10 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   expect(observations).toHaveLength(2);
   expect(observations.map(item => item.content_version_id)).toEqual([versions[0]!.id, versions[0]!.id]);
   expect(new Set(observations.map(item => item.evidence_id)).size).toBe(2);
+  const selectedObservation = observations.find(item => item.request_id === initial.id)!;
+  const history = page.getByRole('region', { name: 'Observation history', exact: true }).first();
+  await expect(history.getByRole('link', { name: 'Record', exact: true }))
+    .toHaveAttribute('href', '/records/' + selectedObservation.record_id);
   await page.getByRole('button', { name: 'View version 1' }).click();
   await expect(page.getByRole('heading', { name: 'Version 1 · Alpha' })).toBeVisible();
   await page.getByRole('button', { name: 'View extracted payload for observation 1 on this page' }).click();
@@ -160,14 +236,39 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await checkLayout(page, checkAxe);
   await page.screenshot({ path: test.info().outputPath('article-dark.png'), fullPage: true });
-  await page.getByRole('region', { name: 'Latest content' }).getByRole('link', { name: 'Evidence', exact: true }).click();
+  await history.getByRole('link', { name: 'Evidence', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('/evidence/' + selectedObservation.evidence_id));
   await expect(page.getByRole('heading', { name: 'Evidence Metadata' })).toBeVisible();
   await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
+
+  const jobIds = initial.jobs.map(item => item.job.job_id);
+  const persisted = await persistedRecords(request, jobIds);
+  expect(persisted).toHaveLength(2);
+  expect(persisted.map(row => Object.keys(row.payload).sort())).toEqual(expect.arrayContaining([['headline'], ['count', 'headline']]));
+  await page.goto('/collection-requests/' + initial.id);
+  await checkLayout(page, checkAxe);
+  await checkDownloads(page, persisted, 'request-' + initial.id);
+  const cardsJob = initial.jobs.find(item => item.source_name === cards.name)!.job;
+  const cardsJobDetails = jobs.getByRole('listitem').filter({ hasText: cards.name });
+  await cardsJobDetails.getByRole('link', { name: 'Evidence', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Capture evidence' })).toBeFocused();
+  await expect(page.getByRole('region', { name: 'Capture evidence' }).getByRole('link')).not.toHaveCount(0);
+  await checkDownloads(page, persisted.filter(row => row.job_id === cardsJob.job_id), 'job-' + cardsJob.job_id);
+  await page.getByRole('link', { name: 'Collection request', exact: true }).click();
+
+  await prepareCollection('detail404');
+  const partial = await submitCollection();
+  await expect(page.getByText('Some jobs did not complete successfully.', { exact: false })).toBeVisible({ timeout: 65_000 });
+  await expect(jobs.getByText('HTTP 404', { exact: true })).toHaveCount(2);
+  await expect(jobs.getByText('Partial', { exact: true })).toHaveCount(2);
+  await checkLayout(page, checkAxe);
+  await expect(page.getByRole('button', { name: 'Download JSON' })).toBeEnabled();
+  await page.screenshot({ path: test.info().outputPath('partial-mobile.png'), fullPage: true });
   await page.goto('/articles');
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
   await expect(page.locator(`a[href="${articlePath}"]`)).toBeVisible();
   await page.goto('/collection-requests');
   await expect(page.getByRole('heading', { name: 'Collection requests' })).toBeVisible();
   await expect(page.locator(`a[href="/collection-requests/${second.id}"]`)).toBeVisible();
-  console.log(`M8 requests ${initial.id} → ${second.id}, article ${articlePath}, evidence ${observations[0]!.evidence_id}`);
+  console.log(`M9 requests ${initial.id} → ${second.id}, controlled partial ${partial.id}, article ${articlePath}, evidence ${selectedObservation.evidence_id}, exported ${persisted.length} records`);
 });

@@ -15,9 +15,11 @@ const messages: Record<string, string> = {
   collection_request_conflict: 'The submission key belongs to another collection.',
   destination_denied: 'A pinned search destination is outside the current source policy.',
   invalid_request: 'Check the fields and try again.',
+  record_export_pending: 'Wait for the collection to finish, then try the download again.',
+  record_export_limit: 'This scope exceeds the download limit of 5,000 records or 8 MiB. Try a smaller scope.',
 };
 
-export function useAction() {
+export function useAction(fallback = 'The action could not be confirmed. Check the connection and try again.') {
   const current = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -40,7 +42,7 @@ export function useAction() {
     } catch (error) {
       if (!controller.signal.aborted) {
         const code = error instanceof ApiError ? error.code : undefined;
-        setError((code && messages[code]) || 'The action could not be confirmed. Check the connection and try again.');
+        setError((code && messages[code]) || fallback);
       }
     } finally {
       current.current = null;

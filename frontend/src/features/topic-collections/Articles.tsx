@@ -1,25 +1,32 @@
 import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { TableRegion, Timestamp } from '../../components/feedback';
 import { apiGet } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { jobPath } from '../collection-jobs/api';
 import { profilePath } from '../profiles/api';
-import { evidenceDetailPath, recordPath, recordsPath } from '../results/api';
+import { evidenceDetailPath, recordPath, recordsForRequest, recordsPath } from '../results/api';
 import { JsonViewer } from '../results/JsonViewer';
 import { sourcePath } from '../sources/api';
 import {
-  articlePath, articlesPath, requestPath, type ArticleDetail, type ArticleSummary,
+  articlePath, articlesPath, requestArticlesPath, requestPath, type ArticleDetail, type ArticleSummary,
   type ArticleVersion, type Observation, type ObservationDetail, type VersionInfo,
 } from './api';
 import { Page, Resource } from './support';
 import './topic-collections.css';
 
 export function ArticlesPage() {
+  const [search] = useSearchParams();
+  const requestId = search.get('request_id') || undefined;
   return <>
-    <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={recordsPath}>Data Explorer</Link></nav>
-    <div className="page-heading"><h1>Articles</h1></div>
-    <ArticleList />
+    <nav className="breadcrumb" aria-label="Breadcrumb">
+      <Link to={requestId ? recordsForRequest(requestId) : recordsPath}>Data Explorer</Link>
+      {requestId && <Link to={requestPath(requestId)}>Collection request</Link>}
+    </nav>
+    <div className="page-heading detail-heading"><h1>Articles</h1>
+      {requestId && <Link className="control" to={articlesPath}>Browse all articles</Link>}
+    </div>
+    <ArticleList key={requestId ?? 'all'} requestId={requestId} />
   </>;
 }
 
@@ -36,7 +43,8 @@ export function ArticleList({ requestId, revision }: { requestId?: string; revis
           <thead><tr><th scope="col">Latest title</th><th scope="col">Source</th>
             <th scope="col">Current version</th><th scope="col">Latest observation (UTC)</th></tr></thead>
           <tbody>{rows.map(row => <tr key={row.id}>
-            <th scope="row"><Link to={articlePath(row.id)}>{row.title}</Link></th>
+            <th scope="row" className="collection-text"><Link to={requestId
+              ? requestArticlesPath(requestId, articlePath(row.id)) : articlePath(row.id)}>{row.title}</Link></th>
             <td><Link to={sourcePath(row.source_id)}>{row.source_name}</Link></td>
             <td>{row.version}</td><td><Timestamp value={row.captured_at} /></td>
           </tr>)}</tbody>
@@ -48,10 +56,12 @@ export function ArticleList({ requestId, revision }: { requestId?: string; revis
 
 export function ArticlePage() {
   const { articleId = '' } = useParams();
-  return <ArticleWorkspace key={articleId} id={articleId} />;
+  const [search] = useSearchParams();
+  const requestId = search.get('request_id') || undefined;
+  return <ArticleWorkspace key={articleId + '/' + (requestId ?? '')} id={articleId} requestId={requestId} />;
 }
 
-function ArticleWorkspace({ id }: { id: string }) {
+function ArticleWorkspace({ id, requestId }: { id: string; requestId?: string }) {
   const path = articlePath(id);
   const load = useCallback((signal: AbortSignal) => apiGet<ArticleDetail>(path, signal), [path]);
   const state = useResource(load);
@@ -65,7 +75,10 @@ function ArticleWorkspace({ id }: { id: string }) {
   const observation = useResource(loadObservation, 0, false, !!recordId);
 
   return <>
-    <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={articlesPath}>Articles</Link></nav>
+    <nav className="breadcrumb" aria-label="Breadcrumb">
+      <Link to={requestId ? requestArticlesPath(requestId) : articlesPath}>Articles</Link>
+      {requestId && <Link to={requestPath(requestId)}>Collection request</Link>}
+    </nav>
     <Resource label="article" state={state}>{article => <>
       <div className="page-heading collection-text"><h1>{article.title}</h1>
         <p><Link to={sourcePath(article.source_id)}>{article.source_name}</Link></p>
@@ -73,6 +86,7 @@ function ArticleWorkspace({ id }: { id: string }) {
       <section className="panel detail-panel" aria-labelledby="latest-article">
         <div className="panel-heading"><h2 id="latest-article">Latest content</h2></div>
         <div className="profile-body profile-form collection-text">
+          {requestId && <p className="muted">Latest capture across all collections. See the observations below for this request.</p>}
           <p>Version {article.version} · Observed <Timestamp value={article.captured_at} /> UTC</p>
           <p className="identifier"><a href={article.url} target="_blank" rel="noreferrer">{article.url}</a></p>
           <Content version={article.latest_version} />
@@ -102,8 +116,12 @@ function ArticleWorkspace({ id }: { id: string }) {
         </div>}
       </section>
       <section className="panel detail-panel" aria-labelledby="article-observations">
-        <div className="panel-heading"><h2 id="article-observations">Observation history</h2></div>
-        <Page<Observation> path={path + '/observations'} label="Observations" empty="No observations.">
+        <div className="panel-heading"><h2 id="article-observations">Observation history</h2>
+          {requestId && <Link to={path}>Show all observations</Link>}
+        </div>
+        {requestId && <p className="notice muted">Observations from this collection request.</p>}
+        <Page<Observation> path={path + '/observations'} label="Observations" requestId={requestId}
+          empty={requestId ? 'No observations for this article in the selected request.' : 'No observations.'}>
           {rows => <TableRegion label="Observation history">
             <table><thead><tr><th scope="col">Observed (UTC)</th><th scope="col">Lineage</th>
               <th scope="col">Payload</th></tr></thead>

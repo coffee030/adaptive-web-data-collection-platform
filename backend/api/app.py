@@ -79,6 +79,8 @@ ERROR_STATUSES = {
     "job_not_pending": 409,
     "job_not_due": 409,
     "invalid_job_transition": 409,
+    "record_export_pending": 409,
+    "record_export_limit": 413,
 }
 
 

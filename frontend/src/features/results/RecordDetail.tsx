@@ -4,7 +4,8 @@ import { Loading, Status, Timestamp } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
 import { getRecord, recordsPath } from './api';
 import { JsonViewer } from './JsonViewer';
-import { EvidenceLink, Metadata, ProvenanceFields, ResultProblem, clip, displayValue, positionLabel } from './presentation';
+import { EvidenceLink, Metadata, ProvenanceFields, ResultProblem, clip, displayValue, positionLabel, recordTitleFields } from './presentation';
+import { articlePath, requestArticlesPath, requestPath } from '../topic-collections/api';
 
 export function RecordDetail() {
   const { recordId = '' } = useParams();
@@ -13,6 +14,8 @@ export function RecordDetail() {
   const load = useCallback((signal: AbortSignal) => getRecord(recordId, signal), [recordId]);
   const { result, retry } = useResource(load);
   const record = result.state === 'ready' ? result.data : null;
+  const title = record && recordTitleFields.map(field => record.payload[field])
+    .find(value => typeof value === 'string' && value.trim());
 
   return (
     <>
@@ -20,7 +23,12 @@ export function RecordDetail() {
         <Link to={{ pathname: recordsPath, search }}>Back to Records</Link>
       </nav>
       <div className="page-heading detail-heading">
-        <div><h1>Record Details</h1><p className="identifier muted">{record?.record_id ?? recordId}</p></div>
+        <div><h1>Record Details</h1>{title && <p>{clip(String(title), 160)}</p>}</div>
+        {record && <div className="profile-actions">
+          {record.request_id && <Link to={requestPath(record.request_id)}>Collection request</Link>}
+          {record.article_id && <Link to={record.request_id
+            ? requestArticlesPath(record.request_id, articlePath(record.article_id)) : articlePath(record.article_id)}>Article history</Link>}
+        </div>}
       </div>
       {result.state === 'loading' && <div className="panel"><Loading>Loading record…</Loading></div>}
       {result.state === 'error' && <div className="panel"><ResultProblem error={result.error} resource="Record" retry={retry} /></div>}
@@ -55,6 +63,7 @@ export function RecordDetail() {
             <div className="panel-heading"><h2 id="record-provenance-title">Provenance</h2></div>
             <dl className="result-metadata">
               <ProvenanceFields lineage={record} />
+              <Metadata label="Record ID"><code>{record.record_id}</code></Metadata>
               <Metadata label="Evidence ID"><EvidenceLink id={record.evidence_reference}
                 state={{ recordId: record.record_id, recordsSearch: search }} /></Metadata>
               <Metadata label="Run ID"><code>{record.provenance.run_id}</code></Metadata>

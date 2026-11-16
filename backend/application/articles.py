@@ -208,12 +208,17 @@ class Articles:
                 )
             return ArticleVersion.model_validate(row)
 
-    def observations(self, article_id, limit, offset):
+    def observations(self, article_id, limit, offset, *, request_id=None):
         with self.sessions() as session:
             _require(session, ArticleRow, article_id, "article")
+            query = _observations(article_id)
+            if request_id is not None:
+                _require(
+                    session, CollectionRequestRow, request_id, "collection_request"
+                )
+                query = query.where(RequestJobRow.request_id == request_id)
             rows = session.execute(
-                _observations(article_id)
-                .order_by(
+                query.order_by(
                     ObservationRow.captured_at.desc(), ObservationRow.record_id.desc()
                 )
                 .limit(limit)

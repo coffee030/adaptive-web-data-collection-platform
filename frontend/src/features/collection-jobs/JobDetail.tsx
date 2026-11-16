@@ -7,7 +7,9 @@ import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } f
 import { profilePath } from '../profiles/api';
 import { listJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
 import { EvidenceLink, PayloadPreview } from '../results/presentation';
+import { RecordExport } from '../results/RecordExport';
 import { sourcePath } from '../sources/api';
+import { requestPath } from '../topic-collections/api';
 import { ErrorDetails, ResultCounts } from './presentation';
 
 export function JobDetail() {
@@ -19,6 +21,7 @@ function JobDetailPage({ id }: { id: string }) {
   const location = useLocation();
   const search = location.state?.jobsSearch;
   const back = typeof search === 'string' && search ? `${jobsPath}?${search}` : jobsPath;
+  const requestId = typeof location.state?.requestId === 'string' ? location.state.requestId : '';
   const [revision, setRevision] = useState(0);
   const [manualRevision, setManualRevision] = useState(0);
   const [recordOffset, setRecordOffset] = useState(0);
@@ -54,6 +57,7 @@ function JobDetailPage({ id }: { id: string }) {
     <>
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <Link to={back}>Collection Jobs</Link>
+        {requestId && <Link to={requestPath(requestId)}>Collection request</Link>}
       </nav>
       <div className="page-heading detail-heading">
         <div>
@@ -82,6 +86,7 @@ function JobDetailPage({ id }: { id: string }) {
       {result.state === 'ready' && (
         <>
           <JobOverview job={result.data} />
+          <RecordExport scope="job" id={result.data.job_id} pending={active} />
           <EventTimeline result={events.result} retry={events.retry} />
           {active ? <section className="panel detail-panel" aria-label="Related records">
             <p className="notice muted">Records appear after the job publishes results.</p>
@@ -191,9 +196,17 @@ const recordsPageSize = 10;
 function JobEvidence({ id, revision }: { id: string; revision: number }) {
   const load = useCallback((signal: AbortSignal) => listJobEvidence(id, signal), [id]);
   const { result, retry } = useResource(load, revision);
+  const { hash } = useLocation();
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (hash === '#job-evidence-title') {
+      heading.current?.focus({ preventScroll: true });
+      heading.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [hash]);
   return (
     <section className="panel detail-panel" aria-labelledby="job-evidence-title">
-      <div className="panel-heading"><h2 id="job-evidence-title">Capture evidence</h2></div>
+      <div className="panel-heading"><h2 id="job-evidence-title" ref={heading} tabIndex={-1}>Capture evidence</h2></div>
       {result.state === 'loading' && <Loading>Loading capture evidence…</Loading>}
       {result.state === 'error' && <RequestProblem error={result.error} resource="capture evidence" retry={retry} />}
       {result.state === 'ready' && (result.data.length > 0

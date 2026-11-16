@@ -33,7 +33,7 @@ export function JobCreate() {
         <Link to={back}>{state?.fromProfile ? 'Profile version' : state?.fromSource ? 'Source details' : 'Collection Jobs'}</Link>
       </nav>
       <div className="page-heading">
-        <h1>New Collection</h1>
+        <h1>Single-source collection and CSV import</h1>
         <p className="muted">{direct
           ? 'Review the source policy, approved profile and permitted input.'
           : 'Choose an input format and source to run a single collection job.'}</p>

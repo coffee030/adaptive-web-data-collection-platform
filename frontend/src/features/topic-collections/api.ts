@@ -8,6 +8,8 @@ export const newRequestPath = requestsPath + '/new';
 export const articlesPath = '/articles';
 export const requestPath = (id: string) => `${requestsPath}/${encodeURIComponent(id)}`;
 export const articlePath = (id: string) => `${articlesPath}/${encodeURIComponent(id)}`;
+export const requestArticlesPath = (requestId: string, path = articlesPath) =>
+  `${path}?${new URLSearchParams({ request_id: requestId })}`;
 export const bindingsPath = (id: string) => `${topicsPath}/${encodeURIComponent(id)}/bindings`;
 
 export interface Category {

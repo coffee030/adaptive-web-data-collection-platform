@@ -43,6 +43,11 @@ export interface GenericRecord extends ResultEntry {
   };
 }
 
+export interface RecordDetails extends GenericRecord {
+  request_id: string | null;
+  article_id: string | null;
+}
+
 export interface QuarantineEntry extends ResultEntry {
   problems: RecordProblem[];
 }
@@ -72,19 +77,26 @@ export function recordsForJob(jobId: string) {
   return `${recordsPath}?${new URLSearchParams({ job_id: jobId })}`;
 }
 
+export function recordsForRequest(requestId: string) {
+  return `${recordsPath}?${new URLSearchParams({ request_id: requestId })}`;
+}
+
 function pageQuery(pageSize: number, offset: number) {
   return new URLSearchParams({ limit: String(pageSize + 1), offset: String(offset) });
 }
 
-export function listRecords(jobId: string, pageSize: number, offset: number, signal: AbortSignal, order?: 'newest') {
+export function listRecords(jobId: string, pageSize: number, offset: number, signal: AbortSignal,
+  { order, requestId }: { order?: 'newest'; requestId?: string } = {},
+) {
   const query = pageQuery(pageSize, offset);
   if (order) query.set('order', order);
   if (jobId) query.set('job_id', jobId);
+  if (requestId) query.set('request_id', requestId);
   return apiGet<GenericRecord[]>(`${recordsPath}?${query}`, signal);
 }
 
 export function getRecord(id: string, signal: AbortSignal) {
-  return apiGet<GenericRecord>(recordPath(id), signal);
+  return apiGet<RecordDetails>(recordPath(id) + '?include_lineage=true', signal);
 }
 
 export function getEvidence(id: string, signal: AbortSignal) {

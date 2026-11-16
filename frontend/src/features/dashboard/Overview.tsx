@@ -1,21 +1,22 @@
 import { Link } from 'react-router';
 import { Loading, RequestProblem, Status, Timestamp } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
-import { jobPath, jobsPath, listJobs, newJobPath } from '../collection-jobs/api';
+import { jobPath, jobsPath, listJobs } from '../collection-jobs/api';
 import { listRecords, recordPath, recordsPath } from '../results/api';
 import { clip, PayloadPreview, recordTitleFields } from '../results/presentation';
 import { listSources, sourcesPath } from '../sources/api';
+import { newRequestPath } from '../topic-collections/api';
 
 const jobLimit = 5;
 const recordLimit = 4;
 const recentJobs = (signal: AbortSignal) => listJobs(jobLimit, 0, '', signal, 'newest');
-const recentRecords = (signal: AbortSignal) => listRecords('', recordLimit, 0, signal, 'newest');
+const recentRecords = (signal: AbortSignal) => listRecords('', recordLimit, 0, signal, { order: 'newest' });
 
 const workflow = [
-  ['Collect', 'Run a collection from an authorized source with an approved profile.'],
+  ['Collect', 'Choose a topic and search its approved sources.'],
   ['Validate', 'Check field values and identify invalid rows and duplicates.'],
   ['Trace', 'Follow each record back to its job, profile version and capture evidence.'],
-  ['Use', 'Explore structured records that downstream applications can consume through the Core API.'],
+  ['Use', 'Explore validated records and article history.'],
 ] as const;
 
 export function Overview() {
@@ -37,7 +38,7 @@ export function Overview() {
       <div>
         <h1 id="dashboard-title">Data Collection Overview</h1>
         <p>Collect structured information from approved sources, validate data quality, and explore traceable results.</p>
-        <Link className="control dashboard-action" to={newJobPath}>New Collection</Link>
+        <Link className="control dashboard-action" to={newRequestPath}>Collect by topic</Link>
       </div>
       <ol className="workflow" aria-label="Platform workflow">
         {workflow.map(([title, description]) => <li key={title}>

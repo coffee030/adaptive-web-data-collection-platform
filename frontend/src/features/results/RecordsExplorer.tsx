@@ -2,22 +2,24 @@ import { useCallback, useRef, useState, type CSSProperties, type FormEvent } fro
 import { Link } from 'react-router';
 import { Loading, Pagination, RequestProblem, Status, TableRegion } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
-import { getJob, jobPath, maxOffset, newJobPath, sameId } from '../collection-jobs/api';
+import { getJob, jobPath, maxOffset, sameId } from '../collection-jobs/api';
 import { listSources, sourcePath } from '../sources/api';
 import { listRecords, quarantinePath, recordPath, type GenericRecord } from './api';
 import { clip, displayValue, EvidenceLink, recordTitleFields } from './presentation';
 import { useResultPage } from './useResultPage';
-import { articlesPath } from '../topic-collections/api';
+import { articlesPath, newRequestPath, requestArticlesPath, requestPath } from '../topic-collections/api';
 
 const pageSize = 10;
 
 export function RecordsExplorer() {
   const { search, setSearch, offset, changePage } = useResultPage();
   const jobId = search.get('job_id') ?? '';
-  const load = useCallback((signal: AbortSignal) => listRecords(jobId, pageSize, offset, signal), [jobId, offset]);
+  const requestId = search.get('request_id') ?? '';
+  const load = useCallback((signal: AbortSignal) =>
+    listRecords(jobId, pageSize, offset, signal, { requestId }), [jobId, requestId, offset]);
   const { result, retry } = useResource(load);
   const heading = useRef<HTMLHeadingElement>(null);
-  const invalidFilter = result.state === 'error' && result.error.status === 422 && Boolean(jobId);
+  const invalidFilter = result.state === 'error' && result.error.status === 422 && Boolean(jobId) && !requestId;
   const [displayFields, setDisplayFields] = useState<Set<string>>();
   const sources = useResource(listSources);
 
@@ -32,17 +34,22 @@ export function RecordsExplorer() {
     <div className="page-heading">
       <h1 ref={heading} tabIndex={-1}>Data Explorer</h1>
       <p className="muted">Browse accepted records and follow their source, collection job and capture evidence.</p>
-      <Link className="control" to={articlesPath}>Browse articles</Link>
+      <div className="profile-actions">
+        {requestId && <Link className="control" to={requestPath(requestId)}>View collection request</Link>}
+        <Link className="control" to={requestId ? requestArticlesPath(requestId) : articlesPath}>Browse articles</Link>
+      </div>
     </div>
     <section className="panel detail-panel explorer-collection" aria-label="Generic records">
       <form key={jobId} className="toolbar records-filter" onSubmit={applyFilter}>
-        <label className="filter">
-          <span>Job ID</span>
-          <input name="job_id" defaultValue={jobId} maxLength={128} aria-invalid={invalidFilter || undefined}
-            aria-describedby={invalidFilter ? 'records-filter-error' : undefined} />
-        </label>
-        <button type="submit">Apply filter</button>
-        {jobId && <button type="button" onClick={() => { heading.current?.focus(); setSearch({}); }}>Clear filter</button>}
+        {requestId ? <strong>Records from this collection request</strong> : <>
+          <label className="filter">
+            <span>Job ID</span>
+            <input name="job_id" defaultValue={jobId} maxLength={128} aria-invalid={invalidFilter || undefined}
+              aria-describedby={invalidFilter ? 'records-filter-error' : undefined} />
+          </label>
+          <button type="submit">Apply filter</button>
+        </>}
+        {(jobId || requestId) && <button type="button" onClick={() => { heading.current?.focus(); setSearch({}); }}>Clear filter</button>}
         <button type="button" className="records-refresh" onClick={retry}
           disabled={result.state === 'loading'}>Refresh records</button>
       </form>
@@ -63,12 +70,14 @@ export function RecordsExplorer() {
             ? sources.result.data.find(source => sameId(id, source.source_id))?.source_name : undefined}
         /> : <div className="notice">
           <div role="status">
-            <strong>{offset ? 'This page is empty' : jobId ? 'No records match this Job ID' : 'No records yet'}</strong>
-            <p>{offset ? 'Return to the previous page to see records.' : jobId
+            <strong>{offset ? 'This page is empty' : requestId ? 'No records for this collection request'
+              : jobId ? 'No records match this Job ID' : 'No records yet'}</strong>
+            <p>{offset ? 'Return to the previous page to see records.' : requestId
+              ? 'Open the collection request to check the status and results of its jobs.' : jobId
               ? 'This job has no accepted records available. Check the job and its quality summary.'
               : 'Accepted records appear after a collection job publishes validated results.'}</p>
           </div>
-          {!offset && !jobId && <Link to={newJobPath}>Start a collection</Link>}
+          {!offset && !jobId && !requestId && <Link to={newRequestPath}>Start a collection</Link>}
         </div>}
         {(offset > 0 || result.data.length > 0) &&
           <Pagination label="Records" offset={offset} size={pageSize} loaded={result.data.length} maxOffset={maxOffset}
@@ -76,7 +85,7 @@ export function RecordsExplorer() {
       </>}
     </section>
     {jobId && result.state === 'ready' && <JobQuality key={jobId} id={jobId} />}
-    {(!jobId || result.state !== 'ready') && <section className="panel detail-panel quality-panel" aria-labelledby="quality-title">
+    {!requestId && (!jobId || result.state !== 'ready') && <section className="panel detail-panel quality-panel" aria-labelledby="quality-title">
       <div className="panel-heading"><h2 id="quality-title">Data quality</h2></div>
       <p className="notice muted">Open a record’s job or filter by Job ID to see its accepted, invalid and duplicate counts.</p>
     </section>}

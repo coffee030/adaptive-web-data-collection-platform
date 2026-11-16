@@ -67,7 +67,7 @@ async function fillCsv(page: Page, content = data) {
 test('Jobs creates one controlled HTML job by keyboard and preserves list filters', async ({ page }) => {
   const sent = await mock(page);
   await page.goto(jobs + '?status=partial&offset=20');
-  await page.getByRole('link', { name: 'New Collection Job' }).click();
+  await page.getByRole('link', { name: 'Single-source collection and CSV import' }).click();
   await expect(page).toHaveURL(create);
   await page.getByRole('radio', { name: /HTML pages/ }).check();
   await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(web.source_id);

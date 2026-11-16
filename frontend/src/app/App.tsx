@@ -29,7 +29,7 @@ export function App() {
   useEffect(() => {
     const title = pathname === '/' ? 'Overview'
       : pathname === jobsPath ? 'Collection Jobs'
-      : pathname === newJobPath ? 'New Collection Job'
+      : pathname === newJobPath ? 'Single-source collection and CSV import'
       : pathname === newRequestPath ? 'Collect by topic'
       : pathname.startsWith(requestsPath) ? 'Collection requests'
       : pathname.startsWith(topicsPath) ? 'Categories and topics'
@@ -62,7 +62,8 @@ export function App() {
       <aside className="sidebar">
         <nav aria-label="Main navigation">
           <NavLink to="/" end>Overview</NavLink>
-          <NavLink to={newJobPath} end>New Collection</NavLink>
+          <NavLink to={newRequestPath} end>Collect by topic</NavLink>
+          <NavLink to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
           <NavLink to={sourcesPath}>Sources</NavLink>
           <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink>
           <NavLink to={recordsPath}>Data Explorer</NavLink>

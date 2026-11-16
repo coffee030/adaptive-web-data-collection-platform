@@ -288,7 +288,8 @@ for (const adapter of ['web', 'csv'] as const) {
     expect(approved.approval_status).toBe('approved');
     const put = await request.put(api + profile.apiPath, { data: { configuration: approved.configuration } });
     expect(put.status()).toBe(409);
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Collect by topic' }).click();
+    await page.getByRole('link', { name: 'Single-source collection and CSV import' }).click();
     await page.getByRole('radio', { name: web ? /HTML pages/ : /CSV datasets/ }).check();
     await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(source.source_id);
     await expect(page.getByRole('combobox', { name: 'Profile Version' })).toHaveValue(approved.profile_version_id);
@@ -460,5 +461,5 @@ test('real Job API rejects pending access, draft versions and unauthorized datas
   expect(refused.status()).toBe(403);
   expect((await refused.json()).error.code).toBe('source_not_approved');
   await expect(page.getByRole('alert')).toContainText('Source access is no longer approved');
-  await expect(page.getByRole('heading', { name: 'New Collection', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Single-source collection and CSV import' })).toBeVisible();
 });

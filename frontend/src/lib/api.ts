@@ -38,6 +38,15 @@ export function apiGet<T>(path: string, signal: AbortSignal) {
   return request<T>(path, signal);
 }
 
+export function apiAttachment(path: string, signal: AbortSignal, mediaType: string) {
+  return request<Blob>(path, signal, { headers: { Accept: mediaType } }, 30_000, response => {
+    if (response.headers.get('Content-Type')?.split(';')[0] !== mediaType) {
+      throw new ApiError('invalid-response');
+    }
+    return response.blob();
+  });
+}
+
 export function apiPost<T>(path: string, body: object, signal: AbortSignal, requestTimeout?: number) {
   return sendJson<T>('POST', path, body, signal, requestTimeout);
 }
@@ -58,7 +67,9 @@ function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: objec
   }, requestTimeout);
 }
 
-async function request<T>(path: string, signal: AbortSignal, init?: RequestInit, requestTimeout = timeoutMs): Promise<T> {
+async function request<T>(path: string, signal: AbortSignal, init?: RequestInit, requestTimeout = timeoutMs,
+  read: (response: Response) => Promise<T> = response => response.json(),
+): Promise<T> {
   const timeout = AbortSignal.timeout(requestTimeout);
   const combinedSignal = AbortSignal.any([signal, timeout]);
   try {
@@ -70,8 +81,7 @@ async function request<T>(path: string, signal: AbortSignal, init?: RequestInit,
     });
     if (!response.ok) throw await responseError(response);
     try {
-      const body: T = await response.json();
-      return body;
+      return await read(response);
     } catch {
       throw new ApiError('invalid-response');
     }

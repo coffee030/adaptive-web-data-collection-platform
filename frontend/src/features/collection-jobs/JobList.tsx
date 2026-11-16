@@ -34,7 +34,7 @@ export function JobList() {
         <h1>Collection Jobs</h1>
         <div className="profile-actions">
           <Link className="control" to={requestsPath}>Collection requests</Link>
-          <Link className="control primary" to={newJobPath} state={{ jobsSearch: search.toString() }}>New Collection Job</Link>
+          <Link className="control" to={newJobPath} state={{ jobsSearch: search.toString() }}>Single-source collection and CSV import</Link>
         </div>
       </div>
       <section className="panel" aria-label="Collection jobs">

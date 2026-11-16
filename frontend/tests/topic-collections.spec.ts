@@ -88,3 +88,34 @@ test('topic selection loads one category page at a time and resets when the cate
   await topic.selectOption({ label: 'Shared topic name' });
   await expect(topic).toHaveValue('topic-100');
 });
+
+test('request downloads wait for completion and recover from an export failure', async ({ page }) => {
+  const id = '6307032e-d307-4d3d-9a78-0fdd7497f0b5';
+  const request = {
+    id, topic_name: 'Fixture topic', keyword: 'Example', status: 'pending',
+    created_at: '2026-11-16T01:00:00Z', refresh_of: null, jobs: [],
+  };
+  await page.route('**/api/v1/articles?*', route => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/collection-requests/' + id, route => route.fulfill({ json: request }));
+  let attempts = 0;
+  await page.route('**/api/v1/collection-requests/' + id + '/records/export?format=json', async route => {
+    attempts++;
+    if (attempts === 1) {
+      await route.fulfill({ status: 413, json: { error: { code: 'record_export_limit' } } });
+    } else {
+      await route.fulfill({ contentType: 'application/json', body: '[]' });
+    }
+  });
+  await page.goto('/collection-requests/' + id);
+  const download = page.getByRole('button', { name: 'Download JSON' });
+  await expect(download).toBeDisabled();
+  await expect(page.getByText('Downloads are available after the jobs in this collection finish.')).toBeVisible();
+  request.status = 'failed';
+  await page.getByRole('button', { name: 'Reload status' }).click();
+  await expect(download).toBeEnabled();
+  await download.click();
+  await expect(page.getByRole('alert')).toContainText('5,000 records or 8 MiB');
+  const saved = page.waitForEvent('download');
+  await download.press('Enter');
+  expect((await saved).suggestedFilename()).toBe(`request-${id}-records.json`);
+});

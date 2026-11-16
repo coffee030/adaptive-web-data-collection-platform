@@ -5,7 +5,11 @@ import { apiGet, apiPost } from '../../lib/api';
 import { forgetRequestIntent, isUncertainWrite, prepareRequestIntent, type RequestIntent } from '../../lib/requestIntent';
 import { useResource } from '../../lib/useResource';
 import { jobPath, jobsPath, newJobPath } from '../collection-jobs/api';
+import { ErrorDetails } from '../collection-jobs/presentation';
 import { profilePath } from '../profiles/api';
+import { RecordExport } from '../results/RecordExport';
+import { quarantinePath, recordsForJob, recordsForRequest } from '../results/api';
+import { sourcePath } from '../sources/api';
 import { ArticleList } from './Articles';
 import {
   bindingsPath, categoriesPath, newRequestPath, requestPath, requestsPath, topicsPath,
@@ -60,7 +64,9 @@ export function NewTopicRequest() {
 
   return <>
     <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={requestsPath}>Collection requests</Link></nav>
-    <div className="page-heading"><h1>Collect by topic</h1></div>
+    <div className="page-heading"><h1>Collect by topic</h1>
+      <p className="muted">Choose a category and topic to search its approved sources with one keyword.</p>
+    </div>
     <section className="panel detail-panel" aria-label="New topic collection">
       <form className="profile-body" onSubmit={submit}>
         <fieldset className="profile-form" disabled={action.busy}>
@@ -82,11 +88,10 @@ export function NewTopicRequest() {
             </label> : <p>This category has no active topics.</p>}</Resource>
             <MoreOptions label="topics" options={topics} />
           </>}
-          <label>Keyword<input value={keyword} required maxLength={128} onChange={event => setKeyword(event.target.value)} /></label>
           {topic && <Resource label="eligible bindings" state={bindings.state}>{() => bindings.rows.length
             ? <fieldset className="profile-field profile-form">
-              <legend>Approved sources and profiles</legend>
-              <p className="muted">Select up to {maxBindings} bindings.</p>
+              <legend>Approved sources</legend>
+              <p className="muted">Choose up to {maxBindings}. Each selection starts a separate job.</p>
               {bindings.rows.map(row => {
                 const checked = chosen.includes(row.id);
                 return <label key={row.id} className="check">
@@ -96,7 +101,8 @@ export function NewTopicRequest() {
                 </label>;
               })}
               <MoreOptions label="bindings" options={bindings} />
-            </fieldset> : <p role="status">This topic has no eligible source bindings.</p>}</Resource>}
+            </fieldset> : <p role="status">This topic has no approved sources available. <Link to={topicsPath}>Manage topics</Link></p>}</Resource>}
+          <label>Keyword<input value={keyword} required maxLength={128} onChange={event => setKeyword(event.target.value)} /></label>
           <div><button className="primary" type="submit" disabled={!chosen.length || !keyword.trim()}>Start topic collection</button></div>
         </fieldset>
         <ActionFeedback action={action} pending="Submitting collection…" />
@@ -148,46 +154,79 @@ function RequestWorkspace({ requestId }: { requestId: string }) {
   const submitRequest = useRequestSubmission();
 
   useEffect(() => {
-    if (!collecting) return;
-    const timer = window.setInterval(() => setRevision(value => value + 1), 2_000);
-    return () => window.clearInterval(timer);
-  }, [collecting]);
+    if (!collecting || state.refreshing) return;
+    let timer: number | undefined;
+    function schedule() {
+      window.clearTimeout(timer);
+      if (document.visibilityState === 'visible') {
+        timer = window.setTimeout(() => setRevision(value => value + 1), 2_000);
+      }
+    }
+    schedule();
+    document.addEventListener('visibilitychange', schedule);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', schedule);
+    };
+  }, [collecting, state.refreshing, revision]);
 
   return <>
     <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={requestsPath}>Collection requests</Link></nav>
     <Resource state={state} label="collection request">{row => <>
       <div className="page-heading detail-heading">
         <div className="collection-text"><h1>{row.topic_name} · {row.keyword}</h1>
-          <p className="muted">Created <Timestamp value={row.created_at} /> UTC</p>
+          <p className="request-summary muted">
+            <span>{row.jobs.length} {row.jobs.length === 1 ? 'source job' : 'source jobs'}</span>
+            <span>Created <Timestamp value={row.created_at} /> UTC</span>
+            {row.finished_at && <span>Finished <Timestamp value={row.finished_at} /> UTC</span>}
+          </p>
         </div>
         <div className="profile-actions">
           <Status value={row.status} />
+          <Link className="control" to={recordsForRequest(row.id)}>View request records</Link>
           <button type="button" className="primary" disabled={action.busy} onClick={() =>
             void action.run(signal => submitRequest(path + '/refresh', {}, signal),
               next => navigate(requestPath(next.id)))}>Refresh collection</button>
         </div>
       </div>
+      {collecting && <p className="muted" role="status">Status updates while this page is visible.</p>}
+      {row.status === 'partial' && <p className="notice outcome" data-status="partial">
+        Some jobs did not complete successfully. Review the available results and job details below.
+      </p>}
       {row.refresh_of && <p><Link to={requestPath(row.refresh_of)}>View previous run</Link></p>}
       <ActionFeedback action={action} pending="Starting refresh…" />
       <section className="panel detail-panel" aria-labelledby="request-jobs">
         <div className="panel-heading"><h2 id="request-jobs">Child jobs</h2>
-          <button type="button" onClick={state.retry}>Reload status</button></div>
-        <TableRegion label="Child jobs">
-          <table>
-            <thead><tr><th scope="col">Source</th><th scope="col">Pinned profile</th>
-              <th scope="col">Status</th><th scope="col">Records</th></tr></thead>
-            <tbody>{row.jobs.map(({ job, source_name, profile_version }) => <tr key={job.job_id}>
-              <th scope="row"><Link to={jobPath(job.job_id)}>{source_name}</Link></th>
-              <td><Link to={profilePath(job.source_id, job.profile_version_id)}>Version {profile_version}</Link></td>
-              <td><Status value={job.status} />
-                {(job.error || job.dispatch_error_code) && <div className="muted">{job.error?.code ?? job.dispatch_error_code}</div>}
-              </td>
-              <td>{job.valid_count}</td>
-            </tr>)}</tbody>
-          </table>
-        </TableRegion>
+          <button type="button" onClick={state.retry} disabled={state.refreshing}>Reload status</button></div>
+        <ul className="request-job-list" aria-label="Source jobs" role="list">
+          {row.jobs.map(({ job, source_name, profile_version }) => (
+            <li key={job.job_id} className="request-job collection-text">
+              <div className="request-job-heading">
+                <h3><Link to={sourcePath(job.source_id)}>{source_name}</Link></h3>
+                <Status value={job.status} />
+              </div>
+              <p><Link to={profilePath(job.source_id, job.profile_version_id)}>Pinned profile version {profile_version}</Link></p>
+              <p>{job.valid_count} accepted · {job.invalid_count} invalid · {job.duplicate_count} duplicates</p>
+              <div className="profile-actions">
+                <Link to={jobPath(job.job_id)} state={{ requestId }}>Job details</Link>
+                <Link to={recordsForJob(job.job_id)}>Records</Link>
+                <Link to={quarantinePath(job.job_id)}>Quarantine</Link>
+                {job.finished_at && <Link to={jobPath(job.job_id) + '#job-evidence-title'} state={{ requestId }}>Evidence</Link>}
+              </div>
+              <div className="request-job-timing muted">
+                {job.started_at && <div>Started <Timestamp value={job.started_at} /> UTC</div>}
+                {job.finished_at && <div>Finished <Timestamp value={job.finished_at} /> UTC</div>}
+                {job.next_attempt_at && <div>Retry scheduled for <Timestamp value={job.next_attempt_at} /> UTC</div>}
+                {!job.started_at && !job.finished_at && !job.next_attempt_at && 'Waiting to start'}
+              </div>
+              {job.error && <ErrorDetails error={job.error} />}
+              {job.dispatch_error_code && <p>Dispatch error <code>{job.dispatch_error_code}</code></p>}
+            </li>
+          ))}
+        </ul>
       </section>
-      <ArticleList requestId={requestId} revision={revision} />
+      <RecordExport scope="request" id={row.id} pending={collecting} />
+      <ArticleList requestId={requestId} revision={row.jobs.reduce((total, { job }) => total + job.valid_count, 0)} />
     </>}</Resource>
   </>;
 }
