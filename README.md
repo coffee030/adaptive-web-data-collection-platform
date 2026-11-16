@@ -21,6 +21,10 @@ A fresh Normal installation opens an empty Dashboard at [127.0.0.1:5197](http://
 
 ### Synthetic Demo
 
+After installing the prerequisites, double-click `Install-FYP-Demo-Shortcut.bat` once. Then double-click **FYP Demo** on your Windows Desktop to start the existing Demo and open its Dashboard. You can also double-click `Start-FYP-Demo.bat` in the checkout. Rerun the shortcut installer from the new location if you move the checkout.
+
+The PowerShell commands for operating the same Demo are available as well.
+
 ```powershell
 .\Setup-Platform.bat -Demo
 .\Start-Platform.bat -Demo

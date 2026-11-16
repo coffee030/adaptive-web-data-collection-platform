@@ -5,7 +5,8 @@ param(
     [switch]$NonInteractive,
     [switch]$NoBrowser,
     [switch]$Demo,
-    [switch]$DemoRetry
+    [switch]$DemoRetry,
+    [switch]$OneClickDemo
 )
 
 . "$PSScriptRoot/Common.ps1"
@@ -55,7 +56,7 @@ function Start-Platform {
     if ((Test-FrontendProcess $state) -and !(Test-FrontendDependencies $node)) { Stop-OwnedFrontend }
     Initialize-FrontendDependencies $node -Offline:$offlineSetup
     Write-Step '[3/7] Loading private local configuration...'
-    $script:Config = Get-LauncherConfig -Create
+    $script:Config = Get-LauncherConfig -Create -AutoDemoNetwork:$OneClickDemo
     if ($Action -eq 'Setup') { $script:Docker = Initialize-Docker $system -Offline:$offlineSetup }
     $compose = Invoke-Compose @('config', '--quiet')
     if ($compose.Code -ne 0) {
@@ -87,11 +88,15 @@ function Start-Platform {
     $started = Start-Frontend $node
     Write-Step '[7/7] Preparing the browser...'
     $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)/"
-    if (!$NoBrowser -and $started) { Open-PlatformBrowser $url }
+    if (!$NoBrowser -and $OneClickDemo) {
+        Write-Step "URL: $url"
+        Open-PlatformBrowser $url -Required
+    }
+    elseif (!$NoBrowser -and $started) { Open-PlatformBrowser $url }
     elseif (!$started) { Write-Step '[INFO] Frontend already running. Use the existing browser tab or the URL below.' }
     if ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
     else { Write-Step '[SUCCESS] Platform is ready!' }
-    Write-Step "URL: $url"
+    if (!$OneClickDemo -or $NoBrowser) { Write-Step "URL: $url" }
 }
 
 function Stop-Platform {
@@ -178,6 +183,10 @@ try {
     if ($DemoRetry -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid Demo Retry Option' 'The -DemoRetry option requires Start with -Demo.' `
             'A different launcher action or mode was selected.' @('Use Start-Platform.bat -Demo -DemoRetry.')
+    }
+    if ($OneClickDemo -and (!$DemoMode -or $Action -ne 'Start')) {
+        Stop-WithError 'DEMO-003' 'Invalid One-Click Demo Option' 'One-click startup requires Start with -Demo.' `
+            'A different launcher action or mode was selected.' @('Double-click Start-FYP-Demo.bat.')
     }
     if ($Action -ne 'Diagnose') {
         $null = New-Item -ItemType Directory -Path $Local -Force

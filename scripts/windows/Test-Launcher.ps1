@@ -1,5 +1,6 @@
 #Requires -Version 5.1
 . "$PSScriptRoot/Platform.ps1"
+. "$PSScriptRoot/Install-DemoShortcut.ps1"
 
 $testRoot = Join-Path $Root ('logs/launcher/tests-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $testRoot -Force
@@ -202,6 +203,7 @@ Test-Case 'Opening browser failure reports an actionable error' {
     function Start-Process { throw 'test error' }
     Open-PlatformBrowser 'http://127.0.0.1:5197/collection-jobs'
     Assert ([IO.File]::ReadAllText($LogFile).Contains('WEB-005')) 'Browser failure was not logged.'
+    Expect-Error 'WEB-005' { Open-PlatformBrowser 'http://127.0.0.1:5198/' -Required }
 }
 Test-Case 'Graceful frontend shutdown writes only the owned stop marker' {
     $state = @{ Marker = ('b' * 32) }
@@ -306,6 +308,56 @@ Test-Case 'Demo check diagnoses via a read-only command and failed provisioning 
     Assert ($demoTestArguments[-1] -ceq '--check') 'Diagnostics did not select the read-only command.'
     Expect-Error 'DEMO-002' { Invoke-DemoProvisioning }
     Assert ($demoTestArguments[-1] -ceq 'backend.experiments.demo_provision') 'Startup did not call the provisioner.'
+}
+Test-Case 'One-click Demo preserves the preferred port or selects a free alternative' {
+    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $listener.Server.ExclusiveAddressUse = $true
+    $listener.Start()
+    $port = $listener.LocalEndpoint.Port
+    try {
+        $selected = Find-DemoPort $port
+        Assert ($selected -gt $port -and $selected -le $port + 19 -and $listener.Server.IsBound) 'The occupied port was affected.'
+    } finally { $listener.Stop() }
+    Assert ((Find-DemoPort $port) -eq $port) 'The now-free preferred port was skipped.'
+}
+Test-Case 'One-click Demo skips overlapping Windows routes and Docker networks' {
+    function Get-NetRoute {
+        '0.0.0.0/0', '0.0.0.0/1', '128.0.0.0/1', '10.249.0.0/16' |
+            ForEach-Object { [pscustomobject]@{ DestinationPrefix = $_ } }
+    }
+    function Invoke-Docker($Arguments) {
+        if ($Arguments[1] -eq 'ls') { return @{ Code = 0; Out = 'abcdef123456' } }
+        return @{ Code = 0; Out = "10.250.0.0/23`n10.250.2.0/25`nfd47::/64" }
+    }
+    Assert (((Find-DemoSubnets) -join ',') -ceq '10.250.3.0/24,10.250.4.0/24') 'Subnets overlapped with existing routes.'
+    function Invoke-Docker { return $fail }
+    Expect-Error 'NET-004' { Find-DemoSubnets }
+}
+Test-Case 'Desktop installer creates, reuses and updates its own Unicode-path shortcut' {
+    $desktop = Join-Path $testRoot 'Desktop'
+    $a = Join-Path $testRoot ('First checkout ' + [char]0x6E2C)
+    $b = Join-Path $testRoot ('Moved checkout ' + [char]0x8A66)
+    foreach ($folder in $desktop, $a, $b) { $null = New-Item -ItemType Directory -Path $folder }
+    foreach ($folder in $a, $b) {
+        [IO.File]::WriteAllText((Join-Path $folder 'Start-FYP-Demo.bat'), '@exit /b 0')
+    }
+    $path = Join-Path $desktop 'FYP Demo.lnk'
+    Assert ((Install-DemoShortcut $desktop $a) -eq 'Installed') 'The first shortcut was not created.'
+    $initial = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
+    Assert ((Install-DemoShortcut $desktop $a) -eq 'Already installed') 'The valid shortcut was not reused.'
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -ceq $initial) 'The valid shortcut was rewritten.'
+    [IO.File]::Delete((Join-Path $a 'Start-FYP-Demo.bat'))
+    Assert ((Install-DemoShortcut $desktop $b) -eq 'Updated') 'The shortcut did not follow the moved checkout.'
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($path)
+    Assert ($link.TargetPath -ieq (Join-Path $b 'Start-FYP-Demo.bat') -and $link.WorkingDirectory -ieq $b -and !$link.Arguments) 'The shortcut fields were wrong.'
+    $link.Description = 'Unrelated shortcut'
+    $link.Save()
+    $before = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
+    $refused = $false
+    try { $null = Install-DemoShortcut $desktop $b }
+    catch { $refused = $_.Exception.Message -match 'unrelated FYP Demo shortcut' }
+    Assert ($refused -and $before -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))) 'An unrelated shortcut was affected.'
 }
 
 $script:Local = $OriginalLocal

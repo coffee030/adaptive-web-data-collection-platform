@@ -167,7 +167,7 @@ function Confirm-Change($Message) {
     return (Read-Host 'Type YES to continue') -ceq 'YES'
 }
 
-function Get-LauncherConfig([switch]$Create, [switch]$Probe) {
+function Get-LauncherConfig([switch]$Create, [switch]$Probe, [switch]$AutoDemoNetwork) {
     if (Test-Path -LiteralPath $Local) { Assert-LocalDirectory }
     $file = Join-Path $Local 'launcher.env'
     if ((Test-Path -LiteralPath $file) -and ((Get-Item -LiteralPath $file -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -186,17 +186,28 @@ function Get-LauncherConfig([switch]$Create, [switch]$Probe) {
         $owner = [Guid]::NewGuid().ToString('N')
         $mode = if ($DemoMode) { 'demo' } else { 'local' }
         $offset = if ($DemoMode) { 1 } else { 0 }
+        $postgresPort = 55497 + $offset
+        $apiPort = 58097 + $offset
+        $frontendPort = 5197 + $offset
+        $networkSettings = ''
+        if ($AutoDemoNetwork) {
+            $postgresPort = Find-DemoPort $postgresPort
+            $apiPort = Find-DemoPort $apiPort
+            $frontendPort = Find-DemoPort $frontendPort
+            $subnets = Find-DemoSubnets
+            $networkSettings = "`nLAUNCHER_SUBNET=$($subnets[0])`nLAUNCHER_FIXTURE_SUBNET=$($subnets[1])"
+        }
         $contents = @"
 LAUNCHER_OWNER=$owner
 COMPOSE_PROJECT_NAME=adaptive-web-core-$mode-$($owner.Substring(0,12))
 POSTGRES_USER=collection_$mode
 POSTGRES_DB=collection_$mode
 POSTGRES_PASSWORD=$password
-POSTGRES_PORT=$(55497 + $offset)
-API_PORT=$(58097 + $offset)
-FRONTEND_PORT=$(5197 + $offset)
+POSTGRES_PORT=$postgresPort
+API_PORT=$apiPort
+FRONTEND_PORT=$frontendPort
 LAUNCHER_FIXTURE=$offset
-LOCAL_PROFILE_APPROVAL=$offset
+LOCAL_PROFILE_APPROVAL=$offset$networkSettings
 "@
         Write-AtomicFile $file ($contents + [Environment]::NewLine)
         Write-Step '[PASS] Created private local settings.'
