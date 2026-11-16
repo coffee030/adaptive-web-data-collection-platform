@@ -23,12 +23,19 @@ export interface KeywordSearch {
   max_detail_pages: number; max_requests: number;
   max_redirects?: number; max_body_bytes?: number; timeout_seconds?: number; max_seconds?: number; max_attempts?: number;
 }
+export const articleFields = {
+  title: 'Article title', canonical_url: 'Canonical URL', stable_id: 'Stable article ID',
+  author: 'Author', published_at: 'Publication timestamp', summary: 'Summary', body: 'Body',
+} as const;
+export type ArticleField = keyof typeof articleFields;
+export type ArticleMapping = Record<'title', string> & Partial<Record<ArticleField, string | null>>;
 export type Configuration = BaseConfiguration & (
   | { adapter_type: 'csv'; columns: { name: string; column: string }[] }
   | {
     adapter_type: 'web'; selector_type: SelectorType; item_selector: string; fields: Extraction[];
     pagination?: NextLinkPagination;
     search?: KeywordSearch;
+    article?: ArticleMapping;
   }
 );
 export interface Profile extends ProfileVersion {

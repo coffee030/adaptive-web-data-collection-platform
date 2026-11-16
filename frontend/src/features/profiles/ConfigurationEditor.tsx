@@ -1,7 +1,7 @@
 import { emptyField, emptySearch } from './configuration';
 import type { Draft } from './configuration';
 import type { Adapter } from '../sources/api';
-import { paginationLimits, selectorTypes, valueTypes, type KeywordSearch } from './api';
+import { articleFields, paginationLimits, selectorTypes, valueTypes, type ArticleField, type KeywordSearch } from './api';
 
 type Props = {
   draft: Draft; adapter: Adapter; origins: string[]; errors: Record<string, string>;
@@ -24,6 +24,9 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
     change({
       ...draft, fields: draft.fields.filter((_, position) => position !== index),
       identity: identity === index ? null : identity !== null && identity > index ? identity - 1 : identity,
+      article: draft.article && Object.fromEntries(Object.entries(draft.article)
+        .filter(([, mapped]) => mapped !== index)
+        .map(([field, mapped]) => [field, mapped > index ? mapped - 1 : mapped])),
     });
   }
 
@@ -56,6 +59,7 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
       {web && <label>Collection mode
         <select value={search ? 'search' : 'document'} onChange={event => change({
           ...draft, search: event.target.value === 'search' ? emptySearch(origins[0] ?? '') : undefined,
+          article: undefined,
         })}>
           <option value="document">Controlled document</option>
           <option value="search">Keyword search and detail pages</option>
@@ -168,6 +172,34 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
       </div>
       <button type="button" disabled={draft.fields.length >= 64}
         onClick={() => change({ ...draft, fields: [...draft.fields, emptyField()] })}>Add field</button>
+      {search && <fieldset className="profile-field profile-form">
+        <legend>Article mapping</legend>
+        <label className="check"><input type="checkbox" checked={!!draft.article}
+          onChange={event => change({ ...draft, article: event.target.checked ? {} : undefined })} />Store article history</label>
+        {draft.article && <>
+          <p className="muted">Use a stable ID field when a detail page contains multiple records. URL identity is available for single-record detail pages.</p>
+          <div className="profile-grid">
+            {Object.entries(articleFields).map(([key, label]) => {
+              const field = key as ArticleField;
+              const id = `article-${key}`;
+              return <label key={key}>{label}
+                <select {...invalid(id)} value={draft.article?.[field] ?? ''} onChange={event => {
+                  const article = { ...draft.article };
+                  if (event.target.value === '') delete article[field];
+                  else article[field] = Number(event.target.value);
+                  change({ ...draft, article });
+                }}>
+                  <option value="">{field === 'title' ? 'Choose a required field' : field === 'canonical_url' ? 'Use detail URL' : 'Unmapped'}</option>
+                  {draft.fields.map((item, index) => (item.value_type === 'string'
+                    || (field === 'stable_id' && item.value_type === 'integer')) && (field !== 'title' || item.required)
+                    ? <option key={index} value={index}>{item.name.trim() || `Field ${index + 1}`}</option> : null)}
+                </select>
+                {error(id)}
+              </label>;
+            })}
+          </div>
+        </>}
+      </fieldset>}
     </>
   );
 }

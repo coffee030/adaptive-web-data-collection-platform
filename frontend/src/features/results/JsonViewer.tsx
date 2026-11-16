@@ -11,7 +11,7 @@ function characterBoundary(text: string, index: number) {
   return char >= 0xdc00 && char <= 0xdfff ? index - 1 : index;
 }
 
-export function JsonViewer({ value }: { value: JsonValue }) {
+export function JsonViewer({ value, title = 'Record payload' }: { value: JsonValue; title?: string }) {
   const json = useMemo(() => JSON.stringify(value, null, 2), [value]);
   const [offset, setOffset] = useState(0);
   const region = useRef<HTMLPreElement>(null);
@@ -20,10 +20,10 @@ export function JsonViewer({ value }: { value: JsonValue }) {
   return (
     <section className="panel detail-panel" aria-labelledby="payload-title">
       <div className="panel-heading">
-        <h2 id="payload-title" tabIndex={-1}>Record payload</h2>
+        <h2 id="payload-title" tabIndex={-1}>{title}</h2>
         <CopyButton label="Copy JSON" read={() => json} />
       </div>
-      <pre ref={region} className="record-json" tabIndex={0} role="region" aria-label="Record payload JSON"><code>{json.slice(start, end)}</code></pre>
+      <pre ref={region} className="record-json" tabIndex={0} role="region" aria-label={title + ' JSON'}><code>{json.slice(start, end)}</code></pre>
       {json.length > chunkSize && (
         <Pagination label="JSON characters" offset={start} size={end - start} loaded={json.length - start}
           change={next => {

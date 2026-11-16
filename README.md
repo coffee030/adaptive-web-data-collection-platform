@@ -2,7 +2,7 @@
 
 A local dashboard for turning HTML pages and CSV files into structured records. Define which fields to collect, test the rules on a sample, and run a collection job. The dashboard shows which records passed validation, what was rejected or counted as a duplicate, and where each accepted record came from.
 
-This is a higher diploma final-year project. The current version runs on a trusted local machine and supports approved local HTML sources and allowlisted CSV inputs. The repository includes sample data for both. Public website collection is outside the current setup.
+This is a higher diploma final-year project. The current version runs on a trusted local machine and supports approved HTTPS keyword search, controlled HTML sources, and allowlisted CSV inputs. The repository includes controlled sample data.
 
 ## Quick start on Windows
 
@@ -34,6 +34,7 @@ The bundled HTML example produces two accepted records. The CSV example produces
 
 ## Documentation
 
+- [Topic collection and article history](docs/contracts/M8-data-identity-collection-management.md)
 - [Windows setup and troubleshooting](docs/setup/Windows-One-Click-Setup.md)
 - [Example data and manual Docker Compose setup](docs/demo/M5.5-dashboard-demo-runbook.md)
 - [Development and testing](docs/demo/M5-core-demo-runbook.md)

@@ -9,6 +9,7 @@ import { allowedInputs, compileCollectionInput } from '../sources/collectionInpu
 import { createJob, jobPath, jobsPath, sameId, type JobInput } from './api';
 import { forgetRequestIntent, prepareRequestIntent } from '../../lib/requestIntent';
 import { submissionError, type Submission } from './submission';
+import { newRequestPath } from '../topic-collections/api';
 
 export function JobCreate() {
   const [search, setSearch] = useSearchParams();
@@ -35,7 +36,8 @@ export function JobCreate() {
         <h1>New Collection</h1>
         <p className="muted">{direct
           ? 'Review the source policy, approved profile and permitted input.'
-          : 'Choose a topic and source, review an approved profile, then start a collection.'}</p>
+          : 'Choose an input format and source to run a single collection job.'}</p>
+        {!direct && <Link className="control" to={newRequestPath}>Collect by topic</Link>}
       </div>
       {!direct ? <GuidedPicker locked={locked}>
         {(source, profiles) => <JobFields key={source.source_id} source={source} requestedProfile={null}

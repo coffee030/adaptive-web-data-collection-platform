@@ -3,6 +3,7 @@ import { Loading, Pagination, RequestProblem, Status, TableRegion } from '../../
 import { useResource } from '../../lib/useResource';
 import { adapterLabels, listSources, sourcePath, sourcesPath } from './api';
 import { useResultPage } from '../results/useResultPage';
+import { topicsPath } from '../topic-collections/api';
 
 const pageSize = 20;
 
@@ -15,7 +16,10 @@ export function SourceList() {
     <>
       <div className="page-heading detail-heading">
         <h1>Sources</h1>
-        <Link className="control primary" to={sourcesPath + '/new'}>Create source</Link>
+        <div className="profile-actions">
+          <Link className="control" to={topicsPath}>Categories and topics</Link>
+          <Link className="control primary" to={sourcesPath + '/new'}>Create source</Link>
+        </div>
       </div>
       <section className="panel" aria-label="Registered sources">
         {result.state === 'loading' && <Loading>Loading sources…</Loading>}

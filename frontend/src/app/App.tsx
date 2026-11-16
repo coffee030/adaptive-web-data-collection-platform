@@ -16,6 +16,10 @@ import { RecordsExplorer } from '../features/results/RecordsExplorer';
 import { RecordDetail } from '../features/results/RecordDetail';
 import { QuarantinePage } from '../features/results/QuarantinePage';
 import { EvidenceDetail } from '../features/results/EvidenceDetail';
+import { ArticlePage, ArticlesPage } from '../features/topic-collections/Articles';
+import { NewTopicRequest, RequestDetails, RequestList } from '../features/topic-collections/Requests';
+import { TopicBindings, TopicCatalog } from '../features/topic-collections/TopicCatalog';
+import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
 export function App() {
   const { pathname } = useLocation();
@@ -26,6 +30,10 @@ export function App() {
     const title = pathname === '/' ? 'Overview'
       : pathname === jobsPath ? 'Collection Jobs'
       : pathname === newJobPath ? 'New Collection Job'
+      : pathname === newRequestPath ? 'Collect by topic'
+      : pathname.startsWith(requestsPath) ? 'Collection requests'
+      : pathname.startsWith(topicsPath) ? 'Categories and topics'
+      : pathname.startsWith(articlesPath) ? 'Articles'
       : pathname.startsWith(`${jobsPath}/`) && pathname.endsWith('/quarantine') ? 'Quarantine'
       : pathname.startsWith(`${jobsPath}/`) ? 'Job Details'
       : pathname === recordsPath ? 'Data Explorer'
@@ -66,6 +74,13 @@ export function App() {
             <Route path="/" element={<Overview />} />
             <Route path={jobsPath} element={<JobList />} />
             <Route path={newJobPath} element={<JobCreate />} />
+            <Route path={requestsPath} element={<RequestList />} />
+            <Route path={newRequestPath} element={<NewTopicRequest />} />
+            <Route path={requestsPath + '/:requestId'} element={<RequestDetails />} />
+            <Route path={topicsPath} element={<TopicCatalog />} />
+            <Route path={topicsPath + '/:topicId'} element={<TopicBindings />} />
+            <Route path={articlesPath} element={<ArticlesPage />} />
+            <Route path={articlesPath + '/:articleId'} element={<ArticlePage />} />
             <Route path={`${jobsPath}/:jobId`} element={<JobDetail />} />
             <Route path={`${jobsPath}/:jobId/quarantine`} element={<QuarantinePage />} />
             <Route path={recordsPath} element={<RecordsExplorer />} />

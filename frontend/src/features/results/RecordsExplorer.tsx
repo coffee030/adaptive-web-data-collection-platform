@@ -7,6 +7,7 @@ import { listSources, sourcePath } from '../sources/api';
 import { listRecords, quarantinePath, recordPath, type GenericRecord } from './api';
 import { clip, displayValue, EvidenceLink, recordTitleFields } from './presentation';
 import { useResultPage } from './useResultPage';
+import { articlesPath } from '../topic-collections/api';
 
 const pageSize = 10;
 
@@ -31,6 +32,7 @@ export function RecordsExplorer() {
     <div className="page-heading">
       <h1 ref={heading} tabIndex={-1}>Data Explorer</h1>
       <p className="muted">Browse accepted records and follow their source, collection job and capture evidence.</p>
+      <Link className="control" to={articlesPath}>Browse articles</Link>
     </div>
     <section className="panel detail-panel explorer-collection" aria-label="Generic records">
       <form key={jobId} className="toolbar records-filter" onSubmit={applyFilter}>

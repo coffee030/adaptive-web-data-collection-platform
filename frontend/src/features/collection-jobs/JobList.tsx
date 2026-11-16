@@ -4,6 +4,7 @@ import { useResource } from '../../lib/useResource';
 import { jobsPath, jobStatuses, listJobs, maxOffset, newJobPath } from './api';
 import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
 import { resultCounts, statusLabels } from './presentation';
+import { requestsPath } from '../topic-collections/api';
 
 const pageSize = 20;
 
@@ -31,7 +32,10 @@ export function JobList() {
     <>
       <div className="page-heading detail-heading">
         <h1>Collection Jobs</h1>
-        <Link className="control primary" to={newJobPath} state={{ jobsSearch: search.toString() }}>New Collection Job</Link>
+        <div className="profile-actions">
+          <Link className="control" to={requestsPath}>Collection requests</Link>
+          <Link className="control primary" to={newJobPath} state={{ jobsSearch: search.toString() }}>New Collection Job</Link>
+        </div>
       </div>
       <section className="panel" aria-label="Collection jobs">
         <div className="toolbar">

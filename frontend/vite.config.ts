@@ -12,7 +12,10 @@ function approvalBoundary(enabled: boolean): Plugin {
         next();
         return;
       }
-      if (!/^\/api\/v1\/sources\/[^/]+\/versions\/[^/]+\/approve\/?$/.test(path)) {
+      const profileApproval = /^\/api\/v1\/sources\/[^/]+\/versions\/[^/]+\/approve\/?$/.test(path);
+      const bindingChange = request.method === 'POST'
+        && /^\/api\/v1\/topics\/[^/]+\/bindings(?:\/[^/]+\/(?:approve|disable))?\/?$/.test(path);
+      if (!profileApproval && !bindingChange) {
         next();
         return;
       }

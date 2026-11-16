@@ -85,6 +85,11 @@ export function ConfigurationSummary({ configuration: config }: { configuration:
         <div><dt>Maximum redirects per document</dt><dd>{search.max_redirects ?? 2}</dd></div>
         <div><dt>Maximum execution attempts</dt><dd>{search.max_attempts ?? 3}</dd></div>
       </>}
+      {web && config.article && <div className="source-policy">
+        <dt>Article mapping</dt>
+        <dd>{Object.entries(config.article).filter(([, field]) => field).map(([common, field]) =>
+          <div key={common}><code>{common}</code> → <code>{field}</code></div>)}</dd>
+      </div>}
     </dl>
     <TableRegion label="Configuration fields table">
       <table className="profile-table">

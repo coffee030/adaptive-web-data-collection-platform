@@ -1,5 +1,5 @@
 import type { Adapter } from '../sources/api';
-import type { Configuration, KeywordSearch, RecordField, SelectorType } from './api';
+import { articleFields, type ArticleField, type ArticleMapping, type Configuration, type KeywordSearch, type RecordField, type SelectorType } from './api';
 
 interface Field extends RecordField {
   mapping: string;
@@ -16,6 +16,7 @@ export interface Draft {
   nextLinkSelector: string;
   maxPages: number;
   search?: KeywordSearch;
+  article?: Partial<Record<ArticleField, number>>;
   fields: Field[];
 }
 export const emptyField = (): Field => ({
@@ -31,6 +32,7 @@ export function draftFrom(configuration?: Configuration): Draft {
   const search = configuration?.adapter_type === 'web' ? configuration.search : undefined;
   const pagination = search?.pagination ?? (configuration?.adapter_type === 'web' ? configuration.pagination : undefined);
   const identity = schema?.fields.findIndex(field => field.name === schema.identity_field) ?? -1;
+  const mapping = configuration?.adapter_type === 'web' ? configuration.article : undefined;
   return {
     recordType: schema?.record_type ?? '',
     identity: identity >= 0 ? identity : null,
@@ -39,6 +41,11 @@ export function draftFrom(configuration?: Configuration): Draft {
     nextLinkSelector: pagination?.next_link_selector ?? '',
     maxPages: pagination?.max_pages ?? 3,
     search,
+    article: mapping && Object.fromEntries(Object.keys(articleFields).flatMap(key => {
+      const field = key as ArticleField;
+      const index = schema?.fields.findIndex(item => item.name === mapping[field]) ?? -1;
+      return index >= 0 ? [[field, index]] : [];
+    })),
     fields: schema?.fields.map(field => {
       const base = { ...emptyField(), ...field };
       if (configuration?.adapter_type === 'csv') {
@@ -97,6 +104,23 @@ export function compileDraft(draft: Draft, adapter: Adapter) {
     if (!Number.isInteger(search.max_detail_pages) || search.max_detail_pages < 1 || search.max_detail_pages > 10) errors['maximum-details'] = 'Enter a whole number from 1 to 10.';
     if (!Number.isInteger(search.max_requests) || search.max_requests < 3 || search.max_requests > 20) errors['maximum-requests'] = 'Enter a whole number from 3 to 20.';
   }
+  let article: ArticleMapping | undefined;
+  if (search && draft.article) {
+    const mapping: Partial<Record<ArticleField, string>> = {};
+    for (const [key, index] of Object.entries(draft.article)) {
+      const field = fields[index];
+      if (field && (field.value_type === 'string' || (key === 'stable_id' && field.value_type === 'integer'))) {
+        mapping[key as ArticleField] = field.name;
+      } else {
+        errors[`article-${key}`] = 'Choose a compatible output field.';
+      }
+    }
+    if (mapping.title && draft.article.title !== undefined && fields[draft.article.title]?.required) {
+      article = { ...mapping, title: mapping.title };
+    } else {
+      errors['article-title'] = 'Choose a required text field for the article title.';
+    }
+  }
   const configuration: Configuration = adapter === 'csv' ? {
     ...base, adapter_type: 'csv',
     columns: draft.fields.map((field, index) => ({
@@ -106,6 +130,7 @@ export function compileDraft(draft: Draft, adapter: Adapter) {
     ...base, adapter_type: 'web', selector_type: draft.selectorType,
     item_selector: text(draft.itemSelector, 'item-selector', 1024, 'an item selector'),
     ...(search ? { search } : pagination ? { pagination } : {}),
+    ...(article ? { article } : {}),
     fields: draft.fields.map((field, index) => ({
       name: fields[index]!.name,
       selector: text(field.mapping, `mapping-${index}`, 1024, 'a field selector'),
