@@ -4,7 +4,7 @@
 
 1. 在 **Sources** 登記及授權網站，驗證及核准 Keyword Search Profile。若需要文章歷史，在 Profile 的 **Article mapping** 啟用 **Store article history**，將文章欄位對應到已宣告的輸出欄位，再使用既有 Profile 審核流程。
 2. 在 **Sources → Categories and topics** 建立 Category 和 Topic。從 Topic 開啟 **Manage approved bindings**，選擇已授權的 Source、已核准的 Keyword Search Profile Version，填寫操作者標籤並選擇 **Approve binding**。
-3. 從 **New Collection → Collect by topic** 選擇 Topic，輸入 1–128 個可列印字元的關鍵字，選擇最多四組可執行的綁定。每組啟動一個既有 Collection Job。HTML／CSV 單一來源流程仍在 **New Collection** 內。
+3. 從 **New Collection → Collect by topic** 先選 Category，再選該 Category 的 Topic。各選項清單逐頁載入，按 **Load more** 可繼續。輸入 1–128 個可列印字元的關鍵字，選擇最多四組可執行的綁定。每組啟動一個既有 Collection Job。HTML／CSV 單一來源流程仍在 **New Collection** 內。
 4. 在 Request Detail 查看子 Jobs、個別失敗原因和本次觀測到的 Articles。**Refresh collection** 建立連回原 Request 的新一輪收集。從 **Data Explorer → Browse articles** 亦可開啟文章最新內容、歷史版本、原始擷取值與 Evidence。
 
 本機操控台使用既有 `LOCAL_PROFILE_APPROVAL=1` 的 Vite loopback 模式調整綁定。API 使用既有 loopback Host／Origin 邊界，並驗證 Source 授權、Profile 狀態、綁定狀態和輸入路徑。操作者標籤供審核紀錄，部署模式為 trusted local。
@@ -15,7 +15,7 @@
 
 | 路徑 | 操作與輸入 |
 | --- | --- |
-| `/categories`、`/categories/{id}` | GET 清單或明細，POST 建立，PUT 編輯 `name` 和 `active`。 |
+| `/categories`、`/categories/{id}` | GET 清單或明細，清單可用 `active_only` 篩選。POST 建立，PUT 編輯 `name` 和 `active`。 |
 | `/topics`、`/topics/{id}` | 同上。建立時加 `category_id`，清單可用 `active_only`、`category_id` 篩選。 |
 | `/topics/{id}/bindings` | GET 清單（`eligible_only=true` 只顯示可執行綁定）。POST 提交 `source_id`、`profile_version_id` 和 `approved_by`，明確核准指定版本。 |
 | `/topics/{id}/bindings/{binding_id}/disable` | POST 停用原綁定。 |

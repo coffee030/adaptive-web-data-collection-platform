@@ -26,12 +26,15 @@ export function ArticlesPage() {
 export function ArticleList({ requestId, revision }: { requestId?: string; revision?: number }) {
   return <section className="panel detail-panel" aria-label={requestId ? 'Articles observed by this request' : 'Latest articles'}>
     {requestId && <div className="panel-heading"><h2>Articles observed in this run</h2></div>}
+    {requestId && <p className="notice muted">
+      This request determines which articles appear. Titles, versions, and observation times show the latest capture across all collections.
+    </p>}
     <Page<ArticleSummary> path={articlesPath} label="Articles" requestId={requestId} revision={revision}
       empty={requestId ? 'No articles have been observed in this run.' : 'Articles appear after a job publishes data from a profile with article mapping.'}>
       {rows => <TableRegion label="Latest article content">
         <table>
           <thead><tr><th scope="col">Latest title</th><th scope="col">Source</th>
-            <th scope="col">Version</th><th scope="col">Latest observation (UTC)</th></tr></thead>
+            <th scope="col">Current version</th><th scope="col">Latest observation (UTC)</th></tr></thead>
           <tbody>{rows.map(row => <tr key={row.id}>
             <th scope="row"><Link to={articlePath(row.id)}>{row.title}</Link></th>
             <td><Link to={sourcePath(row.source_id)}>{row.source_name}</Link></td>

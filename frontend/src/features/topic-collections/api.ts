@@ -2,6 +2,7 @@ import { apiGet } from '../../lib/api';
 import type { CollectionJob, JobStatus } from '../collection-jobs/api';
 
 export const topicsPath = '/topics';
+export const categoriesPath = '/categories';
 export const requestsPath = '/collection-requests';
 export const newRequestPath = requestsPath + '/new';
 export const articlesPath = '/articles';
@@ -83,16 +84,3 @@ export function listPage<T>(path: string, signal: AbortSignal, limit: number, of
   const params = new URLSearchParams({ ...filters, limit: String(limit), offset: String(offset) });
   return apiGet<T[]>(`${path}?${params}`, signal);
 }
-
-export async function listOptions<T>(path: string, signal: AbortSignal, filters?: Record<string, string>) {
-  const options: T[] = [];
-  for (let offset = 0; ; offset += 100) {
-    const page = await listPage<T>(path, signal, 100, offset, filters);
-    options.push(...page);
-    if (page.length < 100) return options;
-  }
-}
-
-export const listCategories = (signal: AbortSignal) => listOptions<Category>('/categories', signal);
-export const listTopics = (signal: AbortSignal) => listOptions<Topic>(topicsPath, signal);
-export const listActiveTopics = (signal: AbortSignal) => listOptions<Topic>(topicsPath, signal, { active_only: 'true' });

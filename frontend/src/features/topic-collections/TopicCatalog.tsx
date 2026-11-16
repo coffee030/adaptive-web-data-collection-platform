@@ -1,33 +1,36 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { Status, TableRegion, Timestamp } from '../../components/feedback';
 import { apiGet, apiPost, apiPut } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { profilePath } from '../profiles/api';
 import { listSources, listVersions, sourcesPath } from '../sources/api';
-import { bindingsPath, listCategories, listTopics, topicsPath, type Binding, type Category, type Topic } from './api';
-import { ActionFeedback, Page, Resource, useAction } from './support';
+import { bindingsPath, categoriesPath, topicsPath, type Binding, type Category, type Topic } from './api';
+import { ActionFeedback, MoreOptions, Page, Resource, useAction, useOptions } from './support';
 
 export function TopicCatalog() {
   const [revision, setRevision] = useState(0);
-  const categories = useResource(listCategories, revision, true);
-  const topics = useResource(listTopics, revision, true);
+  const categories = useOptions<Category>(categoriesPath, '', { revision });
+  const topics = useOptions<Topic>(topicsPath, '', { revision });
   function reload() { setRevision(value => value + 1); }
   return <>
     <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={sourcesPath}>Sources</Link></nav>
     <div className="page-heading"><h1>Categories and topics</h1></div>
-    <Resource label="categories" state={categories}>{categoryRows => <>
-      <CatalogForm items={categoryRows} label="Category" path="/categories" reload={reload} />
-      <Resource label="topics" state={topics}>{topicRows =>
-        <CatalogForm items={topicRows} label="Topic" path={topicsPath} reload={reload} categories={categoryRows} />
+    <Resource label="categories" state={categories.state}>{() => <>
+      <CatalogForm items={categories.rows} label="Category" path={categoriesPath} reload={reload}
+        more={<MoreOptions label="categories" options={categories} />} />
+      <Resource label="topics" state={topics.state}>{() =>
+        <CatalogForm items={topics.rows} label="Topic" path={topicsPath} reload={reload} categories={categories.rows}
+          more={<MoreOptions label="topics" options={topics} />} />
       }</Resource>
     </>}</Resource>
   </>;
 }
 
-function CatalogForm({ items, label, path, reload, categories }: {
+function CatalogForm({ items, label, path, reload, categories, more }: {
   items: (Category | Topic)[]; label: 'Category' | 'Topic'; path: string; reload: () => void;
   categories?: Category[];
+  more: ReactNode;
 }) {
   const [selected, setSelected] = useState<Category | Topic>();
   const [name, setName] = useState('');
@@ -35,6 +38,7 @@ function CatalogForm({ items, label, path, reload, categories }: {
   const [categoryId, setCategoryId] = useState('');
   const action = useAction();
   const lower = label.toLowerCase();
+  const options = selected && !items.some(row => row.id === selected.id) ? [...items, selected] : items;
 
   function choose(value: string) {
     const item = items.find(row => row.id === value);
@@ -63,14 +67,15 @@ function CatalogForm({ items, label, path, reload, categories }: {
         <label>{label} to manage
           <select value={selected?.id ?? ''} onChange={event => choose(event.target.value)}>
             <option value="">Create a new {lower}</option>
-            {items.map(item => {
+            {options.map(item => {
               const category = 'category_id' in item ? categories?.find(row => row.id === item.category_id) : undefined;
               return <option key={item.id} value={item.id}>
-                {category ? `${category.name} / ` : ''}{item.name}{item.active ? '' : ' (inactive)'}
+                {'category_id' in item ? `${category?.name ?? 'Category not loaded'} / ` : ''}{item.name}{item.active ? '' : ' (inactive)'}
               </option>;
             })}
           </select>
         </label>
+        {more}
         {categories && !selected && <label>Parent category
           <select required value={categoryId} onChange={event => setCategoryId(event.target.value)}>
             <option value="">Select a category</option>

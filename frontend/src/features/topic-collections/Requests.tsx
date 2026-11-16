@@ -8,10 +8,10 @@ import { jobPath, jobsPath, newJobPath } from '../collection-jobs/api';
 import { profilePath } from '../profiles/api';
 import { ArticleList } from './Articles';
 import {
-  bindingsPath, listActiveTopics, listCategories, listOptions, newRequestPath,
-  requestPath, requestsPath, topicsPath, type Binding, type CollectionRequest,
+  bindingsPath, categoriesPath, newRequestPath, requestPath, requestsPath, topicsPath,
+  type Binding, type Category, type CollectionRequest, type Topic,
 } from './api';
-import { ActionFeedback, Page, Resource, useAction } from './support';
+import { ActionFeedback, MoreOptions, Page, Resource, useAction, useOptions } from './support';
 
 const maxBindings = 4;
 
@@ -39,19 +39,16 @@ function useRequestSubmission() {
 
 export function NewTopicRequest() {
   const navigate = useNavigate();
-  const topics = useResource(listActiveTopics);
-  const categories = useResource(listCategories);
+  const [category, setCategory] = useState('');
   const [topic, setTopic] = useState('');
   const [keyword, setKeyword] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const action = useAction();
   const submitRequest = useRequestSubmission();
-  const load = useCallback((signal: AbortSignal) => listOptions<Binding>(
-    bindingsPath(topic), signal, { eligible_only: 'true' },
-  ), [topic]);
-  const bindings = useResource(load, 0, false, !!topic);
-  const available = bindings.result.state === 'ready' ? bindings.result.data : [];
-  const chosen = selected.filter(id => available.some(binding => binding.id === id)).sort();
+  const categories = useOptions<Category>(categoriesPath, 'active_only=true');
+  const topics = useOptions<Topic>(topicsPath, `active_only=true&category_id=${encodeURIComponent(category)}`, { enabled: !!category });
+  const bindings = useOptions<Binding>(bindingsPath(topic), 'eligible_only=true', { enabled: !!topic });
+  const chosen = selected.filter(id => bindings.rows.some(binding => binding.id === id)).sort();
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -67,22 +64,30 @@ export function NewTopicRequest() {
     <section className="panel detail-panel" aria-label="New topic collection">
       <form className="profile-body" onSubmit={submit}>
         <fieldset className="profile-form" disabled={action.busy}>
-          <Resource label="categories" state={categories}>{categoryRows =>
-            <Resource label="active topics" state={topics}>{rows => rows.length ? <label>Topic
+          <Resource label="active categories" state={categories.state}>{() => categories.rows.length ? <label>Category
+            <select required value={category} onChange={event => {
+              setCategory(event.target.value); setTopic(''); setSelected([]);
+            }}>
+              <option value="">Select a category</option>
+              {categories.rows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
+            </select>
+          </label> : <p>No active categories are available. <Link to={topicsPath}>Manage categories and topics</Link></p>}</Resource>
+          <MoreOptions label="categories" options={categories} />
+          {category && <>
+            <Resource label="active topics" state={topics.state}>{() => topics.rows.length ? <label>Topic
               <select required value={topic} onChange={event => { setTopic(event.target.value); setSelected([]); }}>
                 <option value="">Select a topic</option>
-                {rows.map(row => <option key={row.id} value={row.id}>
-                  {categoryRows.find(category => category.id === row.category_id)?.name ?? 'Category'} / {row.name}
-                </option>)}
+                {topics.rows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
-            </label> : <p>No active topics are available. <Link to={topicsPath}>Manage categories and topics</Link></p>}</Resource>
-          }</Resource>
+            </label> : <p>This category has no active topics.</p>}</Resource>
+            <MoreOptions label="topics" options={topics} />
+          </>}
           <label>Keyword<input value={keyword} required maxLength={128} onChange={event => setKeyword(event.target.value)} /></label>
-          {topic && <Resource label="eligible bindings" state={bindings}>{rows => rows.length
+          {topic && <Resource label="eligible bindings" state={bindings.state}>{() => bindings.rows.length
             ? <fieldset className="profile-field profile-form">
               <legend>Approved sources and profiles</legend>
               <p className="muted">Select up to {maxBindings} bindings.</p>
-              {rows.map(row => {
+              {bindings.rows.map(row => {
                 const checked = chosen.includes(row.id);
                 return <label key={row.id} className="check">
                   <input type="checkbox" checked={checked} disabled={!checked && chosen.length >= maxBindings}
@@ -90,6 +95,7 @@ export function NewTopicRequest() {
                   {row.source_name} · Version {row.profile_version}
                 </label>;
               })}
+              <MoreOptions label="bindings" options={bindings} />
             </fieldset> : <p role="status">This topic has no eligible source bindings.</p>}</Resource>}
           <div><button className="primary" type="submit" disabled={!chosen.length || !keyword.trim()}>Start topic collection</button></div>
         </fieldset>

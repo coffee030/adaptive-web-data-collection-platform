@@ -30,8 +30,15 @@ class RestoreBinding(Contract):
 
 
 @router.get("/categories", response_model=list[Category])
-def list_categories(request: Request, limit: PageLimit = 50, offset: PageOffset = 0):
-    return request.app.state.catalog.list(CategoryRow, Category, limit, offset)
+def list_categories(
+    request: Request,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
+    active_only: bool = False,
+):
+    return request.app.state.catalog.list(
+        CategoryRow, Category, limit, offset, active_only=active_only
+    )
 
 
 @router.post("/categories", response_model=Category, status_code=201)

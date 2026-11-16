@@ -174,6 +174,7 @@ def test_catalog_crud_active_scope_and_invalid_binding(client, job_setup):
         {"name": "renamed", "category_id": topic["category_id"]},
     )
     response(client, "PUT", category, 200, {"name": "New group", "active": False})
+    assert response(client, "GET", "/categories?active_only=true", 200) == []
     assert response(client, "GET", "/topics?active_only=true", 200) == []
     assert response(client, "GET", topic_path, 200)["name"] == "Renamed"
     response(

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Profile, Report } from '../src/features/profiles/api';
-import type { CollectionRequest, Observation, VersionInfo } from '../src/features/topic-collections/api';
+import type { ArticleSummary, CollectionRequest, Observation, VersionInfo } from '../src/features/topic-collections/api';
 
 const root = '/api/v1';
 const origin = 'http://collection-fixture:8001';
@@ -22,14 +22,21 @@ async function register(request: APIRequestContext, fixture: 'cards' | 'catalog'
   return { name, id: source.source_id };
 }
 
-async function access(page: Page) {
-  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-  expect(result.violations).toEqual([]);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width);
+async function checkLayout(page: Page, checkAxe: boolean) {
+  if (checkAxe) {
+    const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(result.violations).toEqual([]);
+  }
+  expect(await page.evaluate(() => {
+    const { scrollWidth, clientWidth } = document.documentElement;
+    return scrollWidth - clientWidth;
+  })).toBe(0);
 }
 
-test('M8 operator catalog and multi-source collection trace history and manual refresh', async ({ page, request, baseURL }) => {
+test('M8 operator catalog and multi-source collection trace history and manual refresh', async ({ page, request, baseURL, browserName }) => {
   test.setTimeout(120_000);
+  // Keep the interaction and layout checks independent of the axe runtime.
+  const checkAxe = browserName === 'chromium';
   const suffix = randomUUID().slice(0, 8);
   const cards = await register(request, 'cards', suffix);
   const catalog = await register(request, 'catalog', suffix);
@@ -84,7 +91,7 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   await page.getByRole('textbox', { name: 'Topic name' }).fill(topicName);
   await page.getByRole('button', { name: 'Create topic' }).click();
   await expect(page.getByText('Topic created.')).toBeVisible();
-  await access(page);
+  await checkLayout(page, checkAxe);
   await page.screenshot({ path: test.info().outputPath('catalog-light.png'), fullPage: true });
   await page.getByRole('link', { name: 'Manage approved bindings' }).click();
   await page.getByRole('textbox', { name: 'Operator name' }).fill('M8 topic operator');
@@ -97,11 +104,13 @@ test('M8 operator catalog and multi-source collection trace history and manual r
 
   await page.getByRole('link', { name: 'New Collection', exact: true }).click();
   await page.getByRole('link', { name: 'Collect by topic', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Topic', exact: true }).selectOption({ label: `${categoryName} / ${topicName}` });
+  await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption({ label: categoryName });
+  await page.getByRole('combobox', { name: 'Topic', exact: true }).selectOption({ label: topicName });
   await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill('quick');
   for (const source of [cards, catalog]) {
     await page.getByRole('checkbox', { name: `${source.name} · Version 1` }).check();
   }
+  await checkLayout(page, checkAxe);
   const created = page.waitForResponse(reply => reply.request().method() === 'POST' &&
     new URL(reply.url()).pathname === root + '/collection-requests');
   await page.getByRole('button', { name: 'Start topic collection' }).click();
@@ -112,6 +121,7 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   await expect(page.getByRole('heading', { name: `${topicName} · quick` })).toBeVisible();
   const jobTable = page.getByRole('table').filter({ hasText: cards.name }).first();
   await expect(jobTable.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
+  const initialArticles: ArticleSummary[] = await (await request.get(`${root}/articles?request_id=${initial.id}`)).json();
 
   const refresh = page.waitForResponse(reply => reply.request().method() === 'POST' && reply.url().endsWith('/refresh'));
   await page.getByRole('button', { name: 'Refresh collection' }).click();
@@ -123,8 +133,15 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   await expect(page.getByRole('link', { name: 'View previous run' })).toHaveAttribute('href', `/collection-requests/${initial.id}`);
   await expect(jobTable.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
 
+  await page.getByRole('link', { name: 'View previous run' }).click();
+  const refreshedArticles: ArticleSummary[] = await (await request.get(`${root}/articles?request_id=${second.id}`)).json();
+  const initialArticle = initialArticles.find(item => item.source_name === cards.name)!;
+  const refreshedArticle = refreshedArticles.find(item => item.id === initialArticle.id)!;
+  expect(Date.parse(refreshedArticle.captured_at)).toBeGreaterThan(Date.parse(initialArticle.captured_at));
   const articles = page.getByRole('region', { name: 'Articles observed by this request' });
+  await expect(articles).toContainText('show the latest capture across all collections');
   const articleRow = articles.getByRole('row').filter({ hasText: cards.name });
+  await expect(articleRow.locator('time')).toHaveAttribute('datetime', refreshedArticle.captured_at);
   await articleRow.getByRole('link', { name: 'Alpha' }).click();
   await expect(page.getByRole('heading', { name: 'Latest content' })).toBeVisible();
   const articlePath = new URL(page.url()).pathname;
@@ -141,10 +158,16 @@ test('M8 operator catalog and multi-source collection trace history and manual r
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('combobox', { name: 'Theme' }).selectOption('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await access(page);
+  await checkLayout(page, checkAxe);
   await page.screenshot({ path: test.info().outputPath('article-dark.png'), fullPage: true });
   await page.getByRole('region', { name: 'Latest content' }).getByRole('link', { name: 'Evidence', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Evidence Metadata' })).toBeVisible();
   await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
+  await page.goto('/articles');
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
+  await expect(page.locator(`a[href="${articlePath}"]`)).toBeVisible();
+  await page.goto('/collection-requests');
+  await expect(page.getByRole('heading', { name: 'Collection requests' })).toBeVisible();
+  await expect(page.locator(`a[href="/collection-requests/${second.id}"]`)).toBeVisible();
   console.log(`M8 requests ${initial.id} → ${second.id}, article ${articlePath}, evidence ${observations[0]!.evidence_id}`);
 });

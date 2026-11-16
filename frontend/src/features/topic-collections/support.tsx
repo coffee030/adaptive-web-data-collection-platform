@@ -72,6 +72,50 @@ export function Resource<T>({ state, label, children }: {
   return <>{children(result.data)}</>;
 }
 
+const optionPageSize = 99;
+
+export function useOptions<T extends { id: string }>(
+  path: string, query: string, { revision = 0, enabled = true } = {},
+) {
+  const load = useCallback((signal: AbortSignal, offset = 0) => listPage<T>(
+    path, signal, optionPageSize + 1, offset, Object.fromEntries(new URLSearchParams(query)),
+  ), [path, query]);
+  const state = useResource(load, revision, true, enabled);
+  const [additional, setAdditional] = useState<{ first: T[]; rows: T[]; nextOffset: number; more: boolean }>();
+  const [extensionFor, setExtensionFor] = useState<T[]>();
+  const action = useAction();
+  const first = state.result.state === 'ready' ? state.result.data : undefined;
+  const loaded = additional?.first === first ? additional : undefined;
+  const rows = loaded?.rows ?? first?.slice(0, optionPageSize) ?? [];
+  const nextOffset = loaded?.nextOffset ?? optionPageSize;
+  const more = loaded?.more ?? (first?.length === optionPageSize + 1);
+
+  function loadMore() {
+    if (!first || !more || state.refreshing) return;
+    setExtensionFor(first);
+    void action.run(signal => load(signal, nextOffset), page => {
+      const byId = new Map(rows.map(row => [row.id, row]));
+      for (const row of page.slice(0, optionPageSize)) byId.set(row.id, row);
+      setAdditional({
+        first, rows: [...byId.values()], nextOffset: nextOffset + optionPageSize,
+        more: page.length === optionPageSize + 1,
+      });
+    });
+  }
+
+  return { state, rows, more, loadMore, busy: action.busy || state.refreshing, failed: extensionFor === first && !!action.error };
+}
+
+export function MoreOptions({ label, options }: {
+  label: string; options: { more: boolean; loadMore: () => void; busy: boolean; failed: boolean };
+}) {
+  if (!options.more) return null;
+  return <div>
+    <button type="button" disabled={options.busy} onClick={options.loadMore}>Load more {label}</button>
+    {options.failed && <p role="alert">Could not load more {label}.</p>}
+  </div>;
+}
+
 export function Page<T>({ path, label, empty, requestId, revision, children }: {
   path: string; label: string; empty: string; requestId?: string; revision?: number;
   children: (rows: T[]) => ReactNode;
