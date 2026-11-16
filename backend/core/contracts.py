@@ -238,6 +238,16 @@ class KeywordSearch(Contract):
         return self
 
 
+class ArticleMapping(Contract):
+    title: Name
+    canonical_url: Name | None = None
+    stable_id: Name | None = None
+    author: Name | None = None
+    published_at: Name | None = None
+    summary: Name | None = None
+    body: Name | None = None
+
+
 class ExtractionConfiguration(ProfileConfiguration):
     adapter_type: Literal["web"] = "web"
     selector_type: Literal["css", "xpath"]
@@ -248,6 +258,9 @@ class ExtractionConfiguration(ProfileConfiguration):
         default=None, exclude_if=lambda value: value is None
     )
     search: KeywordSearch | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    article: ArticleMapping | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
 
@@ -269,6 +282,21 @@ class ExtractionConfiguration(ProfileConfiguration):
             raise ValueError(
                 "Configure pagination inside keyword search for a search profile"
             )
+        if self.article:
+            if not self.search:
+                raise ValueError("Article mapping requires keyword search")
+            schema = {field.name: field for field in self.record_schema.fields}
+            for common, name in self.article.model_dump(exclude_none=True).items():
+                field = schema.get(name)
+                allowed_types = (
+                    {"string", "integer"} if common == "stable_id" else {"string"}
+                )
+                if not field or field.value_type not in allowed_types:
+                    raise ValueError(
+                        f"Article field {common} must map to an output field of the correct type"
+                    )
+            if not schema[self.article.title].required:
+                raise ValueError("The mapped article title must be required")
         return self
 
 
@@ -412,6 +440,9 @@ class GenericRecord(Contract):
     schema_version: SchemaVersion
     source_record_key: str | None
     payload: dict[Name, Scalar]
+    extracted_payload: dict[Name, Scalar] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     source_position: SourcePosition
     evidence_reference: Name
     provenance: Provenance

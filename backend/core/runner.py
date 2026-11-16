@@ -259,9 +259,17 @@ class CollectionRunner:
         *,
         seen: set[str] | None = None,
     ) -> IngestionResult:
+        configuration = profile.configuration
+        article = (
+            configuration.article
+            if isinstance(configuration, ExtractionConfiguration)
+            else None
+        )
         return ingest(
             self._candidates(profile, document),
-            profile.configuration.record_schema,
+            configuration.record_schema,
             profile.source_id,
             seen=seen,
+            article_detail_url=document.location if article else None,
+            article_stable_id=article.stable_id if article else None,
         )

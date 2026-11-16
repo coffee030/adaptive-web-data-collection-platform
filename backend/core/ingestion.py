@@ -28,6 +28,7 @@ class ValidatedCandidate:
     payload: dict[str, Scalar]
     source_key: str | None
     record_id: str
+    extracted_payload: dict[str, Scalar] | None = None
 
 
 @dataclass
@@ -52,6 +53,7 @@ class IngestionResult:
                 schema_version=schema.schema_version,
                 source_record_key=entry.source_key,
                 payload=entry.payload,
+                extracted_payload=entry.extracted_payload,
                 source_position=entry.position,
                 evidence_reference=evidence.evidence_id,
                 provenance=provenance,
@@ -66,6 +68,8 @@ def ingest(
     source_id: str,
     *,
     seen: set[str] | None = None,
+    article_detail_url: str | None = None,
+    article_stable_id: str | None = None,
 ) -> IngestionResult:
     result = IngestionResult([], [], [])
     if seen is None:
@@ -125,17 +129,18 @@ def ingest(
         key_type, key_value = (
             ("identity", identity) if identity is not None else ("payload", payload)
         )
-        record_id = hashlib.sha256(
-            canonical_json(
-                [
-                    source_id,
-                    schema.record_type,
-                    schema.schema_version,
-                    key_type,
-                    key_value,
-                ]
-            )
-        ).hexdigest()
+        key = [
+            source_id,
+            schema.record_type,
+            schema.schema_version,
+            key_type,
+            key_value,
+        ]
+        if article_detail_url is not None:
+            key.append(article_detail_url)
+            if article_stable_id is not None:
+                key.append(payload.get(article_stable_id))
+        record_id = hashlib.sha256(canonical_json(key)).hexdigest()
         if record_id in seen:
             result.duplicates.append(
                 RecordRejection(
@@ -152,7 +157,11 @@ def ingest(
         seen.add(record_id)
         result.valid.append(
             ValidatedCandidate(
-                candidate.source_position, payload, source_key, record_id
+                candidate.source_position,
+                payload,
+                source_key,
+                record_id,
+                candidate.payload if article_detail_url is not None else None,
             )
         )
     return result

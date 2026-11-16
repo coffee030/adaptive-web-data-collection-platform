@@ -11,6 +11,7 @@ from backend.core.contracts import (
 )
 from backend.core.evidence import EvidenceError, LocalEvidenceStore
 
+from .articles import publish_articles
 from .models import EvidenceRow, JobRow, QuarantineRow, RecordRow
 
 
@@ -68,6 +69,8 @@ def publish_results(
         )
     for item in result.duplicates:
         evidence_for(item.evidence_reference)
+    if result.status in {"completed", "partial"}:
+        publish_articles(session, job, result)
 
 
 def _quarantine_id(job_id: UUID, page_number: int, position: SourcePosition) -> UUID:

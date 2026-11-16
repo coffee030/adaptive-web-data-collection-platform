@@ -92,6 +92,33 @@ def job_from_row(row: JobRow) -> Job:
     )
 
 
+def stage_job(
+    session: Session,
+    source_id: UUID,
+    version_id: UUID,
+    config_hash: str,
+    entry: Entry,
+    *,
+    request_key: UUID | None = None,
+) -> JobRow:
+    """Stage the Job and dispatch intent inside its caller's transaction."""
+    data = entry.model_dump(mode="json")
+    row = JobRow(
+        id=uuid4(),
+        source_id=source_id,
+        profile_version_id=version_id,
+        config_hash=config_hash,
+        request_key=request_key,
+        input_hash=hashlib.sha256(canonical_json(data)).hexdigest(),
+        input_payload=data,
+        dispatch_due_at=database_now(session),
+    )
+    session.add(row)
+    session.flush()
+    Jobs._add_event(session, row, "JOB_CREATED")
+    return row
+
+
 class Jobs:
     def __init__(self, sessions: sessionmaker[Session]):
         self.sessions = sessions
@@ -103,8 +130,6 @@ class Jobs:
         entry: Entry,
         request_key: UUID | None = None,
     ):
-        data = entry.model_dump(mode="json")
-        input_hash = hashlib.sha256(canonical_json(data)).hexdigest()
         with self.sessions.begin() as session:
             profiles = ProfileStorage(session)
             source = source_from_row(profiles.source(source_id, lock=True))
@@ -117,7 +142,10 @@ class Jobs:
                 if existing is not None:
                     if (
                         existing.profile_version_id != version_id
-                        or existing.input_hash != input_hash
+                        or existing.input_hash
+                        != hashlib.sha256(
+                            canonical_json(entry.model_dump(mode="json"))
+                        ).hexdigest()
                     ):
                         raise ProfileError(
                             "job_request_conflict",
@@ -130,19 +158,14 @@ class Jobs:
                 version.profile_version_id
             )
             check_entry(source, version.configuration, entry.collection_input())
-            row = JobRow(
-                id=uuid4(),
-                source_id=source_id,
-                profile_version_id=version_id,
-                config_hash=version.config_hash,
+            row = stage_job(
+                session,
+                source_id,
+                version_id,
+                version.config_hash,
+                entry,
                 request_key=request_key,
-                input_hash=input_hash,
-                input_payload=data,
-                dispatch_due_at=database_now(session),
             )
-            session.add(row)
-            session.flush()
-            self._add_event(session, row, "JOB_CREATED")
             return job_from_row(row), True
 
     def get(self, job_id: UUID) -> Job:
