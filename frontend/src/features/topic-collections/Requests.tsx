@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Status, TableRegion, Timestamp } from '../../components/feedback';
 import { apiGet, apiPost } from '../../lib/api';
 import { forgetRequestIntent, isUncertainWrite, prepareRequestIntent, type RequestIntent } from '../../lib/requestIntent';
@@ -42,9 +42,35 @@ function useRequestSubmission() {
 }
 
 export function NewTopicRequest() {
+  const [search] = useSearchParams();
+  const topicId = search.get('topic_id');
+  return topicId ? <PresetTopicRequest key={topicId} topicId={topicId} /> : <TopicRequestForm />;
+}
+
+function PresetTopicRequest({ topicId }: { topicId: string }) {
+  const load = useCallback(async (signal: AbortSignal) => {
+    const topic = await apiGet<Topic>(topicsPath + '/' + encodeURIComponent(topicId), signal);
+    const category = await apiGet<Category>(categoriesPath + '/' + encodeURIComponent(topic.category_id), signal);
+    return topic.active && category.active ? { topic, category } : undefined;
+  }, [topicId]);
+  const preset = useResource(load);
+
+  if (preset.result.state === 'ready' && preset.result.data) {
+    return <TopicRequestForm preset={preset.result.data} />;
+  }
+  return <>
+    <div className="page-heading"><h1>Collect by topic</h1></div>
+    <Resource label="selected topic" state={preset}>
+      {() => <p role="status">The selected topic is no longer available.</p>}
+    </Resource>
+    <Link to={newRequestPath}>Choose another topic</Link>
+  </>;
+}
+
+function TopicRequestForm({ preset }: { preset?: { category: Category; topic: Topic } }) {
   const navigate = useNavigate();
-  const [category, setCategory] = useState('');
-  const [topic, setTopic] = useState('');
+  const [category, setCategory] = useState(preset?.category.id ?? '');
+  const [topic, setTopic] = useState(preset?.topic.id ?? '');
   const [keyword, setKeyword] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const action = useAction();
@@ -52,6 +78,10 @@ export function NewTopicRequest() {
   const categories = useOptions<Category>(categoriesPath, 'active_only=true');
   const topics = useOptions<Topic>(topicsPath, `active_only=true&category_id=${encodeURIComponent(category)}`, { enabled: !!category });
   const bindings = useOptions<Binding>(bindingsPath(topic), 'eligible_only=true', { enabled: !!topic });
+  const categoryRows = preset && !categories.rows.some(row => row.id === preset.category.id)
+    ? [preset.category, ...categories.rows] : categories.rows;
+  const topicRows = preset && category === preset.category.id && !topics.rows.some(row => row.id === preset.topic.id)
+    ? [preset.topic, ...topics.rows] : topics.rows;
   const chosen = selected.filter(id => bindings.rows.some(binding => binding.id === id)).sort();
 
   function submit(event: FormEvent) {
@@ -70,20 +100,20 @@ export function NewTopicRequest() {
     <section className="panel detail-panel" aria-label="New topic collection">
       <form className="profile-body" onSubmit={submit}>
         <fieldset className="profile-form" disabled={action.busy}>
-          <Resource label="active categories" state={categories.state}>{() => categories.rows.length ? <label>Category
+          <Resource label="active categories" state={categories.state}>{() => categoryRows.length ? <label>Category
             <select required value={category} onChange={event => {
               setCategory(event.target.value); setTopic(''); setSelected([]);
             }}>
               <option value="">Select a category</option>
-              {categories.rows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
+              {categoryRows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
             </select>
           </label> : <p>No active categories are available. <Link to={topicsPath}>Manage categories and topics</Link></p>}</Resource>
           <MoreOptions label="categories" options={categories} />
           {category && <>
-            <Resource label="active topics" state={topics.state}>{() => topics.rows.length ? <label>Topic
+            <Resource label="active topics" state={topics.state}>{() => topicRows.length ? <label>Topic
               <select required value={topic} onChange={event => { setTopic(event.target.value); setSelected([]); }}>
                 <option value="">Select a topic</option>
-                {topics.rows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
+                {topicRows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
             </label> : <p>This category has no active topics.</p>}</Resource>
             <MoreOptions label="topics" options={topics} />

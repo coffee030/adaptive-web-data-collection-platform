@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router';
+import { Link, Route, Routes, ScrollRestoration, useLocation } from 'react-router';
 import { jobsPath, newJobPath } from '../features/collection-jobs/api';
 import { Overview } from '../features/dashboard/Overview';
 import { ThemeSelect } from './ThemeSelect';
+import { WorkspaceNavigation } from './WorkspaceNavigation';
 import { JobCreate } from '../features/collection-jobs/JobCreate';
 import { JobDetail } from '../features/collection-jobs/JobDetail';
 import { JobList } from '../features/collection-jobs/JobList';
@@ -22,7 +23,7 @@ import { TopicBindings, TopicCatalog } from '../features/topic-collections/Topic
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
 export function App() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   const lastPath = useRef(pathname);
   const main = useRef<HTMLElement>(null);
 
@@ -47,33 +48,27 @@ export function App() {
 
     if (lastPath.current !== pathname) {
       lastPath.current = pathname;
-      main.current?.focus();
-      window.scrollTo(0, 0);
+      if (!hash) main.current?.focus({ preventScroll: true });
     }
-  }, [pathname]);
+  }, [pathname, hash]);
 
   return (
     <div className="shell">
-      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <a className="skip-link" href="#main-content" onClick={event => {
+        event.preventDefault();
+        main.current?.focus();
+      }}>Skip to main content</a>
+      <ScrollRestoration />
       <header className="topbar">
         <Link className="wordmark" to="/">Data Collection Platform</Link>
         <ThemeSelect />
       </header>
-      <aside className="sidebar">
-        <nav aria-label="Main navigation">
-          <NavLink to="/" end>Overview</NavLink>
-          <NavLink to={newRequestPath} end>Collect by topic</NavLink>
-          <NavLink to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
-          <NavLink to={sourcesPath}>Sources</NavLink>
-          <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink>
-          <NavLink to={recordsPath}>Data Explorer</NavLink>
-        </nav>
-      </aside>
+      <WorkspaceNavigation />
       <main className="workspace" id="main-content" tabIndex={-1} ref={main}>
         <div className="workspace-inner">
           {__PLATFORM_SYNTHETIC_DEMO__ && (
             <p className="demo-notice">
-              <strong>Synthetic Demo.</strong> Bundled fixtures use fictional data.{' '}
+              <strong>Synthetic Demo.</strong> Fictional data and prices.{' '}
               <Link to={requestsPath}>View collection requests</Link>
             </p>
           )}

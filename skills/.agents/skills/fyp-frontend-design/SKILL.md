@@ -7,7 +7,7 @@ description: "Use when building or changing FYP React pages, dashboards, shared 
 
 ## Start with shared UI and contracts
 
-- Inspect the design system, tokens, shared components, page layouts, API client, domain types, and tests. Reuse existing conventions. Read [PRODUCT.md](../../../../PRODUCT.md) and [DESIGN.md](../../../../DESIGN.md) for the shared operator workflows and design tokens. Use Impeccable selectively for scoped design review when available.
+- Inspect the design system, tokens, shared components, page layouts, API client, domain types, and tests. Reuse existing conventions. Read [PRODUCT.md](../../../../PRODUCT.md) and [DESIGN.md](../../../../DESIGN.md) for the shared operator workflows and design tokens. Use [UI Slop v1.7](../../../../.agents/skills/ui-slop/SKILL.md) for UI design and browser review.
 - Inspect the implemented or agreed API contract before wiring a page. Use its fields and types. Coordinate contract changes with Member A and affected owners. Use clearly labelled fixtures or mocks in tests and prototypes. Surface missing fields or endpoints as dependencies. Keep schema and backend business logic changes outside UI-only work.
 
 ## Build and check the interaction

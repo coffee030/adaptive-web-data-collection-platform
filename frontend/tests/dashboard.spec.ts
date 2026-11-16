@@ -45,39 +45,140 @@ function route(page: Page, path: string, data: unknown, status = 200) {
   return page.route(url => url.pathname === api + path, request => request.fulfill({ json: data, status }));
 }
 
-test('Overview uses newest-first sample and scopes counts to visible jobs', async ({ page }) => {
-  const ids = Array.from({ length: 6 }, (_, index) => `19468130-0bb6-4b43-97a7-f02f550b441${index}`);
+test.beforeEach(async ({ page }) => {
+  await route(page, '/topics', []);
+  await route(page, '/collection-requests', []);
+});
+
+test('Overview preserves request outcomes and offers scoped results and running jobs', async ({ page }) => {
+  const requestId = 'd55c5c68-6bbc-482e-98f1-42e24e768f23';
+  const failed = { ...job, job_id: 'older-failed-job', status: 'failed', valid_count: 0 };
   await route(page, '/sources', [source]);
+  await route(page, '/collection-requests', [{
+    id: requestId, topic_name: 'Listings', keyword: 'north', status: 'partial', created_at: timestamp,
+    jobs: [{ job }, { job: failed }],
+  }]);
   await page.route(url => url.pathname === api + jobs, request => {
     const query = new URL(request.request().url()).searchParams;
+    expect(query.get('order')).toBe('newest');
+    if (query.get('status') === 'running') return request.fulfill({ json: [{ ...job, status: 'running' }] });
+    if (query.has('status')) return request.fulfill({ json: [] });
     expect(Object.fromEntries(query)).toEqual({ offset: '0', limit: '6', order: 'newest' });
-    return request.fulfill({ json: ids.map((id, index) => ({ ...job, job_id: id, valid_count: index === 5 ? 99 : 2 })) });
+    return request.fulfill({ json: [job, ...Array.from({ length: 5 }, (_, index) => ({
+      ...failed, job_id: 'job-' + index, error: { message: 'Fixture detail unavailable' },
+    }))] });
   });
   await page.route(url => url.pathname === api + '/records', request => {
-    expect(new URL(request.request().url()).searchParams.get('order')).toBe('newest');
+    const query = new URL(request.request().url()).searchParams;
+    if (!query.has('request_id')) expect(query.get('order')).toBe('newest');
     return request.fulfill({ json: [record] });
   });
   await page.goto('/');
-  const summary = page.getByRole('region', { name: 'Recent activity' });
-  await expect(summary).toContainText('latest 5 submitted jobs');
-  await expect(summary.locator('dd')).toHaveText(['10', '15', '5']);
-  const recentJobs = page.getByRole('region', { name: 'Recent collection jobs' });
+  const ledger = page.getByRole('region', { name: 'Recent collection requests' });
+  await expect(ledger.getByRole('link', { name: 'Running jobs' })).toHaveAttribute('href', jobs + '?status=running');
+  await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toHaveAttribute('href', '/collection-requests/' + requestId);
+  await expect(ledger).toContainText('2 jobs · 1 partial · 1 failed');
+  const recentJobs = page.getByRole('region', { name: 'Recent jobs' });
   await expect(recentJobs.getByRole('listitem')).toHaveCount(5);
-  await expect(recentJobs.getByRole('link', { name: new RegExp(ids[0]!) })).toHaveAttribute('href', jobs + '/' + ids[0]);
-  await expect(page.getByRole('region', { name: 'Recent accepted records' })).toContainText('North Trail');
+  await expect(recentJobs.getByRole('link', { name: new RegExp(jobId) })).toHaveAttribute('href', jobs + '/' + jobId);
+  await expect(recentJobs.getByText('Fixture detail unavailable').first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Validated records', exact: true })).toContainText('North Trail');
+
+  await ledger.getByRole('link', { name: /2 records for Listings/ }).click();
+  await expect(page).toHaveURL('/records?request_id=' + requestId);
+  await page.goBack();
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL('/records?request_id=' + requestId);
 });
 
-test('Overview shows real empty states and retries an unavailable records list', async ({ page }) => {
+test('Overview distinguishes setup, loading, and error and retries an unavailable records list', async ({ page }) => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
   await route(page, '/sources', []);
   await route(page, jobs, []);
-  await route(page, '/records', { error: { code: 'database_unavailable' } }, 503);
+  await page.route(url => url.pathname === api + '/records', async request => {
+    await gate;
+    await request.fulfill({ json: { error: { code: 'database_unavailable' } }, status: 503 });
+  });
   await page.goto('/');
-  await expect(page.getByText('No collections yet')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Recent activity' })).toHaveCount(0);
-  await expect(page.getByRole('alert')).toContainText('Backend unavailable');
+  const topicDirectory = page.getByRole('region', { name: 'Collect by topic', exact: true });
+  await expect(topicDirectory.getByText('No eligible topics yet')).toBeVisible();
+  await expect(topicDirectory.getByRole('link', { name: 'Manage sources' })).toHaveAttribute('href', '/sources');
+  await expect(page.getByText('No collection requests yet')).toBeVisible();
+  await expect(page.getByText('No running or pending jobs')).toBeVisible();
+  const records = page.getByRole('region', { name: 'Validated records', exact: true });
+  await expect(records.getByRole('status')).toHaveText('Loading recent records…');
+  release();
+  await expect(records.getByRole('alert')).toContainText('Backend unavailable');
   await route(page, '/records', []);
-  await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByText('No accepted records yet')).toBeVisible();
+  await records.getByRole('button', { name: 'Retry' }).click();
+  await expect(records.getByText('No validated records yet')).toBeVisible();
+  await expect(records.getByRole('heading')).toBeFocused();
+  const refresh = page.getByRole('button', { name: 'Refresh activity' });
+  await refresh.click();
+  await expect(page.getByText('Activity refresh finished')).toBeVisible();
+  await expect(refresh).toBeFocused();
+});
+
+test('An eligible Overview topic opens New Collection with a verified preset and unchecked sources', async ({ page }) => {
+  const category = { id: 'listings', name: 'Listings', active: true };
+  const topic = { id: 'north', category_id: category.id, name: 'North area', active: true };
+  const unavailable = { ...topic, id: 'south', name: 'South area' };
+  const binding = { id: 'binding', source_name: source.source_name, profile_version: 2, eligible: true };
+  await route(page, '/sources', []);
+  await route(page, jobs, []);
+  await route(page, '/records', []);
+  await route(page, '/categories', [category]);
+  await route(page, '/categories/' + category.id, category);
+  await route(page, '/topics', [topic, unavailable]);
+  await route(page, '/topics/' + topic.id, topic);
+  await route(page, '/topics/' + topic.id + '/bindings', [binding]);
+  await route(page, '/topics/' + unavailable.id + '/bindings', []);
+  await page.goto('/');
+  const directory = page.getByRole('region', { name: 'Collect by topic', exact: true });
+  await expect(directory.getByText('No eligible sources', { exact: true })).toBeVisible();
+  await expect(directory.getByRole('link', { name: /South area/ })).toHaveCount(0);
+  await directory.getByRole('link', { name: /North area/ }).click();
+  await expect(page).toHaveURL('/collection-requests/new?topic_id=north');
+  await expect(page.getByRole('combobox', { name: 'Category' })).toHaveValue(category.id);
+  await expect(page.getByRole('combobox', { name: 'Topic', exact: true })).toHaveValue(topic.id);
+  await expect(page.getByRole('checkbox', { name: /Controlled listings CSV/ })).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Start topic collection' })).toBeDisabled();
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Topic', exact: true })).toHaveValue(topic.id);
+});
+
+test('Narrow navigation exposes operations by keyboard and restores focus on Escape', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await route(page, '/sources', []);
+  await route(page, jobs, []);
+  await route(page, '/records', []);
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  const toggle = nav.getByRole('button', { name: 'Operations' });
+  await expect(nav.getByRole('link', { name: 'New Collection' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveCount(0);
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Tab');
+  await expect(nav.getByRole('link', { name: 'Sources' })).toBeFocused();
+  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveCSS('outline-style', 'solid');
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/sources');
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(toggle).toHaveAttribute('data-current', 'true');
+  await page.goBack();
+  await expect(nav.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });
 
 test('System theme reacts, and manual light and dark persist across routes and reloads', async ({ page }) => {

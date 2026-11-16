@@ -8,4 +8,4 @@
 ## Frontend design
 
 - Read [PRODUCT.md](PRODUCT.md), [DESIGN.md](DESIGN.md), and the existing FYP frontend skill for React UI work. Follow implemented API contracts and show unavailable states when functionality is pending.
-- Use the project Impeccable skill selectively for design and review. Keep hooks and Live Mode subject to separate approval.
+- Use the vendored [UI Slop v1.7](.agents/skills/ui-slop/SKILL.md) as the primary design and browser review skill. See [M11 decisions](docs/evaluation/M11-Frontend-Redesign-Decisions.md) for the pinned revision and shell decisions.

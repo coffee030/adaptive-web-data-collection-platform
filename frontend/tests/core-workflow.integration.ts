@@ -288,7 +288,7 @@ for (const adapter of ['web', 'csv'] as const) {
     expect(approved.approval_status).toBe('approved');
     const put = await request.put(api + profile.apiPath, { data: { configuration: approved.configuration } });
     expect(put.status()).toBe(409);
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Collect by topic' }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection' }).click();
     await page.getByRole('link', { name: 'Single-source collection and CSV import' }).click();
     await page.getByRole('radio', { name: web ? /HTML pages/ : /CSV datasets/ }).check();
     await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(source.source_id);

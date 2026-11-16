@@ -1,13 +1,15 @@
 ---
-name: "Data Collection Platform Dashboard"
-description: "Cobalt and slate design system for the M5.5 React dashboard."
+name: "Data Collection Workspace"
+description: "Cobalt and Slate design system for the Data Collection Workspace."
 colors:
   page: "#F4F6FB"
   surface: "#FFFFFF"
+  navigation: "#FAFBFF"
   text: "#17233B"
   text-secondary: "#576781"
   divider: "#D8E1EF"
   accent: "#375DDD"
+  accent-ink: "#2B4CBF"
   on-accent: "#FFFFFF"
   control-border: "#74839D"
   success: "#19704A"
@@ -42,31 +44,42 @@ components:
     height: "36px"
 ---
 
-# Data Collection Platform Dashboard
+# Data Collection Workspace
 
-The Overview puts the first action beside the Collect → Validate → Trace → Use workflow. Recent activity and records use persisted data. Sources, jobs and profiles share the same navigation, panels, forms and status styling.
+M11 採用 Modern Data Workspace。Overview 以可收集主題為起點，以下方清冊對照 Request、子 Jobs 和有效紀錄。維運導覽與主要收集流程分組。設計取捨及 UI Slop v1.7 版本見 [M11 決策](docs/evaluation/M11-Frontend-Redesign-Decisions.md)。
 
-## Theme tokens
+## 色彩與表面
 
-| Semantic CSS token | Light | Dark |
-| --- | --- | --- |
-| `--page` | `#F4F6FB` | `#0C1424` |
-| `--surface` | `#FFFFFF` | `#172237` |
-| `--accent` | `#375DDD` | `#7090FF` |
-| `--on-accent` | `#FFFFFF` | `#10182C` |
-| `--accent-ink` | `#2B4CBF` | `#9BB0FF` |
-| `--text` | `#17233B` | `#E9EFFB` |
-| `--text-secondary` | `#576781` | `#AFBCD2` |
-| `--divider` | `#D8E1EF` | `#344158` |
-| `--control-border` | `#74839D` | `#70809D` |
+| CSS token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--page` | `#F4F6FB` | `#0C1424` | 工作區底色 |
+| `--navigation-surface` | `#FAFBFF` | `#101B2E` | 導覽區及清冊表頭 |
+| `--surface` | `#FFFFFF` | `#172237` | 資料列、主題目錄與既有功能面板 |
+| `--accent` | `#375DDD` | `#7090FF` | 主要操作、目前導覽和焦點 |
+| `--on-accent` | `#FFFFFF` | `#10182C` | 主要操作上的文字 |
+| `--accent-ink` | `#2B4CBF` | `#9BB0FF` | 一般連結和選取文字 |
+| `--selected` | `#E8EEFF` | `#24385B` | 目前頁面及互動懸停 |
+| `--text` | `#17233B` | `#E9EFFB` | 標題與主要文字 |
+| `--text-secondary` | `#576781` | `#AFBCD2` | 狀態輔文、日期及範圍 |
+| `--divider` | `#D8E1EF` | `#344158` | 資料分隔線 |
+| `--control-border` | `#74839D` | `#70809D` | 控制項外框 |
+| `--success` | `#19704A` | `#79D4A8` | 已完成及有效資料 |
+| `--warning` | `#875807` | `#F4C16A` | 部分成功及資料來源提示 |
+| `--error` | `#A93048` | `#FF9BAA` | 失敗和錯誤 |
 
-The rest of the palette lives in `frontend/src/styles/console.css`. Use `--divider` for grouping and `--control-border` for interactive boundaries. Status text uses `--success`, `--warning` and `--error` with explicit labels. Reserve the blue introduction surface and its dedicated text colors for the Overview.
+共用 token 位於 `frontend/src/styles/console.css`。System 使用瀏覽器的色彩偏好及 CSS `light-dark()`。顯式 Light 或 Dark 在文件根節點設定 `data-theme`。`collection-theme` 保存於本機，HTML 在 React 掛載前套用已保存偏好。
 
-System mode uses the browser's active color scheme through CSS `light-dark()`. Explicit Light or Dark mode sets `data-theme` on the document root. The initial HTML applies the stored choice before React mounts. `collection-theme` is a local browser preference and the current page can still switch themes if storage is unavailable.
+## 文字與空間
 
-## Typography and layout
+- 以既有本機 Inter／IBM Plex Sans 及系統 fallback 顯示介面。Overview 頁名為 1.65–2.125 rem，區段標題 1.125 rem，記錄摘要及輔文 0.8125–0.9375 rem。時間及紀錄量使用等寬數字。ID、hash、JSON 使用 IBM Plex Mono／Consolas。
+- 以 4／8／16／24／32 px 為間距基準。圓角 6 px 用於控制項與 Overview 資料邊界，既有功能面板保留 12 px。目錄以內部分隔線建立讀取順序，清冊以共同對齊的欄形成關聯。
+- Shell 用 `frontend/src/app/shell.css`。當視窗不超過 900 px 時改為上方導覽，600 px 以下主流程呈 2×2 並獨立提供 Operations 開關。Overview 根據工作區實際寬度重排。640 px 以下主題為單欄，Request 狀態與紀錄入口保留在各列內。
+- 既有寬表格使用具名、可用鍵盤聚焦的水平捲動區。主內容不應產生整頁水平捲動。工作台採自然頁面捲動與靜態狀態回饋，包含 reduced-motion 偏好時的相同行為。
 
-- Use the local Inter/IBM Plex Sans fallback stack with system UI for offline use. Use monospace for hashes, IDs and raw JSON. Align counting and timestamps with tabular numerals.
-- Use 4/8/16/24/32px spacing and 6px control or 12px panel corners. The desktop sidebar becomes a wrapping nav on narrower screens. Use fluid workspace padding and avoid horizontal scrolling at page level.
-- Make wide data grids scroll in a named, keyboard-focusable region. Keep persistent control labels and visible keyboard focus. Preserve copyable payload and lineage values in record detail. Use selected field columns for table previews.
-- Distinguish data loading, empty responses and errors with scoped copy. Label time zones and quality scope. Use the guided flow for eligible sources and retain direct Source/Profile links for advanced operators.
+## 控制與狀態
+
+- 主動作使用 Cobalt 實底及明確文字，導覽使用帶目前頁面狀態的連結。可用主題進入已選 Topic 的表單。沒有可用主題時以 Manage sources 為區段主動作。實際收集仍需明確選擇核准來源及輸入 keyword。
+- 使用具名區段、原生連結與按鈕及 2 px 可見焦點。窄版主導航與操作開關至少 44 px 高。Escape 關閉窄版操作區並返回開關。Skip link 直接聚焦 main。
+- Status 同時顯示文字與顏色。失敗與部分成功以狀態文字、子工作摘要及適用的錯誤資訊呈現。Overview 標示提交時間為 UTC。紀錄入口保留 Request 範圍。
+- 載入使用 status，API 錯誤使用 alert 和局部 Retry。Retry 返回區段標題，更新活動可保留可讀的既有結果並宣布更新完成。真正的空資料以設定來源、綁定主題或等待有效紀錄的下一步呈現。
+- 既有功能頁保留其表單、狀態、表格和深層連結規則，使用同一 Shell 與共用 token。

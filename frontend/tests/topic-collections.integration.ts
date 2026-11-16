@@ -102,9 +102,8 @@ test('the launcher dashboard displays the three seeded Demo requests and downloa
   test.skip(!demoUrl, 'Set M10_SYNTHETIC_URL to the running Synthetic Demo launcher Dashboard.');
   const api = page.request;
   await page.goto(demoUrl!);
-  const notice = page.getByText('Bundled fixtures use fictional data.', { exact: false });
-  await expect(notice).toBeVisible();
-  await notice.getByRole('link', { name: 'View collection requests' }).click();
+  await expect(page.getByText('Synthetic Demo.', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'View collection requests', exact: true }).click();
   const historyURL = page.url();
   const presets = [
     ['Fixture Listings · quick', 2, 'SYNTHETIC FIXTURE DATA'],
@@ -207,7 +206,7 @@ test('operator configures two sources, traces collection history and downloads p
   }
 
   async function prepareCollection(keyword: string) {
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Collect by topic' }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection' }).click();
     await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption({ label: categoryName });
     await page.getByRole('combobox', { name: 'Topic', exact: true }).selectOption({ label: topicName });
     for (const source of [cards, catalog]) {
