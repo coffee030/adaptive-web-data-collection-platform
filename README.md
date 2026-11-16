@@ -9,19 +9,28 @@ This is a higher diploma final-year project. The current version runs on a trust
 You’ll need Windows 11 with WSL 2, Docker Desktop running in Linux container mode, and Node.js 22.13 or later in the 22.x series.
 
 ```powershell
-git clone https://github.com/coffee030/adaptive-web-data-collection-platform.git
+git clone --branch feature/M10-core-reliability-evaluation https://github.com/coffee030/adaptive-web-data-collection-platform.git
 cd adaptive-web-data-collection-platform
 .\Setup-Platform.bat
+.\Start-Platform.bat
+.\Diagnose-Platform.bat
+.\Stop-Platform.bat
 ```
 
-To try the bundled examples, open `.local/launcher.env` after setup and set the following values. Keep the other settings as generated.
+A fresh Normal installation opens an empty Dashboard at [127.0.0.1:5197](http://127.0.0.1:5197/). Stop keeps your settings and data.
 
-```dotenv
-LAUNCHER_FIXTURE=1
-LOCAL_PROFILE_APPROVAL=1
+### Synthetic Demo
+
+```powershell
+.\Setup-Platform.bat -Demo
+.\Start-Platform.bat -Demo
+.\Diagnose-Platform.bat -Demo
+.\Stop-Platform.bat -Demo
 ```
 
-Run `.\Start-Platform.bat` and open the address printed by the launcher. The default is [http://127.0.0.1:5197](http://127.0.0.1:5197/). Run `.\Stop-Platform.bat` when you’re done. Your records and settings are kept for the next run.
+Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The first successful Start prepares three fictional topics with 18 validated Records, verifiable Evidence, Article History and CSV/JSON downloads. Demo has its own settings and Docker volumes. [Presentation walkthrough](docs/evaluation/M10-FYP-Core-Demo-Runbook.md)
+
+FTC and New York Fed collection is unavailable in this release. Public website review and opt-in eligibility are documented separately. [Real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
 
 ## Collect by topic
 

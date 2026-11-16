@@ -16,6 +16,25 @@
 
 自動化可傳入 `-NonInteractive` 關閉 launcher 的安裝同意提示、使用 `-NoBrowser` 關閉 Start 的自動開頁，並設定 `PLATFORM_NO_PAUSE=1` 取得錯誤 exit code。互動使用時 BAT 遇錯會停留供閱讀。
 
+## Isolated Synthetic Demo
+
+Run these commands from the same checkout as Normal Mode. Normal defaults to port `5197`. Demo defaults to port `5198`.
+
+```powershell
+.\Setup-Platform.bat -Demo
+.\Start-Platform.bat -Demo
+.\Diagnose-Platform.bat -Demo
+.\Stop-Platform.bat -Demo
+```
+
+Demo Setup validates installed Windows prerequisites, ownership, ports and bundled fixture files. When npm dependencies are missing it can use the local cache. On a cold machine, install the prerequisites and run `npm ci` in `frontend` with registry access before repeating offline Demo Setup. Start may download the application's pinned dependencies and container images on a cold machine. The presets collect exclusively from the bundled fixture service.
+
+Demo uses `.local-demo/launcher.env` with its own protected credentials and identity. Its loopback API and PostgreSQL ports default to `58098` and `55498`. If a port is occupied, Stop the Demo and change the relevant port in the Demo file. If Docker's default pools are exhausted and the Demo networks have yet to be created, inspect Docker and Windows/VPN routes and add two unused RFC 1918 `/24` values as `LAUNCHER_SUBNET` and `LAUNCHER_FIXTURE_SUBNET`. Keep the project name, owner and credentials.
+
+Find Demo diagnostics at `logs/launcher/demo/latest.log`. `DEMO-001` identifies missing bundled files. `DEMO-002` identifies incomplete or conflicting presets. Fix the reported cause and Start again. Use `Start-Platform.bat -Demo -DemoRetry` to create a replacement for a terminal failed or partial baseline. Earlier Requests and Evidence remain available.
+
+Keep the Demo settings and its PostgreSQL, Redis, Evidence and `demo_state` volumes together for backup and restore. Use the Normal commands to operate the Normal project. [Demo architecture and expected results](../evaluation/M10-Demo-Presets-and-Launcher.md)
+
 ## 前置條件與權限
 
 - 64-bit Windows 11、內建 Windows PowerShell 5.1、Docker Desktop Linux Engine、Docker Compose 2.20+、WSL 2。啟動時會檢查 Windows build、CPU 架構、WSL、虛擬化和可測得的 RAM、磁碟空間。Docker Desktop 安裝適用的 Windows build、記憶體與 WSL 最低需求以 Docker 官方頁面為準。 [Docker Desktop Windows 安裝指南](https://docs.docker.com/desktop/setup/install/windows-install/)

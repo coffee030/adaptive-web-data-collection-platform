@@ -5,42 +5,34 @@
 Use Windows 11 AMD64, WSL2, Docker Desktop Linux Engine, Node.js 22.13+ in the 22.x series, and an available local browser. Run the following from a fresh copy of the repository.
 
 ```powershell
-.\Setup-Platform.bat
-# In the new checkout's .local/launcher.env, enable LAUNCHER_FIXTURE=1 and LOCAL_PROFILE_APPROVAL=1.
-.\Start-Platform.bat
+.\Setup-Platform.bat -Demo
+.\Start-Platform.bat -Demo
 ```
 
-Open the printed Dashboard URL. The default is `http://127.0.0.1:5197/`. If running alongside another checkout, follow the [Windows setup guide](../setup/Windows-One-Click-Setup.md) to select unused ports. The bundled fixture listens at `http://collection-fixture:8001` inside the isolated Compose network.
+Open the printed Dashboard URL, normally `http://127.0.0.1:5198/`. Wait for **Synthetic Demo is ready**. Start validates and approves the bundled Profiles, submits three real Requests and verifies their results. The default Normal launcher opens on `5197` and starts with an empty catalog on a fresh installation. [Windows setup guide](../setup/Windows-One-Click-Setup.md)
 
-## Set up Sources and approved Profiles
+## Show the default results
 
-1. Open **Sources → Create source** and select the Web adapter. Register **Demo Cards** and **Demo Catalog** separately. Use permission reference `Bundled FYP fixture` and allowed origin `http://collection-fixture:8001` for each. Enter `http://collection-fixture:8001/m7/cards` and `http://collection-fixture:8001/m7/catalog` as the respective allowed path prefixes. On each Source page, select **Authorize Source access**.
-2. Under each Source, create a draft with collection mode **Keyword search and detail pages**. Enter the following selectors and output schema. Keep maximum search pages at 1 for this demonstration and the default detail limits.
+From **Overview**, follow **View collection requests** in the Synthetic Demo notice. Open each Succeeded Request and check its two child Jobs.
 
-| Profile setting | Demo Cards | Demo Catalog |
-| --- | --- | --- |
-| Record type | `article_fixture` | `catalog_fixture` |
-| Selector type | CSS | XPath |
-| Search path | `/m7/cards/search` | `/m7/catalog/search` |
-| Keyword query parameter | `q` | `term` |
-| Search result item selector | `li.result` | `//tbody/tr` |
-| Detail link selector | `a.item` | `./td/a` |
-| Detail item selector | `article` | `//main/dl` |
-| Text field | `headline` via `h2` | `headline` via `./dt` |
-| Integer field | — | `count` via `./dd` |
-| Store article history | Yes, article title `headline` | Yes, article title `headline` |
+| Category | Topic | Keyword | Accepted Records |
+| --- | --- | --- | --- |
+| Core Demonstration | Fixture Listings | `quick` | 2 |
+| Marketing Intelligence | Influencer Advertising and Sponsorship | `partnership` | 8 |
+| Financial Markets | Market News and Economic Updates | `market` | 8 |
 
-3. Use sample keyword `quick`, select **Preview**, then **Validate sample**. Confirm `Alpha` and integer `10` in the applicable profile. Enter the approver label, confirm approval and select **Approve version**. Show the immutable Version 1 configuration and hash.
-4. Open **Sources → Categories and topics**. Create category **FYP Demonstration** and topic **Fixture Listings**. Open **Manage approved bindings** for the topic, enter the operator name and approve one binding for each authorized Source and approved Profile.
+Open **Sources** to show authorization, the two different selector types and the Profile Version 1 configuration hashes. Under **Categories and topics**, view the approved topic bindings. The Marketing sources depict explicitly disclosed fictional partnerships. The financial payloads and exports carry **SIMULATED DATA — NOT LIVE MARKET PRICES**.
 
 ## Demonstrate a complete collection
 
 1. From **Overview**, open **Collect by topic**. Select the category, topic and both Sources. Enter `quick` and select **Start topic collection**. Show the parent Request, its two child Jobs, each Profile pin and the execution events. The work shares one origin and may take several seconds.
-2. After both Jobs show **Succeeded**, open **View request records**. Expected payloads are `{"headline":"Alpha"}` and `{"count":10,"headline":"Alpha"}`. Open a Record and show Source, Job, Profile Version and Evidence references. Open **Evidence Metadata** to show the detail capture and content hash. Job capture evidence also lists the search response.
+2. After both Jobs show **Succeeded**, open **View request records**. Both carry `headline: Alpha` and `dataset: SYNTHETIC FIXTURE DATA`. Catalog also carries integer `count: 10`. Open a Record and show Source, Job, Profile Version and Evidence references. Open **Evidence Metadata** for the detail URL, capture time and content hash. Job capture evidence also lists the search response.
 3. Follow **Article history** to the Article and show version 1 and its Observation. Return to the Request and select **Refresh collection**. Review the new run and the original Profile pins. When it succeeds, each Source's Article retains version 1 and gains a distinct Observation and Evidence reference. Show the previous-run link and the older Observation's extracted payload.
 4. On either successful Request, download **CSV** and **JSON**. Expect two records. The JSON attachment carries typed payloads and provenance. CSV carries nested fields as JSON cells. A single child Job contains one record and has its own downloads.
 5. Submit `detail404` against both Sources. Each child retains its accepted `Alpha` record, reports HTTP 404 for the failed detail and goes **Partial**. The parent shows **Partial**. Both download formats still contain two accepted records. To show validated rejection separately, use the bundled [CSV example](../demo/M5.5-dashboard-demo-runbook.md) and open its Job's **Quarantine** and Evidence.
-6. Stop with `Stop-Platform.bat`, start again and reopen the original Request. Show that the Records, Article history, exports and Evidence metadata survived. The verification script independently compares the downloaded attachments to PostgreSQL and hashes actual files in the Evidence volume. [Deployment verification](M10-Deployment-Verification.md)
+6. Stop with `Stop-Platform.bat -Demo`, start again and reopen the original Request. Show that the Records, Article History, exports and Evidence metadata survived. Run `Diagnose-Platform.bat -Demo` to check the migration, fixture and all three baseline Requests. [Demo verification](M10-Demo-Presets-and-Launcher.md)
+
+For the Marketing or Market topic, select both sources and use the keyword in the table to show the two search captures per Job. In Data Explorer, select fields such as `disclosure` or `price` under **Fields to Display**. For the optional financial content-change exercise, switch the internal fixture to Revision 2, then select **Refresh collection** on the Market Request. [Fixture revision commands](M10-Demo-Presets-and-Launcher.md#controlled-financial-refresh)
 
 ## Explain the engineering
 
@@ -72,4 +64,4 @@ Repeat with `firefox` and `webkit` and separate output paths. Chrome has additio
 | Fixture requests return policy errors | Check fixture mode, exact origin, path prefix and `q` or `term`. Keep the Source request limits enabled. |
 | Export exceeds row or byte bounds | Export by child Job, narrow the search or partition CSV input according to the existing export contract. |
 
-The demonstration uses the committed controlled fixtures. **External live collection is NOT VERIFIED.** No authorized public website was supplied for this evaluation. Physical 8 GB Windows and manual screen-reader acceptance remain separate checks. The trusted local mode applies to this release candidate.
+The presentation uses the committed controlled fixtures. Both considered websites are unsupported for this M10 configuration. Physical 8 GB Windows and manual screen-reader acceptance remain separate checks. The trusted local mode applies to this release candidate. [FTC and New York Fed decisions](M10-Real-Website-Feasibility.md)
