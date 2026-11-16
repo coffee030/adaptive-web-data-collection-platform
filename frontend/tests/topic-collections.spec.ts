@@ -115,6 +115,8 @@ test('request downloads wait for completion and recover from an export failure',
   await expect(download).toBeEnabled();
   await download.click();
   await expect(page.getByRole('alert')).toContainText('5,000 records or 8 MiB');
+  await expect(page.getByRole('alert')).toContainText('download records from each child job');
+  await expect(page.getByRole('alert')).toContainText('start a new collection with a narrower search or smaller input');
   const saved = page.waitForEvent('download');
   await download.press('Enter');
   expect((await saved).suggestedFilename()).toBe(`request-${id}-records.json`);

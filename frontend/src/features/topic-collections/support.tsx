@@ -16,7 +16,7 @@ const messages: Record<string, string> = {
   destination_denied: 'A pinned search destination is outside the current source policy.',
   invalid_request: 'Check the fields and try again.',
   record_export_pending: 'Wait for the collection to finish, then try the download again.',
-  record_export_limit: 'This scope exceeds the download limit of 5,000 records or 8 MiB. Try a smaller scope.',
+  record_export_limit: 'This export exceeds the limit of 5,000 records or 8 MiB. For a request, download records from each child job. For a job, start a new collection with a narrower search or smaller input.',
 };
 
 export function useAction(fallback = 'The action could not be confirmed. Check the connection and try again.') {
