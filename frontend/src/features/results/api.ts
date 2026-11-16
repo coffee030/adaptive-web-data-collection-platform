@@ -70,7 +70,10 @@ export interface EvidenceMetadata extends Lineage {
 export const recordsPath = '/records';
 export const evidencePath = '/evidence';
 export const recordPath = (id: string) => `${recordsPath}/${encodeURIComponent(id)}`;
-export const evidenceDetailPath = (id: string) => `${evidencePath}/${encodeURIComponent(id)}`;
+export function evidenceDetailPath(id: string, requestId?: string | null) {
+  const path = `${evidencePath}/${encodeURIComponent(id)}`;
+  return requestId ? path + '?' + new URLSearchParams({ request_id: requestId }) : path;
+}
 export const quarantinePath = (jobId: string) => `${jobPath(jobId)}/quarantine`;
 
 export function recordsForJob(jobId: string) {
@@ -86,7 +89,7 @@ function pageQuery(pageSize: number, offset: number) {
 }
 
 export function listRecords(jobId: string, pageSize: number, offset: number, signal: AbortSignal,
-  { order, requestId }: { order?: 'newest'; requestId?: string } = {},
+  { order, requestId }: { order?: 'newest' | 'oldest'; requestId?: string } = {},
 ) {
   const query = pageQuery(pageSize, offset);
   if (order) query.set('order', order);

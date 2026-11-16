@@ -32,7 +32,7 @@ const record: GenericRecord = {
 const evidence: EvidenceMetadata = {
   ...lineage, evidence_id: evidenceId, run_id: jobId, config_hash: configHash,
   captured_at: timestamp, page_number: 1,
-  adapter_type: 'web', content_hash: 'f'.repeat(64), content_type: 'text/html',
+  adapter_type: 'web', capture_kind: 'detail', content_hash: 'f'.repeat(64), content_type: 'text/html',
   original_location: 'http://127.0.0.1:8001/collection?token=secret',
   requested_location: 'http://username:password@127.0.0.1:8001/first#fragment', http_status: 200,
 };
@@ -84,27 +84,26 @@ async function mockLineage(page: Page) {
   await routeJson(page, evidencePath, evidence);
 }
 
-test('Records navigation opens a keyboard-accessible persisted result table', async ({ page }) => {
+test('Records navigation opens a keyboard-accessible ledger and optional inspector', async ({ page }) => {
   await mockLineage(page);
   await routeJson(page, '/collection-jobs', []);
   await page.goto('/');
-  const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  await nav.getByRole('link', { name: 'Data Explorer' }).focus();
-  await expect(nav.getByRole('link', { name: 'Data Explorer' })).toBeFocused();
-  await page.keyboard.press('Enter');
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Data Explorer' }).press('Enter');
   await expect(page).toHaveURL(recordsPath);
   await expect(page.getByRole('main')).toBeFocused();
-  const table = page.getByRole('table', { name: 'Persisted generic records' });
-  await expect(table.getByRole('row').nth(1)).toContainText('North Trail');
-  await expect(table.getByRole('link', { name: 'Job', exact: true })).toHaveAttribute('href', jobPath);
-  await expect(table.getByRole('link', { name: source.source_name })).toHaveAttribute('href', sourcePath);
-  await expect(table.getByRole('link', { name: 'Open evidence ' + evidenceId })).toHaveAttribute('href', evidencePath);
-  await expect(table.getByRole('columnheader', { name: 'title' })).toBeVisible();
-  const row = table.getByRole('link', { name: 'North Trail · View record' });
-  await row.focus();
-  expect(await row.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(recordPath);
+  const row = page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem');
+  await expect(row).toContainText('listing');
+  await expect(row.getByRole('link', { name: source.source_name })).toHaveAttribute('href', sourcePath);
+  const trigger = row.getByRole('button', { name: 'Inspect North Trail' });
+  await trigger.focus();
+  expect(await trigger.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
+  await trigger.press('Enter');
+  await expect(page).toHaveURL(recordsPath + '?record_id=' + recordId);
+  const inspector = page.getByRole('complementary', { name: 'Record Inspector' });
+  await expect(inspector.getByRole('link', { name: 'Open evidence ' + evidenceId })).toBeVisible();
+  await expect(inspector.getByRole('link', { name: 'Article history' })).toHaveCount(0);
+  await inspector.getByRole('button', { name: 'Close inspector' }).press('Escape');
+  await expect(trigger).toBeFocused();
 });
 
 test('Records announces loading, ordinary empty and filtered empty states', async ({ page }) => {
@@ -139,25 +138,27 @@ test('Records fetches one extra, filters on the API and preserves the list page 
   });
   await routeJson(page, recordPath, record);
   await page.goto(recordsPath + '?offset=10');
-  await expect(page.locator(`a[href="${recordPath}"]`)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inspect North Trail' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Job ID' }).fill(jobId);
   await page.getByRole('textbox', { name: 'Job ID' }).press('Enter');
   await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId);
-  await expect(page.getByRole('row')).toHaveCount(11);
-  expect(seen.at(-1)?.toString()).toBe(`limit=11&offset=0&job_id=${jobId}`);
+  await expect(page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem')).toHaveCount(10);
+  expect(seen.at(-1)?.toString()).toBe(`limit=11&offset=0&order=oldest&job_id=${jobId}`);
   await page.getByRole('button', { name: 'Next records page' }).click();
   await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId + '&offset=10');
-  const link = page.locator(`a[href="${recordPath}"]`);
-  await expect(link).toBeVisible();
+  const trigger = page.getByRole('button', { name: 'Inspect North Trail' });
+  await expect(trigger).toBeVisible();
   expect(seen.at(-1)?.get('offset')).toBe('10');
   await expect(page.getByRole('button', { name: 'Next records page' })).toBeDisabled();
-  await link.click();
+  await trigger.click();
+  await page.getByRole('link', { name: 'Open Record Details' }).click();
   await expect(page.getByRole('heading', { name: 'Record Details' })).toBeVisible();
-  await page.getByRole('link', { name: 'Back to Records' }).click();
+  await page.getByRole('link', { name: 'Back to Record Inspector' }).click();
+  await page.getByRole('button', { name: 'Close inspector' }).click();
   await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId + '&offset=10');
-  await expect(link).toBeVisible();
+  await expect(trigger).toBeVisible();
   await page.getByRole('button', { name: 'Previous records page' }).click();
-  await expect(page.getByRole('row')).toHaveCount(11);
+  await expect(page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem')).toHaveCount(10);
 });
 
 test('Records explains a rejected Job ID without exposing response messages', async ({ page }) => {
@@ -170,6 +171,8 @@ test('Records explains a rejected Job ID without exposing response messages', as
 
 for (const failure of ['503', 'network'] as const) {
   test(`Records retries ${failure} and preserves the requested offset and filter`, async ({ page }) => {
+    await routeJson(page, jobPath, job);
+    await routeJson(page, '/sources', [source]);
     let failed = true;
     await page.route(url => url.pathname === api + recordsPath, route => {
       if (!failed) return route.fulfill({ json: [record] });
@@ -179,10 +182,10 @@ for (const failure of ['503', 'network'] as const) {
     const path = recordsPath + '?job_id=' + jobId + '&offset=10';
     await page.goto(path);
     await expect(page.getByRole('alert')).toContainText('Backend unavailable');
-    await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(page.getByRole('list', { name: 'Persisted generic records' })).toHaveCount(0);
     failed = false;
     await page.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.locator(`a[href="${recordPath}"]`)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Inspect North Trail' })).toBeVisible();
     await expect(page).toHaveURL(path);
   });
 }
@@ -218,15 +221,16 @@ test('Record payload keeps JSON types, literal text and access to long values', 
 test('Record lineage opens the actual Job, Source, pinned Profile and Evidence destinations', async ({ page }) => {
   await mockLineage(page);
   await page.goto(recordPath);
-  await expect(page.getByRole('region', { name: 'Record overview' })).toContainText('Passed');
-  await expect(page.getByRole('region', { name: 'Record overview' })).toContainText('CSV row 2');
-  await expect(page.getByRole('region', { name: 'Provenance' })).toContainText(configHash);
+  await expect(page.getByText('Passed', { exact: true })).toBeVisible();
+  await page.getByText('Provenance and identifiers', { exact: true }).click();
+  await expect(page.getByText('CSV row 2', { exact: true })).toBeVisible();
+  await expect(page.getByText(configHash, { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Open job ' + jobId }).click();
   await expect(page).toHaveURL(jobPath);
   await expect(page.getByRole('heading', { name: 'Execution events' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View quarantine' })).toHaveAttribute('href', quarantinePath);
   await page.getByRole('link', { name: 'Open record ' + recordId }).click();
-  await page.getByRole('link', { name: 'Open source ' + sourceId }).click();
+  await page.getByRole('link', { name: new RegExp('Open source ' + sourceId) }).click();
   await expect(page).toHaveURL(sourcePath);
   await expect(page.getByRole('heading', { name: source.source_name })).toBeVisible();
   await page.goBack();
@@ -235,7 +239,7 @@ test('Record lineage opens the actual Job, Source, pinned Profile and Evidence d
   await expect(page.getByText('Read only', { exact: true })).toBeVisible();
   await page.goBack();
   await page.getByRole('link', { name: 'Open evidence ' + evidenceId }).click();
-  await expect(page).toHaveURL(evidencePath);
+  await expect(page).toHaveURL(new RegExp(evidencePath + '\\?from='));
   await page.getByRole('link', { name: 'Back to Record Details' }).click();
   await expect(page).toHaveURL(recordPath);
   await page.getByRole('link', { name: 'Back to Records' }).click();
@@ -307,11 +311,11 @@ test('Quarantine handles a missing job and a backend failure with retry', async 
 test('Evidence shows safe stored metadata, preserves lineage and links back to the Job', async ({ page }) => {
   await mockLineage(page);
   await page.goto(evidencePath);
-  await expect(page.getByRole('region', { name: 'Capture details' })).toContainText('text/html');
+  await expect(page.getByRole('region', { name: 'Detail page' })).toContainText('text/html');
   await expect(page.getByText('http://127.0.0.1:8001/collection', { exact: true })).toBeVisible();
   await expect(page.getByText('http://127.0.0.1:8001/first', { exact: true })).toBeVisible();
   await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
-  await expect(page.getByText('SHA-256 recorded by the collection backend.')).toBeVisible();
+  await expect(page.getByText('Stored hash recorded by the collection backend.')).toBeVisible();
   await expect(page.getByText(/token=secret|username:password|never-render/)).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Download/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Open profile version ' + profileId })).toHaveAttribute('href', profilePath);
@@ -330,7 +334,7 @@ for (const [path, label] of [[recordPath, 'Record'], [evidencePath, 'Evidence']]
   });
 }
 
-for (const width of [1440, 1280, 768, 390]) {
+for (const width of [1440, 900, 768, 390, 320]) {
   test(`result pages contain long data and pass axe at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const longId = 'result-reference-'.repeat(20);
@@ -343,7 +347,7 @@ for (const width of [1440, 1280, 768, 390]) {
     ] }]);
     await routeJson(page, evidencePath, evidence);
     for (const [path, landmark] of [
-      [recordsPath, page.locator(`a[href="/records/${longId}"]`)],
+      [recordsPath, page.getByRole('list', { name: 'Persisted generic records' })],
       [recordPath, page.getByRole('region', { name: 'Record payload JSON' })],
       [quarantinePath, page.getByText(longValue, { exact: true })],
       [evidencePath, page.getByText(evidence.content_hash, { exact: true })],
@@ -354,14 +358,6 @@ for (const width of [1440, 1280, 768, 390]) {
       const rules = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
       expect((await new AxeBuilder({ page }).withTags(rules).analyze()).violations).toEqual([]);
     }
-    if (width === 390) {
-      await page.goto(recordsPath);
-      const region = page.getByRole('region', { name: /Records table/ });
-      await region.focus();
-      await page.keyboard.press('End');
-      await expect.poll(() => region.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
-      await page.keyboard.press('ArrowRight');
-      await expect.poll(() => region.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
-    }
+
   });
 }

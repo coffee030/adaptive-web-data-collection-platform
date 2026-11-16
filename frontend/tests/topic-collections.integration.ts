@@ -128,7 +128,7 @@ test('the launcher dashboard displays the three seeded Demo requests and downloa
     await checkDownloads(page, rows, 'request-' + id);
     await page.getByRole('link', { name: 'View request records' }).click();
     await expect(page.getByRole('heading', { name: 'Data Explorer' })).toBeVisible();
-    if (dataset.startsWith('SIMULATED')) await expect(page.getByText(dataset, { exact: true })).toBeVisible();
+    if (dataset.startsWith('SIMULATED')) await expect(page.locator('.ledger-warning')).toHaveText(dataset);
   }
   await page.screenshot({ path: test.info().outputPath('demo-financial-records.png'), fullPage: true });
 });
@@ -238,11 +238,11 @@ test('operator configures two sources, traces collection history and downloads p
   await checkLayout(page, checkAxe);
   await page.screenshot({ path: test.info().outputPath('request-tablet.png'), fullPage: true });
   await page.getByRole('link', { name: 'View request records' }).click();
-  await expect(page.getByText('Records from this collection request')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Alpha · View record' })).toHaveCount(2);
-  await page.getByRole('link', { name: 'Alpha · View record' }).first().click();
+  await expect(page.getByText('Records from this Collection Request')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inspect Alpha', exact: true })).toHaveCount(2);
+  await page.getByRole('button', { name: 'Inspect Alpha', exact: true }).first().click();
   await expect(page.getByRole('link', { name: 'Article history' })).toBeVisible();
-  await page.getByRole('link', { name: 'Back to Records' }).click();
+  await page.getByRole('button', { name: 'Close inspector' }).click();
   await expect(page).toHaveURL(new RegExp(`request_id=${initial.id}`));
   await page.getByRole('link', { name: 'Browse articles' }).click();
   await expect(page.getByRole('heading', { name: 'Articles observed in this run' })).toBeVisible();
@@ -268,7 +268,7 @@ test('operator configures two sources, traces collection history and downloads p
   const articleRow = articles.getByRole('row').filter({ hasText: cards.name });
   await expect(articleRow.locator('time')).toHaveAttribute('datetime', refreshedArticle.captured_at);
   await articleRow.getByRole('link', { name: 'Alpha' }).click();
-  await expect(page.getByRole('heading', { name: 'Latest content' })).toBeVisible();
+  await expect(page.getByText('Latest content across all collections', { exact: true })).toBeVisible();
   const articlePath = new URL(page.url()).pathname;
   const versions: VersionInfo[] = await (await request.get(`${root}${articlePath}/versions`)).json();
   const observations: Observation[] = await (await request.get(`${root}${articlePath}/observations`)).json();
@@ -278,21 +278,28 @@ test('operator configures two sources, traces collection history and downloads p
   expect(new Set(observations.map(item => item.evidence_id)).size).toBe(2);
   const selectedObservation = observations.find(item => item.request_id === initial.id)!;
   const history = page.getByRole('region', { name: 'Observation history', exact: true }).first();
-  await expect(history.getByRole('link', { name: 'Record', exact: true }))
-    .toHaveAttribute('href', '/records/' + selectedObservation.record_id);
+  await expect(history.getByRole('list', { name: 'Observation list' }).getByRole('link', { name: 'Record', exact: true }))
+    .toHaveAttribute('href', new RegExp('/records/' + selectedObservation.record_id));
   await page.getByRole('button', { name: 'View version 1' }).click();
   await expect(page.getByRole('heading', { name: 'Version 1 · Alpha' })).toBeVisible();
-  await page.getByRole('button', { name: 'View extracted payload for observation 1 on this page' }).click();
+  await page.getByRole('button', { name: 'Inspect observation' }).click();
   await expect(page.getByRole('region', { name: 'Extracted payload JSON' })).toContainText('"headline": "Alpha"');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('combobox', { name: 'Theme' }).selectOption('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await checkLayout(page, checkAxe);
   await page.screenshot({ path: test.info().outputPath('article-dark.png'), fullPage: true });
-  await history.getByRole('link', { name: 'Evidence', exact: true }).click();
+  await history.locator('#selected-article-record').click();
+  await expect(page.getByRole('heading', { name: 'Record Details' })).toBeVisible();
+  await page.getByRole('link', { name: 'Open evidence ' + selectedObservation.evidence_id }).click();
   await expect(page).toHaveURL(new RegExp('/evidence/' + selectedObservation.evidence_id));
   await expect(page.getByRole('heading', { name: 'Evidence Metadata' })).toBeVisible();
-  await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Detail page', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to Record Details' }).click();
+  await page.getByRole('link', { name: 'Back to Article History' }).click();
+  await expect(page).toHaveURL(new RegExp('observation_id=' + selectedObservation.record_id));
+  await expect(page.getByRole('heading', { name: 'Version 1 · Alpha' })).toBeVisible();
+  await expect(page.locator('#selected-article-record')).toBeFocused();
 
   const jobIds = initial.jobs.map(item => item.job.job_id);
   const persisted = await persistedRecords(request, jobIds);
@@ -320,9 +327,12 @@ test('operator configures two sources, traces collection history and downloads p
   expect(partialRecords).toHaveLength(2);
   await checkDownloads(page, partialRecords, 'request-' + partial.id);
   await page.screenshot({ path: test.info().outputPath('partial-mobile.png'), fullPage: true });
+  await page.getByRole('link', { name: 'View request records' }).click();
+  await expect(page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('link', { name: 'Review child job outcomes' })).toHaveAttribute('href', '/collection-requests/' + partial.id);
   await page.goto('/articles');
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
-  await expect(page.locator(`a[href="${articlePath}"]`)).toBeVisible();
+  await expect(page.locator(`a[href^="${articlePath}?"]`)).toBeVisible();
   await page.goto('/collection-requests');
   await expect(page.getByRole('heading', { name: 'Collection requests' })).toBeVisible();
   await expect(page.locator(`a[href="/collection-requests/${second.id}"]`)).toBeVisible();

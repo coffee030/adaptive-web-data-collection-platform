@@ -11,7 +11,7 @@ const formats = [
 export function RecordExport({ scope, id, pending }: {
   scope: 'job' | 'request'; id: string; pending: boolean;
 }) {
-  const action = useAction('Could not download records. Check the connection and try again.');
+  const action = useAction('Could not download records. Check the connection and try again.', scope + ':' + id);
   const path = scope === 'job' ? jobPath(id) : requestPath(id);
 
   function download({ extension, type }: (typeof formats)[number]) {
@@ -35,6 +35,7 @@ export function RecordExport({ scope, id, pending }: {
           onClick={() => download(format)}>Download {format.label}</button>)}
       </div>
     </div>
+    <p className="export-scope muted">Includes all published records from this {scope === 'job' ? 'job' : 'collection request'}, with every persisted field.</p>
     {pending && <p className="notice muted">Downloads are available after the jobs in this collection finish.</p>}
     {(action.busy || action.error) && <div className="notice">
       <ActionFeedback action={action} pending="Preparing download…" />

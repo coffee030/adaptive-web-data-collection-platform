@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Loading, Pagination, RequestProblem } from '../../components/feedback';
 import { ApiError } from '../../lib/api';
+import { maxOffset } from '../collection-jobs/api';
 import { useResource } from '../../lib/useResource';
 import { listPage } from './api';
 
@@ -124,12 +125,14 @@ export function MoreOptions({ label, options }: {
   </div>;
 }
 
-export function Page<T>({ path, label, empty, requestId, revision, children }: {
+export function Page<T>({ path, label, empty, requestId, revision, paging, children }: {
   path: string; label: string; empty: string; requestId?: string; revision?: number;
+  paging?: { offset: number; change: (offset: number) => void };
   children: (rows: T[]) => ReactNode;
 }) {
   const size = 20;
-  const [offset, setOffset] = useState(0);
+  const [localOffset, setOffset] = useState(0);
+  const offset = paging?.offset ?? localOffset;
   const load = useCallback((signal: AbortSignal) => listPage<T>(
     path, signal, size + 1, offset, requestId ? { request_id: requestId } : {},
   ), [path, offset, requestId]);
@@ -137,6 +140,6 @@ export function Page<T>({ path, label, empty, requestId, revision, children }: {
   return <Resource label={label.toLowerCase()} state={state}>{rows => <>
     {rows.length ? children(rows.slice(0, size)) : <p className="notice muted">{empty}</p>}
     {(offset > 0 || rows.length > size) && <Pagination label={label} offset={offset} size={size}
-      loaded={rows.length} change={setOffset} />}
+      loaded={rows.length} maxOffset={maxOffset} change={paging?.change ?? setOffset} />}
   </>}</Resource>;
 }

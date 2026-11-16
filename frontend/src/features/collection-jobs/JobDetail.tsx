@@ -5,9 +5,10 @@ import { getJob, jobsPath, listEvents, maxOffset } from './api';
 import type { CollectionJob, ExecutionEvent } from './api';
 import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
 import { profilePath } from '../profiles/api';
-import { listJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
-import { EvidenceLink, PayloadPreview } from '../results/presentation';
+import { evidenceDetailPath, listJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
+import { captureLabel, EvidenceLink, PayloadPreview } from '../results/presentation';
 import { RecordExport } from '../results/RecordExport';
+import { ContextLink, useResultReturn } from '../results/resultNavigation';
 import { sourcePath } from '../sources/api';
 import { requestPath } from '../topic-collections/api';
 import { ErrorDetails, ResultCounts } from './presentation';
@@ -91,7 +92,7 @@ function JobDetailPage({ id }: { id: string }) {
           {active ? <section className="panel detail-panel" aria-label="Related records">
             <p className="notice muted">Records appear after the job publishes results.</p>
           </section> : <>
-            <JobEvidence id={result.data.job_id} revision={manualRevision} />
+            <JobEvidence id={result.data.job_id} revision={manualRevision} requestId={requestId} />
             <RecordsPreview id={result.data.job_id} offset={recordOffset} setOffset={setRecordOffset}
               revision={manualRevision} />
           </>}
@@ -193,10 +194,11 @@ function EventTimeline({ result, retry }: {
 
 const recordsPageSize = 10;
 
-function JobEvidence({ id, revision }: { id: string; revision: number }) {
+function JobEvidence({ id, revision, requestId }: { id: string; revision: number; requestId: string }) {
   const load = useCallback((signal: AbortSignal) => listJobEvidence(id, signal), [id]);
   const { result, retry } = useResource(load, revision);
   const { hash } = useLocation();
+  useResultReturn(result.state === 'ready');
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (hash === '#job-evidence-title') {
@@ -212,9 +214,9 @@ function JobEvidence({ id, revision }: { id: string; revision: number }) {
       {result.state === 'ready' && (result.data.length > 0
         ? <ul className="notice job-evidence-list">
           {result.data.map(evidence => <li key={evidence.evidence_id}>
-            {evidence.capture_kind === 'search' ? 'Search results · ' : evidence.capture_kind === 'detail' ? 'Detail · ' : ''}
-            {evidence.adapter_type === 'web' ? `Page ${evidence.page_number} ` : ''}
-            <EvidenceLink id={evidence.evidence_id} />
+            {captureLabel(evidence)}{evidence.adapter_type === 'web' ? ` · Page ${evidence.page_number} ` : ' '}
+            <ContextLink id={'job-capture-' + evidence.evidence_id} to={evidenceDetailPath(evidence.evidence_id, requestId)}
+              className="identifier" aria-label={`Open evidence ${evidence.evidence_id}`}>{evidence.evidence_id}</ContextLink>
           </li>)}
         </ul>
         : <p className="notice">No capture evidence was saved for this job.</p>)}

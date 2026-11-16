@@ -115,4 +115,8 @@ test('failed capture opens Evidence without records and API rejects foreign Host
   }
   const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
+  await page.getByRole('link', { name: 'View job records' }).click();
+  await expect(page.getByRole('region', { name: 'Quality for this job' })).toContainText('Failed');
+  await expect(page.getByText('No records match this Job ID')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Persisted generic records' })).toHaveCount(0);
 });

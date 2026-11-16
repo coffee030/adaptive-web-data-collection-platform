@@ -288,3 +288,55 @@
 
 .review-version { white-space: nowrap; }
 .request-outcome { margin-block-end: var(--md); }
+
+.history-panel {
+  min-inline-size: 0;
+  margin-block-end: var(--md);
+  border-radius: var(--radius-compact);
+  overflow-wrap: anywhere;
+}
+.history-latest, .history-selection { padding: var(--md) var(--lg); }
+.history-latest h2 { margin-block: var(--xs); font-size: clamp(1.25rem, 2.5vw, 1.8rem); line-height: 1.2; }
+.history-kicker { color: var(--text-secondary); font-size: 0.875rem; font-weight: 650; }
+.history-latest > .muted, .history-selection > .muted { font-size: 0.875rem; }
+.history-panel .timestamp span { display: inline; margin-inline-start: var(--sm); }
+.history-scope-note {
+  margin-block: var(--md);
+  padding: var(--sm) 12px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--navigation-surface);
+  font-size: 0.875rem;
+}
+.history-content { display: grid; gap: var(--sm); margin-block: var(--md); }
+.history-content summary { cursor: pointer; color: var(--accent-ink); }
+.history-content p { white-space: pre-wrap; }
+.history-lineage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sm) var(--md);
+  margin-block: var(--md) var(--xs);
+  font-size: 0.875rem;
+}
+.history-selection { border-block-end: 1px solid var(--divider); background: var(--navigation-surface); }
+.history-selection h3 { margin-block: 0 var(--xs); font-size: 1.0625rem; }
+.history-selection .detail-panel { margin-block-start: var(--md); border-radius: var(--radius-compact); }
+.history-register { margin: 0; padding: 0; list-style: none; }
+.history-register li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sm) var(--md);
+  padding: var(--sm) var(--md);
+  border-block-end: 1px solid var(--divider);
+  font-size: 0.875rem;
+}
+.history-register li:last-child { border-block-end: 0; }
+.history-register li[data-selected="true"] { background: var(--selected); }
+.history-register button { justify-self: end; }
+@container (width < 30rem) {
+  .history-latest, .history-selection { padding-inline: var(--md); }
+  .history-register li { grid-template-columns: minmax(0, 1fr) auto; }
+  .history-register li > :nth-child(2) { grid-row: 2; }
+  .history-register button { grid-area: 1 / 2 / span 2 / 3; min-block-size: 44px; }
+}
+.article-breadcrumb { display: flex; flex-wrap: wrap; gap: var(--xs) var(--md); }

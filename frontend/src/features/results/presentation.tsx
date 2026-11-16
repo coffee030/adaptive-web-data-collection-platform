@@ -5,17 +5,15 @@ import { RequestProblem } from '../../components/feedback';
 import { jobPath } from '../collection-jobs/api';
 import { profilePath } from '../profiles/api';
 import { sourcePath } from '../sources/api';
-import { evidenceDetailPath, type Lineage, type SourcePosition } from './api';
+import { evidenceDetailPath, type EvidenceMetadata, type GenericRecord, type Lineage, type SourcePosition } from './api';
 
 export function Metadata({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return <div className={className}><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
-export function EvidenceLink({ id, state, compact = false }: {
-  id: string; state?: { recordId: string; recordsSearch: string }; compact?: boolean;
-}) {
-  return <Link className={compact ? undefined : 'identifier'} to={evidenceDetailPath(id)} state={state}
-    aria-label={`Open evidence ${id}`}>{compact ? 'Evidence' : id}</Link>;
+export function EvidenceLink({ id }: { id: string }) {
+  return <Link className="identifier" to={evidenceDetailPath(id)}
+    aria-label={`Open evidence ${id}`}>{id}</Link>;
 }
 
 export function ProvenanceFields({ lineage }: { lineage: Lineage }) {
@@ -79,7 +77,17 @@ export function clip(value: string, limit: number) {
   return value.slice(0, limit).replace(/[\uD800-\uDBFF]$/, '') + '…';
 }
 
+export const marketWarning = 'SIMULATED DATA — NOT LIVE MARKET PRICES';
+
 export const recordTitleFields = ['title', 'name', 'headline'] as const;
+
+export function recordTitle(record: GenericRecord) {
+  for (const field of recordTitleFields) {
+    const value = Object.hasOwn(record.payload, field) ? record.payload[field] : undefined;
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return `${record.record_type} · ${record.record_id.slice(0, 8)}`;
+}
 
 export function displayValue(value: unknown) {
   if (value === '') return '(empty)';
@@ -105,4 +113,21 @@ export function PayloadPreview({ payload, omit }: { payload: Record<string, unkn
       {extra > 0 && <span className="muted">+{extra} more {extra === 1 ? 'field' : 'fields'}</span>}
     </>
   );
+}
+
+export function webLocation(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin + url.pathname;
+  } catch {
+    // Return a neutral label for an unusable location.
+  }
+  return 'Unavailable';
+}
+
+export function captureLabel(evidence: EvidenceMetadata) {
+  if (evidence.capture_kind === 'search') return 'Search results page';
+  if (evidence.capture_kind === 'detail') return 'Detail page';
+  if (evidence.adapter_type === 'csv') return 'CSV input';
+  return evidence.capture_kind === 'input' ? 'HTML input' : 'HTML capture';
 }

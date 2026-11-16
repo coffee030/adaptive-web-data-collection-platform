@@ -262,11 +262,11 @@ test('Fields to Display handles mixed payloads without API writes or refetching'
   page.on('request', request => { if (request.url().includes('/api/v1/')) methods.push(request.method()); });
   await route(page, '/sources', [source]);
   await route(page, jobs + '/' + jobId, job);
-  await route(page, '/records', [record, { ...record, record_id: 'another', payload: { price: 12, note: '' } }]);
+  await route(page, '/records', [record, { ...record, record_id: '9ab8e00c-2b2f-74c8-0836-8016b42ac249', payload: { price: 12, note: '' } }]);
   await page.goto('/records?job_id=' + jobId);
-  const table = page.getByRole('table');
-  await expect(table.getByRole('cell', { name: '0', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: 'false', exact: true })).toBeVisible();
+  const ledger = page.getByRole('list', { name: 'Persisted generic records' });
+  await expect(ledger.getByText('0', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('false', { exact: true })).toBeVisible();
   const quality = page.getByRole('region', { name: 'Quality for this job' });
   await expect(quality.locator('dd strong')).toHaveText(['2', '3', '1']);
   await expect(quality.getByRole('link', { name: 'View quarantine' }))
@@ -275,18 +275,18 @@ test('Fields to Display handles mixed payloads without API writes or refetching'
   await page.getByText('Fields to Display').click();
   await page.getByRole('checkbox', { name: 'price', exact: true }).check();
   await page.getByRole('checkbox', { name: 'note', exact: true }).check();
-  await expect(table.getByRole('cell', { name: '12', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: 'Null', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: '(empty)', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: '—', exact: true })).toHaveCount(3);
-  await expect(table.getByRole('link', { name: 'View record · listing' })).toHaveAttribute('href', '/records/another');
+  await expect(ledger.getByText('12', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('Null', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('(empty)', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('Missing', { exact: true })).toHaveCount(3);
+  await expect(ledger.getByRole('button', { name: 'Inspect listing · 9ab8e00c' })).toBeVisible();
   await page.getByRole('button', { name: 'Reset fields' }).click();
-  await expect(table.getByRole('columnheader', { name: 'price' })).toHaveCount(0);
-  for (const field of ['title', 'count', 'active']) {
+  await expect(page.getByRole('checkbox', { name: 'note', exact: true })).not.toBeChecked();
+  for (const field of ['price', 'count', 'active']) {
     await page.getByRole('checkbox', { name: field, exact: true }).uncheck();
   }
-  await expect(table.getByRole('link', { name: 'listing · View record' }).first())
-    .toHaveAttribute('href', '/records/' + record.record_id);
+  await expect(ledger.getByText('No preview fields selected')).toHaveCount(2);
+  await expect(ledger.getByRole('button', { name: 'Inspect North Trail' })).toBeVisible();
   expect(methods).toEqual(before);
   expect(methods.every(method => method === 'GET')).toBe(true);
 });
@@ -315,13 +315,9 @@ for (const [width, theme] of [[1440, 'light'], [390, 'dark']] as const) {
     await audit();
     await page.goto('/records?job_id=' + jobId);
     await expect(page.getByRole('region', { name: 'Quality for this job' }).locator('dd strong')).toHaveText(['2', '3', '1']);
-    const recordsTable = page.getByRole('table', { name: 'Persisted generic records' });
-    await expect(recordsTable.getByRole('columnheader').first()).toHaveText('title');
-    const recordLink = recordsTable.getByRole('link', { name: 'North Trail · View record' });
-    await expect(recordLink).toBeInViewport();
-    const typeCell = recordsTable.getByRole('rowheader');
-    expect((await typeCell.boundingBox())?.width).toBeGreaterThanOrEqual(120);
-    expect((await typeCell.boundingBox())?.height).toBeLessThan(96);
+    const ledger = page.getByRole('list', { name: 'Persisted generic records' });
+    await expect(ledger.getByRole('button', { name: 'Inspect North Trail' })).toBeInViewport();
+    await expect(ledger.getByText(/listing · Schema/)).toBeVisible();
     await audit();
   });
 }
