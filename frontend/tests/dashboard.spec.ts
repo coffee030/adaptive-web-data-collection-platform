@@ -142,12 +142,12 @@ test('An eligible Overview topic opens New Collection with a verified preset and
   await expect(directory.getByRole('link', { name: /South area/ })).toHaveCount(0);
   await directory.getByRole('link', { name: /North area/ }).click();
   await expect(page).toHaveURL('/collection-requests/new?topic_id=north');
-  await expect(page.getByRole('combobox', { name: 'Category' })).toHaveValue(category.id);
-  await expect(page.getByRole('combobox', { name: 'Topic', exact: true })).toHaveValue(topic.id);
+  await expect(page.getByRole('region', { name: topic.name, exact: true })).toContainText(category.name);
+  await expect(page.getByRole('heading', { name: topic.name, exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Controlled listings CSV/ })).not.toBeChecked();
-  await expect(page.getByRole('button', { name: 'Start topic collection' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Start topic collection' })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('combobox', { name: 'Topic', exact: true })).toHaveValue(topic.id);
+  await expect(page.getByRole('heading', { name: topic.name, exact: true })).toBeVisible();
 });
 
 test('Narrow navigation exposes operations by keyboard and restores focus on Escape', async ({ page }) => {

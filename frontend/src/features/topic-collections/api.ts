@@ -34,6 +34,7 @@ export interface Binding {
 }
 export interface CollectionRequest {
   id: string;
+  topic_id: string;
   keyword: string;
   topic_name: string;
   status: JobStatus;

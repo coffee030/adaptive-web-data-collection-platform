@@ -1,3 +1,4 @@
+import { BackToCollection } from './CollectionReturn';
 import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { Status, TableRegion, Timestamp } from '../../components/feedback';
@@ -127,7 +128,7 @@ function BindingWorkspace({ topicId }: { topicId: string }) {
   }
 
   return <>
-    <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={topicsPath}>Categories and topics</Link></nav>
+    <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={topicsPath}>Categories and topics</Link> <BackToCollection /></nav>
     <Resource label="topic" state={topic}>{item => <>
       <div className="page-heading collection-text"><h1>{item.name}</h1></div>
       <section className="panel detail-panel" aria-labelledby="approve-binding">

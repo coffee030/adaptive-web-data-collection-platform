@@ -207,12 +207,13 @@ test('operator configures two sources, traces collection history and downloads p
 
   async function prepareCollection(keyword: string) {
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection' }).click();
-    await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption({ label: categoryName });
-    await page.getByRole('combobox', { name: 'Topic', exact: true }).selectOption({ label: topicName });
+    await page.getByRole('button', { name: categoryName, exact: true }).click();
+    await page.getByRole('button', { name: topicName, exact: true }).click();
     for (const source of [cards, catalog]) {
-      await page.getByRole('checkbox', { name: `${source.name} · Version 1` }).check();
+      await page.getByRole('checkbox', { name: `${source.name} Approved profile · Version 1` }).check();
     }
     await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
+    await page.getByRole('button', { name: 'Review collection' }).click();
   }
   async function submitCollection() {
     const created = page.waitForResponse(reply => reply.request().method() === 'POST' &&
@@ -326,4 +327,140 @@ test('operator configures two sources, traces collection history and downloads p
   await expect(page.getByRole('heading', { name: 'Collection requests' })).toBeVisible();
   await expect(page.locator(`a[href="/collection-requests/${second.id}"]`)).toBeVisible();
   console.log(`M9 requests ${initial.id} → ${second.id}, controlled partial ${partial.id}, article ${articlePath}, evidence ${selectedObservation.evidence_id}, exported ${persisted.length} records`);
+});
+
+test('M12 shows setup in an isolated empty Normal database', async ({ page, request }) => {
+  test.skip(process.env.M12_EMPTY_NORMAL !== '1', 'Run against a freshly migrated isolated Normal database.');
+  for (const endpoint of ['categories', 'topics', 'sources', 'collection-requests', 'collection-jobs', 'records', 'articles']) {
+    const response = await request.get(`${root}/${endpoint}`);
+    expect(response.ok()).toBe(true);
+    expect(await response.json()).toEqual([]);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/collection-requests/new');
+  await expect(page.getByText('No active categories', { exact: true })).toBeVisible();
+  await expect(page.getByText('Synthetic Demo.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await checkLayout(page, true);
+  await page.screenshot({ path: test.info().outputPath('normal-empty.png'), fullPage: true });
+  await page.getByRole('link', { name: 'Manage categories and topics' }).click();
+  await expect(page.getByRole('heading', { name: 'Categories and topics' })).toBeVisible();
+});
+
+test('M12 collects all three existing Synthetic Demo presets and replays a committed request', async ({ page }) => {
+  const demoUrl = process.env.M10_SYNTHETIC_URL;
+  test.skip(!demoUrl, 'Set M10_SYNTHETIC_URL to an isolated Synthetic Demo Dashboard.');
+  test.setTimeout(240_000);
+  const api = page.request;
+  const presets = [
+    ['Core Demonstration', 'Fixture Listings', 'quick', ['Demo Cards', 'Demo Catalog'], 2, 'SYNTHETIC FIXTURE DATA'],
+    ['Marketing Intelligence', 'Influencer Advertising and Sponsorship', 'partnership',
+      ['Creator Brief (Synthetic)', 'Disclosure Desk (Synthetic)'], 8, 'SYNTHETIC FIXTURE DATA'],
+    ['Financial Markets', 'Market News and Economic Updates', 'market',
+      ['Market Wire (Simulated)', 'Economic Ledger (Simulated)'], 8, 'SIMULATED DATA — NOT LIVE MARKET PRICES'],
+    ['Core Demonstration', 'Fixture Listings', 'detail404', ['Demo Cards', 'Demo Catalog'], 2, 'SYNTHETIC FIXTURE DATA'],
+  ] as const;
+
+  async function configure(preset: typeof presets[number]) {
+    const [group, topic, keyword, sources] = preset;
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection' }).click();
+    await page.getByRole('button', { name: group, exact: true }).click();
+    await expect(page.getByRole('button', { name: topic, exact: true })).toBeVisible();
+    if (keyword === 'quick') await page.screenshot({ path: test.info().outputPath('topic-browser.png'), fullPage: true });
+    await page.getByRole('button', { name: topic, exact: true }).click();
+    await expect(page.getByText('0 of 4 selected')).toBeVisible();
+    for (const name of sources) {
+      const checkbox = page.getByRole('checkbox', { name: name + ' Approved profile · Version 1', exact: true });
+      await expect(checkbox).not.toBeChecked();
+      await checkbox.check();
+      if (keyword === 'quick' && name === sources[0]) {
+        await page.screenshot({ path: test.info().outputPath('approved-sources.png'), fullPage: true });
+      }
+    }
+    await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
+    await page.getByRole('button', { name: 'Review collection' }).click();
+    const review = page.getByRole('region', { name: 'Review collection' });
+    for (const item of [group, topic, keyword, ...sources, '2 jobs will search']) await expect(review).toContainText(item);
+    await checkLayout(page, true);
+    if (keyword === 'quick' || keyword === 'market') await page.screenshot({
+      path: test.info().outputPath(keyword === 'quick' ? 'review-desktop.png' : 'review-mobile-dark.png'), fullPage: true,
+    });
+  }
+
+  await page.setViewportSize({ width: 1440, height: 920 });
+  await page.goto(demoUrl!);
+  await expect(page.getByText('Synthetic Demo.', { exact: true })).toBeVisible();
+
+  for (const preset of presets) {
+    const [, topic, keyword, sources, expected, dataset] = preset;
+    if (keyword === 'market') {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole('combobox', { name: 'Theme' }).selectOption('dark');
+    }
+    await configure(preset);
+    const createdPath = '/api/v1/collection-requests';
+    let lost: CollectionRequest | undefined;
+    let original: unknown;
+    if (keyword === 'quick') {
+      await page.route('**' + createdPath, async route => {
+        original = route.request().postDataJSON();
+        const committed = await route.fetch();
+        expect(committed.status()).toBe(201);
+        lost = await committed.json() as CollectionRequest;
+        await route.abort('failed');
+      }, { times: 1 });
+    }
+
+    const posted = (status: number) => page.waitForResponse(response =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === createdPath && response.status() === status);
+    if (keyword !== 'quick') {
+      const created = posted(201);
+      await page.getByRole('button', { name: 'Start topic collection' }).click();
+      await created;
+    } else {
+      await page.getByRole('button', { name: 'Start topic collection' }).click();
+      await expect(page.getByRole('heading', { name: 'Confirm your submission' })).toBeVisible();
+      const replayed = posted(200);
+      await page.getByRole('button', { name: 'Retry submission' }).click();
+      const reply = await replayed;
+      expect(reply.request().postDataJSON()).toEqual(original);
+      expect((await reply.json()).id).toBe(lost?.id);
+    }
+
+    const outcome = keyword === 'detail404' ? 'Partial' : 'Succeeded';
+    await expect(page.getByRole('heading', { name: topic + ' · ' + keyword })).toBeVisible();
+    await expect(page.getByText('Collection request submitted. Follow the source jobs below.')).toBeVisible();
+    const jobs = page.getByRole('list', { name: 'Source jobs' });
+    await expect(jobs.getByText(outcome, { exact: true })).toHaveCount(2, { timeout: 70_000 });
+    const id = new URL(page.url()).pathname.split('/').at(-1)!;
+    const saved = await api.get(new URL(createdPath + '/' + id, demoUrl!).href);
+    expect(saved.ok()).toBe(true);
+    const run: CollectionRequest = await saved.json();
+    expect(run.jobs.map(job => job.source_name).sort()).toEqual([...sources].sort());
+    expect(run.jobs.map(job => job.profile_version)).toEqual([1, 1]);
+    expect(run.status).toBe(outcome.toLowerCase());
+    const response = await api.get(new URL(`${root}/records?request_id=${id}`, demoUrl!).href);
+    expect(response.ok()).toBe(true);
+    const records: GenericRecord[] = await response.json();
+    expect(records).toHaveLength(expected);
+    expect(new Set(records.map(record => record.payload.dataset))).toEqual(new Set([dataset]));
+    expect(run.jobs.every(({ job }) => records.some(record => record.job_id === job.job_id))).toBe(true);
+    await expect(page.getByText(`${expected} validated records available.`, { exact: false })).toBeVisible();
+    if (keyword === 'quick' || keyword === 'detail404') {
+      await page.screenshot({
+        path: test.info().outputPath(keyword === 'quick' ? 'request-succeeded.png' : 'request-partial.png'), fullPage: true,
+      });
+      const job = jobs.getByRole('link', { name: 'Evidence', exact: true }).first();
+      await job.click();
+      await expect(page.getByRole('heading', { name: 'Capture evidence' })).toBeFocused();
+      await expect(page.getByRole('region', { name: 'Capture evidence' }).getByRole('link')).not.toHaveCount(0);
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp('/collection-requests/' + id + '$'));
+    }
+    if (keyword === 'market') {
+      await page.getByRole('link', { name: 'View request records' }).click();
+      await expect(page.getByText(dataset, { exact: true })).toBeVisible();
+    }
+    console.log(`M12 ${topic} · ${keyword}: ${id}, ${outcome}, ${run.jobs.length} jobs, ${records.length} persisted records`);
+  }
 });

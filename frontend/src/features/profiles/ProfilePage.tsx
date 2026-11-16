@@ -1,3 +1,4 @@
+import { BackToCollection } from '../topic-collections/CollectionReturn';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBeforeUnload, useBlocker, useLocation, useNavigate, useParams } from 'react-router';
 import { Loading, RequestProblem, Status, Timestamp } from '../../components/feedback';
@@ -53,6 +54,7 @@ function ProfileLoader({ sourceId, profileId }: { sourceId: string; profileId?: 
     <nav className="breadcrumb profile-breadcrumb" aria-label="Breadcrumb">
       <Link to={{ pathname: sourcesPath, search: sourcesSearch }}>Sources</Link>
       <Link to={{ pathname: sourcePath(sourceId), search: sourceSearch }} state={{ sourcesSearch }}>Source details</Link>
+      <BackToCollection />
     </nav>
     {result.state === 'loading' && <div className="panel"><Loading>Loading profile workspace…</Loading></div>}
     {result.state === 'error' && <div className="panel">

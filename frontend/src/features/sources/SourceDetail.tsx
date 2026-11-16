@@ -1,3 +1,4 @@
+import { BackToCollection } from '../topic-collections/CollectionReturn';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
@@ -11,7 +12,7 @@ import { useResultPage } from '../results/useResultPage';
 export function SourcesBreadcrumb() {
   const { state } = useLocation();
   const search = typeof state?.sourcesSearch === 'string' ? state.sourcesSearch : '';
-  return <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={{ pathname: sourcesPath, search }}>Sources</Link></nav>;
+  return <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={{ pathname: sourcesPath, search }}>Sources</Link> <BackToCollection /></nav>;
 }
 
 export function SourceDetail() {

@@ -19,12 +19,20 @@ const messages: Record<string, string> = {
   record_export_limit: 'This export exceeds the limit of 5,000 records or 8 MiB. For a request, download records from each child job. For a job, start a new collection with a narrower search or smaller input.',
 };
 
-export function useAction(fallback = 'The action could not be confirmed. Check the connection and try again.') {
+export function useAction(fallback: string | ((error: unknown) => string) = 'The action could not be confirmed. Check the connection and try again.', scope?: string) {
   const current = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  useEffect(() => () => current.current?.abort(), []);
+  useEffect(() => {
+    setBusy(false);
+    setError('');
+    setNotice('');
+    return () => {
+      current.current?.abort();
+      current.current = null;
+    };
+  }, [scope]);
 
   async function run<T>(action: (signal: AbortSignal) => Promise<T>, done: (value: T) => void, confirmation = '') {
     if (current.current) return;
@@ -42,7 +50,7 @@ export function useAction(fallback = 'The action could not be confirmed. Check t
     } catch (error) {
       if (!controller.signal.aborted) {
         const code = error instanceof ApiError ? error.code : undefined;
-        setError((code && messages[code]) || fallback);
+        setError(typeof fallback === 'function' ? fallback(error) : (code && messages[code]) || fallback);
       }
     } finally {
       current.current = null;
@@ -50,7 +58,7 @@ export function useAction(fallback = 'The action could not be confirmed. Check t
     }
   }
 
-  return { run, busy, error, notice };
+  return { run, busy, error, notice, clearError: () => setError('') };
 }
 
 export function ActionFeedback({ action, pending = 'Saving…' }: {
@@ -74,33 +82,31 @@ export function Resource<T>({ state, label, children }: {
   return <>{children(result.data)}</>;
 }
 
-const optionPageSize = 99;
-
 export function useOptions<T extends { id: string }>(
-  path: string, query: string, { revision = 0, enabled = true } = {},
+  path: string, query: string, { revision = 0, enabled = true, pageSize = 99 } = {},
 ) {
   const load = useCallback((signal: AbortSignal, offset = 0) => listPage<T>(
-    path, signal, optionPageSize + 1, offset, Object.fromEntries(new URLSearchParams(query)),
-  ), [path, query]);
+    path, signal, pageSize + 1, offset, Object.fromEntries(new URLSearchParams(query)),
+  ), [path, query, pageSize]);
   const state = useResource(load, revision, true, enabled);
   const [additional, setAdditional] = useState<{ first: T[]; rows: T[]; nextOffset: number; more: boolean }>();
   const [extensionFor, setExtensionFor] = useState<T[]>();
   const action = useAction();
   const first = state.result.state === 'ready' ? state.result.data : undefined;
   const loaded = additional?.first === first ? additional : undefined;
-  const rows = loaded?.rows ?? first?.slice(0, optionPageSize) ?? [];
-  const nextOffset = loaded?.nextOffset ?? optionPageSize;
-  const more = loaded?.more ?? (first?.length === optionPageSize + 1);
+  const rows = loaded?.rows ?? first?.slice(0, pageSize) ?? [];
+  const nextOffset = loaded?.nextOffset ?? pageSize;
+  const more = loaded?.more ?? (first?.length === pageSize + 1);
 
   function loadMore() {
     if (!first || !more || state.refreshing) return;
     setExtensionFor(first);
     void action.run(signal => load(signal, nextOffset), page => {
       const byId = new Map(rows.map(row => [row.id, row]));
-      for (const row of page.slice(0, optionPageSize)) byId.set(row.id, row);
+      for (const row of page.slice(0, pageSize)) byId.set(row.id, row);
       setAdditional({
-        first, rows: [...byId.values()], nextOffset: nextOffset + optionPageSize,
-        more: page.length === optionPageSize + 1,
+        first, rows: [...byId.values()], nextOffset: nextOffset + pageSize,
+        more: page.length === pageSize + 1,
       });
     });
   }

@@ -18,7 +18,8 @@ import { RecordDetail } from '../features/results/RecordDetail';
 import { QuarantinePage } from '../features/results/QuarantinePage';
 import { EvidenceDetail } from '../features/results/EvidenceDetail';
 import { ArticlePage, ArticlesPage } from '../features/topic-collections/Articles';
-import { NewTopicRequest, RequestDetails, RequestList } from '../features/topic-collections/Requests';
+import { RequestDetails, RequestList } from '../features/topic-collections/Requests';
+import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
 import { TopicBindings, TopicCatalog } from '../features/topic-collections/TopicCatalog';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
