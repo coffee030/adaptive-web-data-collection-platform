@@ -5,6 +5,7 @@ import json
 import os
 import shlex
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from itertools import pairwise
@@ -125,22 +126,23 @@ def snapshot(client, paths):
     return result
 
 
+def m7_fixture_metrics(prefix):
+    return json.loads(
+        compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "collection-fixture",
+            "python",
+            "-c",
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/m7-metrics').read().decode())",
+        )
+    )
+
+
 def test_m7_two_compose_workers_share_origin_and_preserve_detail_lineage(compose):
     prefix, url = compose
     origin = COMPOSE_FIXTURE_ORIGIN
-
-    def metrics():
-        return json.loads(
-            compose_command(
-                prefix,
-                "exec",
-                "-T",
-                "collection-fixture",
-                "python",
-                "-c",
-                "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/m7-metrics').read().decode())",
-            )
-        )
 
     with httpx2.Client(base_url=url, timeout=30, trust_env=False) as client:
         registered = [
@@ -156,7 +158,7 @@ def test_m7_two_compose_workers_share_origin_and_preserve_detail_lineage(compose
             )
             for layout in ("cards", "catalog")
         ]
-        before = len(metrics())
+        before = max(end for _, _, end in m7_fixture_metrics(prefix))
         compose_command(
             prefix,
             "up",
@@ -227,7 +229,14 @@ def test_m7_two_compose_workers_share_origin_and_preserve_detail_lineage(compose
                     == pages[-1]["evidence_id"]
                 )
 
-            requests = sorted(metrics()[before:], key=lambda request: request[1])
+            requests = sorted(
+                (
+                    request
+                    for request in m7_fixture_metrics(prefix)
+                    if request[1] >= before
+                ),
+                key=lambda request: request[1],
+            )
             assert len(requests) == 12
             gaps = [
                 next_request[1] - previous[2]
@@ -694,4 +703,95 @@ def test_m7_recovers_after_worker_loss_and_keeps_terminal_lineage(compose):
             assert hashlib.sha256(raw).hexdigest() == page["content_hash"]
         print(
             f"M7 Job {job_id} recovered on attempt 2, ignored a duplicate and retained five captures after restart"
+        )
+
+
+def test_compose_revocation_after_search_prevents_next_capture(compose):
+    prefix, url = compose
+    origin = COMPOSE_FIXTURE_ORIGIN
+    keyword = f"revoke-{uuid4().hex}"
+    with httpx2.Client(base_url=url, trust_env=False, timeout=5) as client:
+        approved = create_approved_source(
+            client,
+            {
+                "adapter_type": "web",
+                "allowed_origins": [origin],
+                "allowed_paths": {origin: ["/m7/cards"]},
+            },
+            search_config(origin, "cards"),
+            {"adapter_type": "web", "keyword": "quick"},
+        )
+        # Observe the real fixture within Docker to revoke during the origin cooldown.
+        watch = """
+import json
+import sys
+from time import monotonic, sleep
+from urllib.parse import parse_qs, urlsplit
+from urllib.request import Request, urlopen
+
+origin, source_id, keyword = sys.argv[1:]
+deadline = monotonic() + 20
+while monotonic() < deadline:
+    with urlopen(origin + "/m7-metrics", timeout=2) as reply:
+        requests = json.load(reply)
+    for path, _, _ in requests:
+        if parse_qs(urlsplit(path).query).get("q") == [keyword]:
+            request = Request(
+                f"http://127.0.0.1:8000/api/v1/sources/{source_id}/authorization",
+                data=b'{"approval_status":"revoked"}',
+                headers={"Content-Type": "application/json"},
+                method="PATCH",
+            )
+            with urlopen(request, timeout=2) as reply:
+                assert json.load(reply)["approval_status"] == "revoked"
+            print(path)
+            sys.exit(0)
+    sleep(0.05)
+raise RuntimeError("The fixture did not receive the submitted search")
+"""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            revoke = executor.submit(
+                compose_command,
+                prefix,
+                "exec",
+                "-T",
+                "api",
+                "python",
+                "-c",
+                watch,
+                origin,
+                approved["source_id"],
+                keyword,
+            )
+            job, _ = submit_job(
+                client, approved, {"adapter_type": "web", "keyword": keyword}, uuid4()
+            )
+            search = revoke.result(timeout=25).decode().strip()
+        assert search == f"/m7/cards/search?q={keyword}"
+        job_id = job["job_id"]
+        path = f"/api/v1/collection-jobs/{job_id}"
+        wait_for(lambda: client.get(path).json()["status"] == "failed")
+        pages, records = path + "/evidence-pages", f"/api/v1/records?job_id={job_id}"
+        result = snapshot(client, [path, pages, records])
+        assert result[path]["execution_attempt"] == 1
+        assert result[path]["error"]["code"] == "source_not_approved"
+        assert result[records] == []
+        served_paths = [path for path, _, _ in m7_fixture_metrics(prefix)]
+        assert served_paths[served_paths.index(search) :] == [search]
+        [page] = result[pages]
+        assert (
+            page["capture_kind"] == "search"
+            and page["original_location"] == origin + search
+        )
+        raw = compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "api",
+            "cat",
+            f"/data/evidence/{UUID(page['evidence_id']).hex}/input.bin",
+        )
+        assert hashlib.sha256(raw).hexdigest() == page["content_hash"]
+        print(
+            f"Revoked Source after search for Job {job_id}; retained only capture {page['evidence_id']}"
         )
