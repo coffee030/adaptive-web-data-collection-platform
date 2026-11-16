@@ -30,7 +30,7 @@ The one-Worker CSV measurement sampled up to 160.4 MiB for the Worker, 281.7 MiB
 
 Follow the [existing Windows setup guide](../setup/Windows-One-Click-Setup.md) in a fresh checkout or a fresh commit export. Run Setup, enable `LAUNCHER_FIXTURE=1` and `LOCAL_PROFILE_APPROVAL=1` in the new checkout's `.local/launcher.env`, then run Start. Preserve the generated identity and password. For parallel verification, choose unused loopback ports and two unused private subnets. The test used 5199 for Vite, 18012 for API, 55442 for PostgreSQL and `10.249.125.0/24` and `10.249.126.0/24` for its networks.
 
-Run the [live Topic workflow](M10-FYP-Core-Demo-Runbook.md), then run the SQL and Evidence check before and after Stop followed by Start. Pass the isolated launcher project and refresh ID printed in that run.
+Run the live Topic workflow, then run the SQL and Evidence check before and after Stop followed by Start. Set `$fixtureProject` to `COMPOSE_PROJECT_NAME` in the isolated checkout's `.local/launcher.env`. Set `$refreshId` to the refresh request UUID in the Playwright output. [Live Topic workflow](M10-FYP-Core-Demo-Runbook.md)
 
 ```powershell
 python -m backend.experiments.m10_verify_topic --project $fixtureProject --downloads .local/m10/topic-chromium --refresh $refreshId

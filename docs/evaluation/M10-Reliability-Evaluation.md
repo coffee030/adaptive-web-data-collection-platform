@@ -1,6 +1,6 @@
 # M10 Reliability Evaluation
 
-Fault injection used only `collection-m3-test-m10-evaluation`. Its API, PostgreSQL and Redis were on loopback ports 18011, 55441 and 16391. The default and internal fixture networks, credentials and named PostgreSQL, Redis and Evidence volumes belonged to that project. Project labels and bindings were verified before running the tests. Subprocess broker tests also use disposable PostgreSQL schemas and Redis logical database 1. Compose consumes database 0.
+The original evaluation used `collection-m3-test-m10-evaluation`. Its API, PostgreSQL and Redis were on loopback ports 18011, 55441 and 16391. The default and internal fixture networks, credentials and named PostgreSQL, Redis and Evidence volumes belonged to that project. Project labels and bindings were verified before running the tests. The final full Backend gate used its own new isolated project. Subprocess broker tests in the final gate used disposable PostgreSQL schemas and Redis logical database 1. Compose used database 0.
 
 | Scenario and initial state | Injection and expected behavior | Actual outcome and evidence | Result |
 | --- | --- | --- | --- |
@@ -25,10 +25,6 @@ Fault injection used only `collection-m3-test-m10-evaluation`. Its API, PostgreS
 - An additional regression covers real mid-execution revocation. A repeated use of the same fixture also exposed a test instrumentation failure in the older two-Worker rate test. Its fixed-size metric ring had filled, so slicing by the previous list length returned an empty subset. The regression now compares fixture timestamps to select requests from the current scenario. Both cases passed together in 36.67 s on the populated fixture with 12 timed requests and a minimum 1.004 s gap. Evidence is in `revoke-verified.{log,xml}`.
 - Attempt fencing protects committed database results. An interrupted or rolled-back attempt can leave unreferenced raw files. The recovery tests verify that these files are excluded from committed Evidence and exports.
 
-From the repository root after the isolated setup in the [scalability report](M10-Scalability-Evaluation.md), run:
-
-```powershell
-python -m pytest -q -rs -s --tb=short --junitxml=.local/m10/backend.xml backend/tests
-```
+The separate final Backend gate at reviewed commit `7418a3b5132da091f10be564dddc8649de2c1fce` returned **270 PASS, 0 FAIL, 0 SKIP, 0 ERROR** in **500.07 s**, in one complete run. See the final gate command, isolation settings and evidence paths in the handoff. [Final Backend regression](M10-Implementation-Handoff.md#final-backend-regression)
 
 The HTTP fixtures send only local synthetic requests. The browser workflow and its restart steps are in the [Demo Runbook](M10-FYP-Core-Demo-Runbook.md) and [Deployment Verification](M10-Deployment-Verification.md).
