@@ -71,6 +71,12 @@ export function App() {
       </aside>
       <main className="workspace" id="main-content" tabIndex={-1} ref={main}>
         <div className="workspace-inner">
+          {__PLATFORM_SYNTHETIC_DEMO__ && (
+            <p className="demo-notice">
+              <strong>Synthetic Demo.</strong> Bundled fixtures use fictional data.{' '}
+              <Link to={requestsPath}>View collection requests</Link>
+            </p>
+          )}
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path={jobsPath} element={<JobList />} />

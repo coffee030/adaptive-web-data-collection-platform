@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 .env
 /.local/
+/.local-demo/
 /logs/launcher/
 /var/evidence/
 /var/m2-postgres/

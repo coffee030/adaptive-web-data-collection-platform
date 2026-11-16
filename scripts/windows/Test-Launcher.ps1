@@ -255,6 +255,58 @@ Test-Case 'Native arguments preserve spaces and Unicode' {
     # Where may use an OEM code page. Successful lookup verifies argument transmission.
     Assert ($result.Code -eq 0) 'Windows did not receive the Unicode path as a single argument.'
 }
+Test-Case 'Demo settings use a distinct identity, credentials, flags and ports' {
+    $previousRoot = $Root
+    $previousLocal = $Local
+    try {
+        $script:Root = $testRoot
+        Set-LauncherMode
+        $null = New-Item -ItemType Directory -Path $Local
+        $normal = Get-LauncherConfig -Create
+        Set-LauncherMode -Demo
+        $null = New-Item -ItemType Directory -Path $Local
+        $demo = Get-LauncherConfig -Create
+        Assert ($demo.COMPOSE_PROJECT_NAME -match '^adaptive-web-core-demo-' -and
+            $normal.COMPOSE_PROJECT_NAME -match '^adaptive-web-core-local-') 'Compose identities overlapped.'
+        Assert ($demo.POSTGRES_PASSWORD -cne $normal.POSTGRES_PASSWORD -and
+            $demo.POSTGRES_DB -cne $normal.POSTGRES_DB -and $demo.LAUNCHER_OWNER -cne $normal.LAUNCHER_OWNER) 'State credentials overlapped.'
+        Assert ($demo.API_PORT -ne $normal.API_PORT -and $demo.FRONTEND_PORT -ne $normal.FRONTEND_PORT -and
+            $demo.POSTGRES_PORT -ne $normal.POSTGRES_PORT) 'Default ports overlapped.'
+        Assert ($demo.LAUNCHER_FIXTURE -eq '1' -and $demo.LOCAL_PROFILE_APPROVAL -eq '1' -and
+            $normal.LAUNCHER_FIXTURE -eq '0' -and $normal.LOCAL_PROFILE_APPROVAL -eq '0') 'Mode defaults were wrong.'
+        $normalFile = Join-Path $testRoot '.local/launcher.env'
+        $demoFile = Join-Path $testRoot '.local-demo/launcher.env'
+        $current = [IO.File]::ReadAllText($demoFile)
+        Write-AtomicFile $demoFile ([IO.File]::ReadAllText($normalFile))
+        Expect-Error 'CFG-001' { Get-LauncherConfig }
+        Write-AtomicFile $demoFile ($current.Replace('LAUNCHER_FIXTURE=1', 'LAUNCHER_FIXTURE=0'))
+        Expect-Error 'CFG-001' { Get-LauncherConfig }
+    } finally {
+        [IO.File]::Delete((Join-Path $testRoot '.local/launcher.env'))
+        [IO.File]::Delete((Join-Path $testRoot '.local-demo/launcher.env'))
+        $script:Root = $previousRoot
+        Set-LauncherMode
+        $script:Local = $previousLocal
+    }
+}
+Test-Case 'Demo setup only installs frontend dependencies from the local npm cache' {
+    function Test-FrontendDependencies { return $false }
+    function Invoke-Npm($Node, $Arguments) {
+        Assert ('--offline' -in $Arguments -and '--ignore-scripts' -in $Arguments) 'Offline flags were missing.'
+        return $fail
+    }
+    Expect-Error 'WEB-001' { Initialize-FrontendDependencies @{} -Offline }
+}
+Test-Case 'Demo check diagnoses via a read-only command and failed provisioning blocks readiness' {
+    function Invoke-Compose($Arguments, $Seconds) {
+        $script:demoTestArguments = $Arguments
+        return $fail
+    }
+    $null = Invoke-DemoCheck -ReadOnly
+    Assert ($demoTestArguments[-1] -ceq '--check') 'Diagnostics did not select the read-only command.'
+    Expect-Error 'DEMO-002' { Invoke-DemoProvisioning }
+    Assert ($demoTestArguments[-1] -ceq 'backend.experiments.demo_provision') 'Startup did not call the provisioner.'
+}
 
 $script:Local = $OriginalLocal
 Write-Host "$($Count - $Failures)/$Count launcher tests passed."

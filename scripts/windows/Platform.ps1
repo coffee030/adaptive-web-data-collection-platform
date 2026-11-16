@@ -3,13 +3,17 @@
 param(
     [ValidateSet('Start', 'Setup', 'Stop', 'Diagnose')][string]$Action = 'Start',
     [switch]$NonInteractive,
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [switch]$Demo,
+    [switch]$DemoRetry
 )
 
 . "$PSScriptRoot/Common.ps1"
 . "$PSScriptRoot/Setup-Environment.ps1"
 . "$PSScriptRoot/Backend.ps1"
 . "$PSScriptRoot/Frontend.ps1"
+. "$PSScriptRoot/Demo.ps1"
+Set-LauncherMode -Demo:$Demo
 
 function Assert-OwnedDocker {
     if (!(Confirm-DockerOwnership)) {
@@ -17,6 +21,14 @@ function Assert-OwnedDocker {
             'A resource may already use the project name or the Engine may have lost access.' `
             @('Keep the existing containers and volumes.', 'Run Diagnose-Platform.bat and ask a teammate to check the saved launcher identity.')
     }
+}
+
+function Assert-LauncherPorts {
+    $state = Get-FrontendState
+    Assert-PortAvailable $Config.FRONTEND_PORT 'NET-002' 'Frontend' -Owned:((Test-FrontendProcess $state) -and $state.Port -eq [int]$Config.FRONTEND_PORT)
+    Assert-PortAvailable $Config.API_PORT 'NET-001' 'API' -Owned:(Test-BackendPort api 8000 $Config.API_PORT)
+    Assert-PortAvailable $Config.POSTGRES_PORT 'NET-003' 'PostgreSQL' -Owned:(Test-BackendPort postgres 5432 $Config.POSTGRES_PORT)
+    Write-Step '[PASS] Configured ports are available or owned by this launcher.'
 }
 
 function Start-Platform {
@@ -35,15 +47,16 @@ function Start-Platform {
         Write-Step '[WARN] Free space is limited. Installing packages and Docker images may require more space.'
     }
     $script:WSL = Get-WSLStatus
-    $node = Initialize-Node
+    $offlineSetup = $DemoMode -and $Action -eq 'Setup'
+    $node = Initialize-Node -Offline:$offlineSetup
     if ($Action -eq 'Start') { $script:Docker = Initialize-Docker $system }
     Write-Step '[2/7] Checking project dependencies...'
     $state = Get-FrontendState
     if ((Test-FrontendProcess $state) -and !(Test-FrontendDependencies $node)) { Stop-OwnedFrontend }
-    Initialize-FrontendDependencies $node
+    Initialize-FrontendDependencies $node -Offline:$offlineSetup
     Write-Step '[3/7] Loading private local configuration...'
     $script:Config = Get-LauncherConfig -Create
-    if ($Action -eq 'Setup') { $script:Docker = Initialize-Docker $system }
+    if ($Action -eq 'Setup') { $script:Docker = Initialize-Docker $system -Offline:$offlineSetup }
     $compose = Invoke-Compose @('config', '--quiet')
     if ($compose.Code -ne 0) {
         Stop-WithError 'CFG-004' 'Compose Configuration Failed Validation' 'Docker Compose rejected the local configuration.' `
@@ -51,15 +64,17 @@ function Start-Platform {
     }
     Assert-OwnedDocker
     if ($Action -eq 'Setup') {
+        if ($DemoMode) {
+            Assert-LauncherPorts
+            Assert-DemoFixtureFiles
+        }
         Write-Step '[PASS] Compose configuration and resource ownership verified.'
-        Write-Step '[SUCCESS] Setup checks passed. Run Start-Platform.bat to launch the application.'
+        $command = if ($DemoMode) { 'Start-Platform.bat -Demo' } else { 'Start-Platform.bat' }
+        Write-Step "[SUCCESS] Setup checks passed. Run $command to launch the application."
         return
     }
-    $state = Get-FrontendState
-    Assert-PortAvailable $Config.FRONTEND_PORT 'NET-002' 'Frontend' -Owned:((Test-FrontendProcess $state) -and $state.Port -eq [int]$Config.FRONTEND_PORT)
-    Assert-PortAvailable $Config.API_PORT 'NET-001' 'API' -Owned:(Test-BackendPort api 8000 $Config.API_PORT)
-    Assert-PortAvailable $Config.POSTGRES_PORT 'NET-003' 'PostgreSQL' -Owned:(Test-BackendPort postgres 5432 $Config.POSTGRES_PORT)
-    Write-Step '[PASS] Configured ports are available or owned by this launcher.'
+    if ($DemoMode) { Assert-DemoFixtureFiles }
+    Assert-LauncherPorts
     Update-BackendImage
     Write-Step '[4/7] Starting PostgreSQL and Redis...'
     Start-StorageServices
@@ -67,13 +82,15 @@ function Start-Platform {
     Update-DatabaseSchema
     Start-BackendServices
     Stop-DisabledFixture
+    if ($DemoMode) { Invoke-DemoProvisioning }
     Write-Step '[6/7] Starting the React frontend...'
     $started = Start-Frontend $node
     Write-Step '[7/7] Preparing the browser...'
     $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)/"
     if (!$NoBrowser -and $started) { Open-PlatformBrowser $url }
     elseif (!$started) { Write-Step '[INFO] Frontend already running. Use the existing browser tab or the URL below.' }
-    Write-Step '[SUCCESS] Platform is ready!'
+    if ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
+    else { Write-Step '[SUCCESS] Platform is ready!' }
     Write-Step "URL: $url"
 }
 
@@ -129,6 +146,7 @@ function Invoke-Diagnosis {
     catch { if (!$_.Exception.Data['LauncherError']) { throw } }
     if ($Config) {
         Write-Step "[INFO] Launcher settings valid. API port $($Config.API_PORT), frontend port $($Config.FRONTEND_PORT), PostgreSQL port $($Config.POSTGRES_PORT)."
+        if ($DemoMode) { Write-Step "URL: http://127.0.0.1:$($Config.FRONTEND_PORT)/" }
         $state = Get-FrontendState
         Write-Step "[INFO] Launcher frontend process verified: $(Test-FrontendProcess $state)."
         if (Test-LinuxEngine $engine) {
@@ -137,6 +155,7 @@ function Invoke-Diagnosis {
                 if ($Config.LAUNCHER_FIXTURE -eq '1') { $services += 'collection-fixture' }
                 foreach ($service in $services) { $null = Write-ServiceDiagnosis $service }
                 Write-Step "[INFO] API health: $(Test-ApiHealth "http://127.0.0.1:$($Config.API_PORT)/api/v1/health")."
+                if ($DemoMode) { Write-DemoDiagnosis }
             } else { Write-Step '[WARN] Docker project ownership could not be verified.' }
         }
     } else { Write-Step '[INFO] Valid launcher settings are unavailable.' }
@@ -148,12 +167,18 @@ if ($MyInvocation.InvocationName -eq '.') { return }
 $lock = $null
 $exitCode = 1
 $logDirectory = Join-Path $Root 'logs/launcher'
+if ($DemoMode) { $logDirectory = Join-Path $logDirectory 'demo' }
 try {
     $null = New-Item -ItemType Directory -Path $logDirectory -Force
     $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
     $script:LogFile = Join-Path $logDirectory "$stamp-$PID.log"
     Write-Step 'Adaptive Web Data Collection Platform | Windows Launcher 1.0'
-    Write-LauncherLog INFO "Action: $Action."
+    $modeLabel = if ($DemoMode) { 'Synthetic Demo' } else { 'Normal' }
+    Write-Step "[INFO] $modeLabel mode. Action: $Action."
+    if ($DemoRetry -and (!$DemoMode -or $Action -ne 'Start')) {
+        Stop-WithError 'DEMO-003' 'Invalid Demo Retry Option' 'The -DemoRetry option requires Start with -Demo.' `
+            'A different launcher action or mode was selected.' @('Use Start-Platform.bat -Demo -DemoRetry.')
+    }
     if ($Action -ne 'Diagnose') {
         $null = New-Item -ItemType Directory -Path $Local -Force
         Assert-LocalDirectory
@@ -163,7 +188,7 @@ try {
                 Write-LauncherLog ERROR "Local ACL update failed: $($_.Exception.GetType().Name)."
                 Stop-WithError 'CFG-002' 'Cannot Protect Local Settings' 'Windows could not restrict access to .local.' `
                     'Windows permissions could not be applied to the folder.' `
-                    @('Use a writable local NTFS folder and check that you own .local.')
+                    @('Use a writable local NTFS folder and check that you own the launcher settings directory.')
             }
         }
         try { $lock = [IO.File]::Open((Join-Path $Local 'launcher.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }

@@ -6,6 +6,11 @@ $script:Utf8 = New-Object System.Text.UTF8Encoding($false)
 $script:DockerHost = 'npipe:////./pipe/dockerDesktopLinuxEngine'
 $script:LogFile = $null
 
+function Set-LauncherMode([switch]$Demo) {
+    $script:DemoMode = [bool]$Demo
+    $script:Local = Join-Path $Root $(if ($Demo) { '.local-demo' } else { '.local' })
+}
+
 function Write-LauncherLog($Level, $Message) {
     if ($LogFile) {
         [IO.File]::AppendAllText($LogFile, ('{0:o} [{1}] {2}{3}' -f [DateTimeOffset]::Now, $Level, $Message, [Environment]::NewLine), $Utf8)
@@ -163,6 +168,7 @@ function Confirm-Change($Message) {
 }
 
 function Get-LauncherConfig([switch]$Create, [switch]$Probe) {
+    if (Test-Path -LiteralPath $Local) { Assert-LocalDirectory }
     $file = Join-Path $Local 'launcher.env'
     if ((Test-Path -LiteralPath $file) -and ((Get-Item -LiteralPath $file -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
         Stop-WithError 'CFG-001' 'Invalid Local Settings' 'The settings file redirects to another location.' `
@@ -178,34 +184,38 @@ function Get-LauncherConfig([switch]$Create, [switch]$Probe) {
         try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
         $password = [BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
         $owner = [Guid]::NewGuid().ToString('N')
+        $mode = if ($DemoMode) { 'demo' } else { 'local' }
+        $offset = if ($DemoMode) { 1 } else { 0 }
         $contents = @"
 LAUNCHER_OWNER=$owner
-COMPOSE_PROJECT_NAME=adaptive-web-core-local-$($owner.Substring(0,12))
-POSTGRES_USER=collection_local
-POSTGRES_DB=collection_local
+COMPOSE_PROJECT_NAME=adaptive-web-core-$mode-$($owner.Substring(0,12))
+POSTGRES_USER=collection_$mode
+POSTGRES_DB=collection_$mode
 POSTGRES_PASSWORD=$password
-POSTGRES_PORT=55497
-API_PORT=58097
-FRONTEND_PORT=5197
-LAUNCHER_FIXTURE=0
-LOCAL_PROFILE_APPROVAL=0
+POSTGRES_PORT=$(55497 + $offset)
+API_PORT=$(58097 + $offset)
+FRONTEND_PORT=$(5197 + $offset)
+LAUNCHER_FIXTURE=$offset
+LOCAL_PROFILE_APPROVAL=$offset
 "@
         Write-AtomicFile $file ($contents + [Environment]::NewLine)
         Write-Step '[PASS] Created private local settings.'
     }
     elseif (!$Probe) { Write-Step '[INFO] Reading existing local settings.' }
 
+    $mode = if ($DemoMode) { 'demo' } else { 'local' }
+    $fixtureFlag = if ($DemoMode) { '1' } else { '[01]' }
     $rules = @{
         LAUNCHER_OWNER = '[a-f0-9]{32}'
-        COMPOSE_PROJECT_NAME = 'adaptive-web-core-local-[a-f0-9]{12}'
-        POSTGRES_USER = 'collection_local'
-        POSTGRES_DB = 'collection_local'
+        COMPOSE_PROJECT_NAME = "adaptive-web-core-$mode-[a-f0-9]{12}"
+        POSTGRES_USER = "collection_$mode"
+        POSTGRES_DB = "collection_$mode"
         POSTGRES_PASSWORD = '[a-f0-9]{64}'
         POSTGRES_PORT = '[0-9]{4,5}'
         API_PORT = '[0-9]{4,5}'
         FRONTEND_PORT = '[0-9]{4,5}'
-        LAUNCHER_FIXTURE = '[01]'
-        LOCAL_PROFILE_APPROVAL = '[01]'
+        LAUNCHER_FIXTURE = $fixtureFlag
+        LOCAL_PROFILE_APPROVAL = $fixtureFlag
     }
     $required = @($rules.Keys)
     $subnetPattern = '(?:10\.(?:[0-9]{1,3})|172\.(?:1[6-9]|2[0-9]|3[01])|192\.168)\.[0-9]{1,3}\.0/24'
@@ -231,7 +241,7 @@ LOCAL_PROFILE_APPROVAL=0
     $invalidOctets = @($subnets -split '[./]' | Where-Object { [int]$_ -gt 255 -or $_ -match '^0\d' })
     if (!$valid -or @($required | Where-Object { !$config.ContainsKey($_) }).Count -or $invalidOctets.Count -or
         ($config.LAUNCHER_SUBNET -and $config.LAUNCHER_SUBNET -eq $config.LAUNCHER_FIXTURE_SUBNET) -or
-        $config.COMPOSE_PROJECT_NAME -cne "adaptive-web-core-local-$($config.LAUNCHER_OWNER -replace '^(.{12}).*$', '$1')" -or
+        $config.COMPOSE_PROJECT_NAME -cne "adaptive-web-core-$mode-$($config.LAUNCHER_OWNER -replace '^(.{12}).*$', '$1')" -or
         @($ports | Sort-Object -Unique).Count -ne 3 -or
         @($ports | Where-Object { [int]$_ -lt 1024 -or [int]$_ -gt 65535 -or $_.StartsWith('0') }).Count) {
         Stop-WithError 'CFG-001' 'Invalid Local Settings' 'The launcher settings failed validation.' `

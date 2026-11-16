@@ -1,0 +1,14 @@
+services:
+  api:
+    environment:
+      PLATFORM_SYNTHETIC_DEMO: "1"
+    volumes:
+      - demo_state:/data/demo-state
+  collection-fixture:
+    environment:
+      PLATFORM_SYNTHETIC_DEMO: "1"
+
+volumes:
+  demo_state:
+    labels:
+      org.adaptive-web.launcher-owner: "${LAUNCHER_OWNER:?missing launcher owner}"

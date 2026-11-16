@@ -176,6 +176,14 @@ code, .identifier { font: 0.875rem/1.5 var(--mono); overflow-wrap: anywhere; }
 p.notice { margin: 0; }
 .notice a { display: inline-block; margin-block-start: var(--sm); }
 .toolbar + .notice { border-block-start: 1px solid var(--divider); }
+.demo-notice {
+  margin: 0 0 var(--md);
+  padding: var(--sm) var(--md);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-compact);
+  color: var(--text);
+  background: var(--surface);
+}
 .request-problem { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--md); }
 
 .table-region {

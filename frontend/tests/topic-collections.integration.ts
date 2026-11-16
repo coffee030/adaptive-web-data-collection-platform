@@ -97,6 +97,43 @@ async function checkDownloads(page: Page, expected: GenericRecord[], filenamePre
   }
 }
 
+test('the launcher dashboard displays the three seeded Demo requests and downloads their records', async ({ page }) => {
+  const demoUrl = process.env.M10_SYNTHETIC_URL;
+  test.skip(!demoUrl, 'Set M10_SYNTHETIC_URL to the running Synthetic Demo launcher Dashboard.');
+  const api = page.request;
+  await page.goto(demoUrl!);
+  const notice = page.getByText('Bundled fixtures use fictional data.', { exact: false });
+  await expect(notice).toBeVisible();
+  await notice.getByRole('link', { name: 'View collection requests' }).click();
+  const historyURL = page.url();
+  const presets = [
+    ['Fixture Listings · quick', 2, 'SYNTHETIC FIXTURE DATA'],
+    ['Influencer Advertising and Sponsorship · partnership', 8, 'SYNTHETIC FIXTURE DATA'],
+    ['Market News and Economic Updates · market', 8, 'SIMULATED DATA — NOT LIVE MARKET PRICES'],
+  ] as const;
+
+  for (const [label, count, dataset] of presets) {
+    await page.goto(historyURL);
+    await page.getByRole('link', { name: label, exact: true }).last().click();
+    await expect(page.getByRole('heading', { name: label })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Source jobs' }).getByText('Succeeded', { exact: true })).toHaveCount(2);
+    const id = new URL(page.url()).pathname.split('/').at(-1);
+    const response = await api.get(new URL(`${root}/records?request_id=${id}`, demoUrl!).href);
+    expect(response.ok()).toBe(true);
+    const rows: GenericRecord[] = await response.json();
+    expect(rows).toHaveLength(count);
+    for (const row of rows) {
+      expect(row.payload.dataset).toBe(dataset);
+      if (dataset.startsWith('SIMULATED')) expect(typeof row.payload.price).toBe('number');
+    }
+    await checkDownloads(page, rows, 'request-' + id);
+    await page.getByRole('link', { name: 'View request records' }).click();
+    await expect(page.getByRole('heading', { name: 'Data Explorer' })).toBeVisible();
+    if (dataset.startsWith('SIMULATED')) await expect(page.getByText(dataset, { exact: true })).toBeVisible();
+  }
+  await page.screenshot({ path: test.info().outputPath('demo-financial-records.png'), fullPage: true });
+});
+
 test('operator configures two sources, traces collection history and downloads persisted records', async ({ page, request, baseURL, browserName }) => {
   test.setTimeout(180_000);
   // Keep the interaction and layout checks independent of the axe runtime.

@@ -13,6 +13,7 @@ function Invoke-Compose([string[]]$Arguments, $Seconds = 25) {
     if ($Config.LAUNCHER_FIXTURE -eq '1') {
         $options += @('-f', (Join-Path $Root 'compose.fixture.yaml'), '-f', (Join-Path $PSScriptRoot 'compose.launcher-fixture.yaml'))
     }
+    if ($DemoMode) { $options += @('-f', (Join-Path $PSScriptRoot 'compose.demo.yaml')) }
     if ($Config.LAUNCHER_SUBNET) { $options += @('-f', (Join-Path $PSScriptRoot 'compose.subnet.yaml')) }
     if ($Config.LAUNCHER_FIXTURE -eq '1' -and $Config.LAUNCHER_FIXTURE_SUBNET) {
         $options += @('-f', (Join-Path $PSScriptRoot 'compose.fixture-subnet.yaml'))
@@ -36,7 +37,10 @@ function Confirm-DockerOwnership {
         $existing = @($listed.Out -split '\r?\n' | Where-Object { $_ })
         # Also check physical volume and network names for unlabeled collisions.
         $names = switch ($kind) {
-            'volume' { @($project + '_postgres_data'; $project + '_redis_data'; $project + '_evidence_data') }
+            'volume' {
+                @($project + '_postgres_data'; $project + '_redis_data'; $project + '_evidence_data')
+                if ($DemoMode) { $project + '_demo_state' }
+            }
             'network' { @($project + '_default'; $project + '_fixtures') }
         }
         if ($names) {
@@ -121,8 +125,10 @@ function Assert-PortAvailable($Port, $Code, $Name, [switch]$Owned) {
             $entry = [regex]::Match($table.Out, ('(?m)^\s*TCP\s+\S+:{0}\s+\S+:0\s+\S+\s+(\d+)\s*$' -f $Port))
             if ($entry.Success) { $owner = "PID $($entry.Groups[1].Value)." }
         }
+        $settings = "$(Split-Path -Leaf $Local)/launcher.env"
+        $command = if ($DemoMode) { 'Start-Platform.bat -Demo' } else { 'Start-Platform.bat' }
         Stop-WithError $Code "$Name Port Is Unavailable" "The launcher cannot bind TCP port $Port." $owner `
-            @('Close the other application if appropriate.', 'Or change the matching port in .local/launcher.env after stopping this launcher installation.', 'Run Start-Platform.bat again.')
+            @('Close the other application if appropriate.', "Or change the matching port in $settings after stopping this launcher installation.", "Run $command again.")
     }
     finally { $listener.Stop() }
 }

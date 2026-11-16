@@ -101,6 +101,9 @@ function RecordsTable({ rows, search, selection, select, nameFor }: {
   const ordered = headline ? [headline, ...available.filter(field => field !== headline)] : available;
   const defaults = ordered.slice(0, 3);
   const selected = ordered.filter(field => selection?.has(field) ?? defaults.includes(field));
+  const simulatedMarketLabel = 'SIMULATED DATA — NOT LIVE MARKET PRICES';
+  const hasSimulatedMarketPrices = __PLATFORM_SYNTHETIC_DEMO__
+    && rows.some(record => record.payload.dataset === simulatedMarketLabel);
 
   function setField(field: string, show: boolean) {
     const next = new Set(selection ?? defaults);
@@ -110,6 +113,7 @@ function RecordsTable({ rows, search, selection, select, nameFor }: {
   }
 
   return <>
+    {hasSimulatedMarketPrices && <p className="notice"><strong>{simulatedMarketLabel}</strong></p>}
     <details className="display-fields">
       <summary>Fields to Display <span className="muted">({selected.length})</span></summary>
       <p className="muted">Options come from records on this page. Changes affect only the table.</p>

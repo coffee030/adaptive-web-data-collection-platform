@@ -67,6 +67,7 @@ function Start-Frontend($Node) {
         API_PROXY_TARGET = "http://127.0.0.1:$($Config.API_PORT)"
         VITE_API_BASE_URL = '/api/v1'
         LOCAL_PROFILE_APPROVAL = $Config.LOCAL_PROFILE_APPROVAL
+        PLATFORM_SYNTHETIC_DEMO = if ($DemoMode) { '1' } else { '0' }
         NODE_OPTIONS = $null
         NODE_PATH = $null
     }
