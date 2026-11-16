@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Profile, Report } from '../src/features/profiles/api';
 import type { GenericRecord } from '../src/features/results/api';
+import type { Source } from '../src/features/sources/api';
 import type { ArticleSummary, CollectionRequest, Observation, VersionInfo } from '../src/features/topic-collections/api';
 
 const root = '/api/v1';
@@ -16,12 +17,23 @@ async function post<T>(request: APIRequestContext, path: string, data: object, s
   return response.json();
 }
 
-async function register(request: APIRequestContext, fixture: 'cards' | 'catalog', suffix: string) {
-  const name = `M8 ${fixture} ${suffix}`;
-  const source = await post<{ source_id: string }>(request, '/sources', {
-    source_name: name, adapter_type: 'web', approval_status: 'approved', permission_reference: 'M8 fixture',
-    allowed_origins: [origin], allowed_paths: { [origin]: ['/m7/' + fixture] },
-  });
+async function register(page: Page, fixture: 'cards' | 'catalog', suffix: string) {
+  const name = `Topic fixture ${fixture} ${suffix}`;
+  await page.goto('/sources/new');
+  await page.getByRole('textbox', { name: 'Source name' }).fill(name);
+  await page.getByRole('combobox', { name: 'Adapter' }).selectOption('web');
+  await page.getByRole('textbox', { name: 'Permission reference' }).fill('Isolated keyword search fixture');
+  await page.getByRole('textbox', { name: 'Allowed origins' }).fill(origin);
+  await page.getByRole('textbox', { name: /Allowed path prefixes/ }).fill(`${origin}/m7/${fixture}`);
+  const posted = page.waitForResponse(reply =>
+    reply.request().method() === 'POST' && new URL(reply.url()).pathname === root + '/sources');
+  await page.getByRole('button', { name: 'Create source' }).click();
+  const reply = await posted;
+  expect(reply.status()).toBe(201);
+  const source: Source = await reply.json();
+  expect(source.approval_status).toBe('pending');
+  await page.getByRole('button', { name: 'Authorize Source access' }).click();
+  await expect(page.getByRole('button', { name: 'Revoke Source access' })).toBeVisible();
   return { name, id: source.source_id };
 }
 
@@ -90,8 +102,8 @@ test('operator configures two sources, traces collection history and downloads p
   // Keep the interaction and layout checks independent of the axe runtime.
   const checkAxe = browserName === 'chromium';
   const suffix = randomUUID().slice(0, 8);
-  const cards = await register(request, 'cards', suffix);
-  const catalog = await register(request, 'catalog', suffix);
+  const cards = await register(page, 'cards', suffix);
+  const catalog = await register(page, 'catalog', suffix);
   const categoryName = `Test category ${suffix}`;
   const topicName = `Test topic ${suffix}`;
 
@@ -108,6 +120,8 @@ test('operator configures two sources, traces collection history and downloads p
   await page.getByRole('combobox', { name: 'Article title' }).selectOption('0');
   await page.getByRole('button', { name: 'Create draft', exact: true }).click();
   await page.getByRole('textbox', { name: 'Sample keyword' }).fill('quick');
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('table', { name: /Preview candidates/ })).toContainText('Alpha', { timeout: 15_000 });
   await page.getByRole('button', { name: 'Validate sample' }).click();
   await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('textbox', { name: 'Approver label' }).fill('M8 profile operator');
@@ -172,6 +186,7 @@ test('operator configures two sources, traces collection history and downloads p
     expect(reply.status()).toBe(201);
     return await reply.json() as CollectionRequest;
   }
+  await page.goto('/');
   await prepareCollection('quick');
   await checkLayout(page, checkAxe);
   const initial = await submitCollection();
@@ -179,6 +194,7 @@ test('operator configures two sources, traces collection history and downloads p
   await expect(page.getByRole('heading', { name: `${topicName} · quick` })).toBeVisible();
   const jobs = page.getByRole('list', { name: 'Source jobs' });
   await expect(jobs.getByText('Succeeded', { exact: true })).toHaveCount(2, { timeout: 65_000 });
+  expect((await (await request.get(`${root}/collection-requests/${initial.id}`)).json()).status).toBe('succeeded');
   const initialArticles: ArticleSummary[] = await (await request.get(`${root}/articles?request_id=${initial.id}`)).json();
   await expect(page.getByText('2 source jobs', { exact: false })).toBeVisible();
   await page.setViewportSize({ width: 768, height: 900 });
@@ -261,8 +277,11 @@ test('operator configures two sources, traces collection history and downloads p
   await expect(page.getByText('Some jobs did not complete successfully.', { exact: false })).toBeVisible({ timeout: 65_000 });
   await expect(jobs.getByText('HTTP 404', { exact: true })).toHaveCount(2);
   await expect(jobs.getByText('Partial', { exact: true })).toHaveCount(2);
+  expect((await (await request.get(`${root}/collection-requests/${partial.id}`)).json()).status).toBe('partial');
   await checkLayout(page, checkAxe);
-  await expect(page.getByRole('button', { name: 'Download JSON' })).toBeEnabled();
+  const partialRecords = await persistedRecords(request, partial.jobs.map(item => item.job.job_id));
+  expect(partialRecords).toHaveLength(2);
+  await checkDownloads(page, partialRecords, 'request-' + partial.id);
   await page.screenshot({ path: test.info().outputPath('partial-mobile.png'), fullPage: true });
   await page.goto('/articles');
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();

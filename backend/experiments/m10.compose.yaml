@@ -1,0 +1,12 @@
+services:
+  api:
+    image: collection-backend:m10-evaluation
+  worker:
+    image: collection-backend:m10-evaluation
+  dispatcher:
+    image: collection-backend:m10-evaluation
+  collection-fixture:
+    image: collection-backend:m10-evaluation
+  redis:
+    ports:
+      - "127.0.0.1:${M10_REDIS_PORT:-16391}:6379"
