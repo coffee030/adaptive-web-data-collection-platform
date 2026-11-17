@@ -9,6 +9,7 @@ import { ErrorDetails } from '../collection-jobs/presentation';
 import { profilePath } from '../profiles/api';
 import { RecordExport } from '../results/RecordExport';
 import { quarantinePath, recordsForJob, recordsForRequest } from '../results/api';
+import { ContextLink, useResultReturn } from '../results/resultNavigation';
 import { sourcePath } from '../sources/api';
 import { ArticleList } from './Articles';
 import {
@@ -77,6 +78,7 @@ function RequestWorkspace({ requestId }: { requestId: string }) {
   const load = useCallback((signal: AbortSignal) => apiGet<CollectionRequest>(path, signal), [path]);
   const state = useResource(load, revision, true);
   const { result } = state;
+  useResultReturn(result.state === 'ready');
   const collecting = result.state === 'ready' && ['pending', 'running'].includes(result.data.status);
   const action = useAction();
   const submitRequest = useRequestSubmission();
@@ -150,10 +152,11 @@ function RequestWorkspace({ requestId }: { requestId: string }) {
                 <p><Link to={profilePath(job.source_id, job.profile_version_id)}>Pinned profile version {profile_version}</Link></p>
                 <p>{job.valid_count} accepted · {job.invalid_count} invalid · {job.duplicate_count} duplicates</p>
                 <div className="profile-actions">
-                  <Link to={jobPath(job.job_id)} state={{ requestId }}>Job details</Link>
+                  <ContextLink id={'request-job-' + job.job_id} to={jobPath(job.job_id)} state={{ requestId }}>Job details</ContextLink>
                   <Link to={recordsForJob(job.job_id)}>Records</Link>
                   <Link to={quarantinePath(job.job_id)}>Quarantine</Link>
-                  {job.finished_at && <Link to={jobPath(job.job_id) + '#job-evidence-title'} state={{ requestId }}>Evidence</Link>}
+                  {job.finished_at && <ContextLink id={'request-evidence-' + job.job_id}
+                    to={jobPath(job.job_id) + '#job-evidence-title'} state={{ requestId }}>Evidence</ContextLink>}
                 </div>
                 <div className="request-job-timing muted">
                   {job.started_at && <div>Started <Timestamp value={job.started_at} /> UTC</div>}

@@ -145,8 +145,6 @@ table {
   text-align: start;
   font-size: 0.875rem;
 }
-.jobs-table { table-layout: fixed; min-inline-size: 880px; }
-.records-table { min-inline-size: 780px; }
 thead { background: var(--page); color: var(--text-secondary); }
 thead th { font-weight: 600; text-align: start; }
 th, td {
@@ -157,22 +155,6 @@ th, td {
 th:first-child, td:first-child { padding-inline-start: var(--md); }
 th:last-child, td:last-child { padding-inline-end: var(--md); }
 th[scope="row"] { text-align: start; font-weight: 400; }
-.jobs-table th:first-child, .jobs-table th:nth-child(3) { inline-size: 168px; }
-.jobs-table th:nth-child(2) { inline-size: 176px; }
-.list-counts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--xs);
-  margin-block-start: var(--xs);
-  max-inline-size: 9.5rem;
-  text-align: start;
-}
-.list-counts dt { color: var(--text-secondary); font-size: 0.75rem; }
-.list-counts dd { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.job-link { display: inline-block; min-block-size: 24px; font-weight: 600; }
-.records-table .identifier { min-inline-size: 140px; max-inline-size: 23ch; }
-.records-table td { overflow-wrap: anywhere; }
-.records-table .payload-cell { min-inline-size: 175px; max-inline-size: 38ch; }
 .timestamp { display: inline-block; white-space: nowrap; font-size: 0.875rem; }
 .timestamp span { display: block; color: var(--text-secondary); }
 .numeric { text-align: end; }
@@ -204,17 +186,7 @@ th[scope="row"] { text-align: start; font-weight: 400; }
 [data-status="partial"] { --status-ink: var(--warning); }
 [data-status="failed"] { --status-ink: var(--error); }
 
-.overview-body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(200px, 0.8fr);
-  padding: var(--md);
-  gap: var(--lg);
-}
-.overview-body dl { display: grid; align-content: start; gap: 12px; }
-.overview-body dt, .payload dt { font-size: 0.8125rem; color: var(--text-secondary); }
-.overview-body dt { margin-block-end: var(--xs); }
-.overview-body .times .timestamp span { display: inline; margin-inline-start: var(--sm); }
-.overview-body .counts { gap: 0; }
+.payload dt { font-size: 0.8125rem; color: var(--text-secondary); }
 .counts div {
   display: flex;
   justify-content: space-between;
@@ -261,11 +233,6 @@ th[scope="row"] { text-align: start; font-weight: 400; }
 .payload { display: grid; gap: var(--xs); }
 .payload > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--sm); }
 
-@media (max-width: 1023px) {
-  .overview-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .overview-body .counts { grid-column: 1 / -1; }
-}
-
 @media (max-width: 800px) {
   .page-heading { margin-block-end: var(--md); }
 }
@@ -274,10 +241,6 @@ th[scope="row"] { text-align: start; font-weight: 400; }
   .toolbar { justify-content: space-between; }
   .toolbar .timezone { order: 1; margin-inline-start: 0; inline-size: 100%; }
   button, select { min-block-size: 44px; }
-  .jobs-table th:first-child { inline-size: 148px; }
-  .jobs-table th:nth-child(2) { inline-size: 170px; }
-  .overview-body { grid-template-columns: minmax(0, 1fr); gap: var(--md); }
-  .overview-body dl + dl { padding-block-start: var(--md); border-block-start: 1px solid var(--divider); }
   .timeline > li { grid-template-columns: minmax(0, 1fr); gap: var(--xs); }
   .timeline .timestamp span { display: inline; margin-inline-start: var(--sm); }
 }

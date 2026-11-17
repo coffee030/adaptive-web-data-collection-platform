@@ -7,8 +7,8 @@ import { listSources, listVersions, sourcePath, sourcesPath, type Adapter, type 
 import { allowedInputs } from '../sources/collectionInput';
 
 const formats = [
-  { adapter: 'web', label: 'HTML pages', description: 'Collect structured fields from a permitted HTML page.' },
-  { adapter: 'csv', label: 'CSV datasets', description: 'Import rows from a permitted CSV dataset.' },
+  { adapter: 'web', label: 'HTML pages', description: 'Use a permitted document path or an approved keyword search.' },
+  { adapter: 'csv', label: 'CSV datasets', description: 'Enter CSV content for a permitted dataset.' },
 ] as const;
 
 type EligibleSource = { source: Source; profiles: Profile[] };
@@ -78,7 +78,7 @@ export function GuidedPicker({ locked, children }: {
           {selected && <p><Link to={sourcePath(selected.source.source_id)}>View source access policy</Link></p>}
         </div>}
         {selected && <div className="guided-step">
-          <h3>3. Review and start</h3>
+          <h3>3. Choose a version and enter input</h3>
           {children(selected.source, selected.profiles)}
         </div>}
       </> : <div className="guided-empty">

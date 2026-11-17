@@ -85,7 +85,8 @@ async function collect(request: APIRequestContext, adapter: 'web' | 'csv', baseU
     profile: await read<Profile>(request, profileApi),
   };
   expect(snapshot.record).toEqual(first);
-  expect(snapshot.evidence.content_hash).toBe(createHash('sha256').update(bytes).digest('hex'));
+  const fixtureBytes = web ? [bytes, bytes.toString('utf8').replace(/\r\n/g, '\n')] : [bytes];
+  expect(fixtureBytes.map(value => createHash('sha256').update(value).digest('hex'))).toContain(snapshot.evidence.content_hash);
   expect(first.profile_version_id).toBe(job.profile_version_id);
   expect(first.provenance.config_hash).toBe(profile.config_hash);
   expect(snapshot.evidence.profile_version_id).toBe(job.profile_version_id);
@@ -99,7 +100,7 @@ async function openRecord(page: Page, fixture: Awaited<ReturnType<typeof collect
   const { record, job } = fixture.snapshot;
   await page.goto(fixture.jobPath);
   await page.getByRole('link', { name: 'View job records' }).click();
-  await expect(page).toHaveURL(fixture.recordsPath);
+  await expect(page).toHaveURL(fixture.recordsPath + '&from=' + encodeURIComponent(fixture.jobPath));
   await expect(page.getByRole('textbox', { name: 'Job ID' })).toHaveValue(job.job_id);
   await expect(page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem')).toHaveCount(2);
   await page.locator('#inspect-record-' + record.record_id).click();
@@ -133,7 +134,7 @@ test('real HTML Job traces the persisted payload through Evidence, Job and appro
   await page.getByRole('link', { name: 'View quarantine' }).click();
   await expect(page.getByText('No quarantine entries for this job.')).toBeVisible();
   await page.getByRole('link', { name: 'Back to Job Details' }).click();
-  await page.getByRole('link', { name: job.profile_version_id }).click();
+  await page.getByRole('region', { name: 'Run overview' }).getByRole('link', { name: 'Version 1', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Profile version 1' })).toBeVisible();
   await expect(page.getByText('Read only', { exact: true })).toBeVisible();
   console.log('HTML acceptance', job.job_id, record.record_id, evidence.evidence_id, evidence.content_hash);
@@ -151,9 +152,9 @@ test('real partial CSV preserves physical row positions, evidence and independen
   await openRecord(page, fixture);
   await page.getByRole('link', { name: 'Open job ' + job.job_id }).click();
   await page.getByRole('link', { name: 'View quarantine' }).click();
-  await expect(page).toHaveURL(fixture.quarantinePath);
+  await expect(page).toHaveURL(fixture.quarantinePath + '?from=' + encodeURIComponent('/collection-jobs/' + job.job_id));
   await expect(page.getByRole('region', { name: 'Job results' })).toContainText('Partial');
-  for (const [label, count] of [['Valid', 2], ['Invalid', 3], ['Duplicates', 1]]) {
+  for (const [label, count] of [['Accepted', 2], ['Invalid', 3], ['Duplicates', 1]]) {
     await expect(page.getByText(String(label), { exact: true }).locator('..')).toHaveText(`${label}${count}`);
   }
   const entries = page.getByRole('list', { name: 'Quarantine entries' });

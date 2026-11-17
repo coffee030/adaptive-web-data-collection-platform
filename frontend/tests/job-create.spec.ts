@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import type { CollectionJob, JobInput } from '../src/features/collection-jobs/api';
 import type { ProfileVersion, Source } from '../src/features/sources/api';
+import { captureM15 } from './m15Capture';
 
 const api = '/api/v1';
 const jobs = '/collection-jobs';
@@ -74,6 +75,9 @@ test('Jobs creates one controlled HTML job by keyboard and preserves list filter
   await expect(page.getByRole('combobox', { name: 'Profile Version' })).toHaveValue(versionId);
   await expect(page.getByRole('combobox', { name: 'Allowed origin' })).toHaveValue(web.allowed_origins[0]!);
   await page.getByRole('textbox', { name: 'Document path' }).fill('/table.html');
+  await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText('Controlled document path');
+  await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText('/table.html');
+  await captureM15(page, 'guided-web-review');
   await page.getByRole('textbox', { name: 'Document path' }).press('Enter');
   await expect(page).toHaveURL(jobs + '/' + id);
   await expect(page.getByRole('region', { name: 'Run overview' })).toContainText('Partial');
@@ -175,6 +179,7 @@ for (const failure of ['503', 'network', 'timeout'] as const) {
     await expect(alert).toContainText(failure === 'timeout' ? 'timed out' : 'did not confirm', { timeout: 15_000 });
     await expect(page.getByRole('textbox', { name: 'CSV content' })).toBeDisabled();
     await expect(page.getByRole('combobox', { name: 'Source', exact: true })).toBeDisabled();
+    if (failure === '503') await captureM15(page, 'uncertain-submission');
     await page.getByRole('button', { name: 'Retry submission' }).click();
     await expect(page).toHaveURL(jobs + '/' + id);
     expect(sent).toHaveLength(2);
@@ -188,14 +193,34 @@ test('matching intent can recover on return to the form and a confirmed job clea
   await fillCsv(page);
   await submit(page).click();
   await page.getByRole('link', { name: 'Check Collection Jobs' }).click();
-  await fillCsv(page);
-  await submit(page).click();
+  await page.goBack();
+  await expect(page.getByRole('textbox', { name: 'CSV content' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Retry submission' }).click();
   await expect(page).toHaveURL(jobs + '/' + id);
   expect(sent[1]).toEqual(sent[0]);
   await fillCsv(page);
   await submit(page).click();
   await expect(page).toHaveURL(jobs + '/' + id);
   expect(sent[2]?.request_key).not.toBe(sent[0]?.request_key);
+});
+
+test('reload resumes an unreadable success with the original UUID and rejects changed input', async ({ page }) => {
+  let requests = 0;
+  const sent = await mock(page, route => ++requests === 1 ? route.fulfill({ status: 201, json: {} })
+    : route.fulfill({ status: 200, json: job }));
+  await fillCsv(page);
+  await submit(page).click();
+  await expect(page.getByRole('button', { name: 'Retry submission' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('combobox', { name: 'Allowed dataset ID' }).selectOption('listings');
+  await page.getByRole('textbox', { name: 'CSV content' }).fill(data + 'new row');
+  await page.getByRole('button', { name: 'Reconcile submission' }).click();
+  await expect(page.getByRole('alert')).toContainText('Re-enter its original');
+  expect(sent).toHaveLength(1);
+  await page.getByRole('textbox', { name: 'CSV content' }).fill(data);
+  await page.getByRole('button', { name: 'Reconcile submission' }).click();
+  await expect(page).toHaveURL(jobs + '/' + id);
+  expect(sent[1]).toEqual(sent[0]);
 });
 
 test('active monitoring polls status and events, loads records once pending ends and stops at terminal', async ({ page }) => {
@@ -205,7 +230,17 @@ test('active monitoring polls status and events, loads records once pending ends
   let previews = 0;
   await page.route(api + jobs + '/' + id, route => {
     reads++;
-    return route.fulfill({ json: { ...job, status } });
+    const active = status === 'pending' || status === 'running';
+    return route.fulfill({ json: { ...job, status,
+      started_at: status === 'pending' ? null : timestamp,
+      finished_at: active ? null : timestamp,
+      execution_attempt: status === 'pending' ? 0 : 1,
+      dispatch_attempts: status === 'pending' ? 0 : 1,
+      dispatch_due_at: status === 'pending' ? timestamp : null,
+      last_dispatched_at: status === 'pending' ? null : timestamp,
+      valid_count: active ? 0 : job.valid_count, invalid_count: active ? 0 : job.invalid_count,
+      duplicate_count: active ? 0 : job.duplicate_count,
+    } });
   });
   await page.route(api + jobs + '/' + id + '/events', route => route.fulfill({
     json: [{ event_id: 'first', job_id: id, status: 'pending', occurred_at: timestamp,
@@ -219,6 +254,7 @@ test('active monitoring polls status and events, loads records once pending ends
   });
   await page.goto(jobs + '/' + id);
   await expect(page.getByText('Waiting for execution.', { exact: false })).toBeVisible();
+  await captureM15(page, 'pending-job');
   const overview = page.getByRole('region', { name: 'Run overview' });
   status = 'running';
   await expect(overview.getByText('Running', { exact: true })).toBeVisible({ timeout: 8000 });
@@ -243,6 +279,7 @@ for (const width of [1440, 1280, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await fillCsv(page);
     await expect(submit(page)).toBeVisible();
+    if (width === 1440) await captureM15(page, 'contextual-csv-review');
     await page.getByRole('textbox', { name: 'CSV content' }).press('Tab');
     await expect(submit(page)).toBeFocused();
     expect(await submit(page).evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');

@@ -315,11 +315,7 @@
 .quarantine-problems strong { font-size: 0.875rem; }
 .quarantine-problems p { margin-block-start: var(--xs); }
 
-.job-result-links { margin-inline-start: auto; }
-.job-result-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sm); }
-
 @media (max-width: 640px) {
-  .job-result-links { margin-inline-start: 0; }
   .quarantine-entry { grid-template-columns: minmax(0, 1fr); }
 }
 

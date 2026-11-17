@@ -9,6 +9,7 @@ import type { CollectionJob, ExecutionEvent, JobInput } from '../src/features/co
 import type { Profile, Report } from '../src/features/profiles/api';
 import type { EvidenceMetadata, GenericRecord, QuarantineEntry } from '../src/features/results/api';
 import type { Source } from '../src/features/sources/api';
+import { captureM15 } from './m15Capture';
 
 const api = '/api/v1';
 const jobs = '/collection-jobs';
@@ -118,7 +119,7 @@ function jobResponse(page: Page) {
 }
 
 test('M7 browser workflow authorizes a source and traces keyword results to detail captures', async ({ page, request }) => {
-  test.setTimeout(65_000);
+  test.setTimeout(190_000);
   await page.goto('/sources/new');
   await page.getByRole('textbox', { name: 'Source name' }).fill(`M7 cards ${randomUUID().slice(0, 8)}`);
   await page.getByRole('combobox', { name: 'Adapter' }).selectOption('web');
@@ -154,6 +155,8 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
   await expect(page.getByText('Read only', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'New Collection Job', exact: true }).click();
   await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
+  await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText('Keyword search');
+  await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText(keyword);
   const submitted = jobResponse(page);
   await page.getByRole('button', { name: 'Submit job', exact: true }).click();
   const confirmation = await submitted;
@@ -173,8 +176,41 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
   await evidence.getByRole('link', { name: 'Open evidence ' + captures[2]!.evidence_id }).click();
   await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
   await expect(page.getByText(captures[2]!.content_hash, { exact: true })).toBeVisible();
+  await captureM15(page, 'persisted-detail-evidence');
   await scan(page, 'm7-detail-evidence', [1440, 390]);
   console.log(`M7 browser Job ${job.job_id}: five captures and three detail-linked records`);
+
+  for (const [query, terminal] of [['empty', 'failed'], ['detail429', 'partial']] as const) {
+    const submitted = await request.post(api + jobs, { data: {
+      source_id: job.source_id, profile_version_id: job.profile_version_id, request_key: randomUUID(),
+      entry: { adapter_type: 'web', keyword: query },
+    } });
+    expect(submitted.status()).toBe(201);
+    const next: CollectionJob = await submitted.json();
+    const path = jobs + '/' + next.job_id;
+    await page.goto(path);
+    if (query === 'detail429') {
+      await expect(page.getByText('Earliest scheduled retry (UTC)', { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('HTTP 429');
+      await captureM15(page, 'persisted-scheduled-retry');
+    }
+    await expect(page.getByRole('region', { name: 'Run overview' }).locator('.status')).toHaveText(
+      terminal === 'partial' ? 'Partial' : 'Failed', { timeout: 115_000 });
+    const final = await get<CollectionJob>(request, path);
+    const trail = await get<ExecutionEvent[]>(request, path + '/events');
+    expect(final.status).toBe(terminal);
+    expect(final.next_attempt_at).toBeNull();
+    expect(trail.at(-1)?.kind).toBe(terminal.toUpperCase());
+    if (query === 'detail429') {
+      expect(trail.filter(item => item.kind === 'RETRY_SCHEDULED')).toHaveLength(2);
+      expect(trail.filter(item => item.kind === 'CLAIMED').map(item => item.execution_attempt)).toEqual([1, 2, 3]);
+      expect(final.valid_count).toBeGreaterThan(0);
+    } else {
+      expect(final.valid_count).toBe(0);
+      await captureM15(page, 'persisted-failed');
+    }
+    console.log(`M15 ${terminal} Job ${final.job_id}, execution attempts ${final.execution_attempt}`);
+  }
 });
 
 test('M6 browser workflow approves pagination and follows page-level evidence', async ({ page, request }) => {
@@ -217,7 +253,7 @@ test('M6 browser workflow approves pagination and follows page-level evidence', 
   await expect(page).toHaveURL(jobPath);
   await expect(page.getByRole('region', { name: 'Run overview' }).getByText('Partial', { exact: true })).toBeVisible();
   const captureList = page.getByRole('region', { name: 'Capture evidence' });
-  await expect(captureList.getByRole('listitem')).toHaveText([/^HTML input · Page 1 /, /^HTML input · Page 2 /, /^HTML input · Page 3 /]);
+  await expect(captureList.locator('li strong')).toHaveText(['HTML input · Page 1', 'HTML input · Page 2', 'HTML input · Page 3']);
   const captures = await get<EvidenceMetadata[]>(request, jobPath + '/evidence-pages');
   const third = captures[2]!;
   await captureList.getByRole('link', { name: 'Open evidence ' + third.evidence_id }).click();
@@ -296,13 +332,14 @@ for (const adapter of ['web', 'csv'] as const) {
     await page.getByRole('radio', { name: web ? /HTML pages/ : /CSV datasets/ }).check();
     await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(source.source_id);
     await expect(page.getByRole('combobox', { name: 'Profile Version' })).toHaveValue(approved.profile_version_id);
-    await expect(page.getByRole('region', { name: 'Version 1' })).toContainText('Extraction Fields');
+    await page.getByText('Profile mapping and collection rules').click();
+    await expect(page.getByText('Extraction Fields', { exact: true })).toBeVisible();
     const input = page.getByRole('textbox', { name: web ? 'Document path' : 'CSV content' });
     await input.fill(web ? '/table.html' : csv);
     await scan(page, web ? 'job-form-html' : 'job-form-csv');
     await page.setViewportSize({ width: 1280, height: 900 });
     const response = jobResponse(page);
-    await page.getByRole('button', { name: 'Start Collection', exact: true }).click();
+    await page.getByRole('button', { name: 'Submit job', exact: true }).click();
     const created = await response;
     expect(created.status()).toBe(201);
     const accepted: CollectionJob = await created.json();
@@ -368,7 +405,10 @@ for (const adapter of ['web', 'csv'] as const) {
     const evidence = await get<EvidenceMetadata>(request, evidencePath);
     await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
     const capturedInput = body.entry.adapter_type === 'csv' ? body.entry.content : bytes;
-    expect(evidence.content_hash).toBe(createHash('sha256').update(capturedInput).digest('hex'));
+    // Windows checkouts may use CRLF while the fixture image was built from an LF checkout.
+    const representations = body.entry.adapter_type === 'web'
+      ? [capturedInput, bytes.toString('utf8').replace(/\r\n/g, '\n')] : [capturedInput];
+    expect(representations.map(value => createHash('sha256').update(value).digest('hex'))).toContain(evidence.content_hash);
     expect(evidence.profile_version_id).toBe(confirmed.profile_version_id);
     expect(quarantine.every(entry => entry.evidence_reference === evidence.evidence_id)).toBe(true);
     if (!web) await scan(page, 'evidence');
@@ -379,6 +419,30 @@ for (const adapter of ['web', 'csv'] as const) {
 
     if (!web && project) {
       const compose = isolatedCompose();
+      compose('stop', 'redis');
+      let dispatchCase: CollectionJob;
+      try {
+        const staged = await request.post(api + jobs, { data: { ...body, request_key: randomUUID() } });
+        expect(staged.status()).toBe(201);
+        dispatchCase = await staged.json();
+        await page.goto(jobs + '/' + dispatchCase!.job_id);
+        await expect(page.getByText('A previous broker publication could not be confirmed.', { exact: false }))
+          .toBeVisible({ timeout: 25_000 });
+        const pending = await get<CollectionJob>(request, jobs + '/' + dispatchCase!.job_id);
+        expect(pending.status).toBe('pending');
+        expect(pending.execution_attempt).toBe(0);
+        expect(pending.dispatch_attempts).toBeGreaterThanOrEqual(1);
+        expect((await get<ExecutionEvent[]>(request, jobs + '/' + pending.job_id + '/events')).map(event => event.kind))
+          .toContain('DISPATCH_FAILED');
+        await captureM15(page, 'persisted-dispatch-failure');
+      } finally {
+        compose('start', '--wait', 'redis');
+      }
+      await expect(page.getByRole('region', { name: 'Run overview' }).locator('.status')).toHaveText('Partial', { timeout: 40_000 });
+      const recoveredDispatch = await get<CollectionJob>(request, jobs + '/' + dispatchCase!.job_id);
+      expect(recoveredDispatch.dispatch_error_code).toBeNull();
+      expect(recoveredDispatch.execution_attempt).toBe(1);
+      console.log('M15 broker recovery', recoveredDispatch.job_id, recoveredDispatch.dispatch_attempts);
       const before = [sourcePath, profile.apiPath, jobPath, jobPath + '/events', recordsPath,
         jobPath + '/quarantine', evidencePath];
       const snapshot = await Promise.all(before.map(route => get(request, route)));

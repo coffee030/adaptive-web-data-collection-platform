@@ -10,7 +10,7 @@ import { listRecords, quarantinePath, recordsPath, type GenericRecord } from './
 import { useDisplayFields } from './displayFields';
 import { RecordInspector } from './RecordInspector';
 import { clip, displayValue, marketWarning, recordTitle } from './presentation';
-import { ContextLink, readId, readOffset, rememberPosition, useResultReturn } from './resultNavigation';
+import { contextFrom, ContextLink, readId, readOffset, rememberPosition, ReturnLink, useResultReturn } from './resultNavigation';
 
 const pageSize = 10;
 const noRecords: GenericRecord[] = [];
@@ -122,6 +122,8 @@ function Ledger({ jobId, requestId, scopeProblem, invalidJob }: {
   }
 
   const scoped = Boolean(jobId || requestId);
+  const previous = contextFrom(location.search);
+  const jobOrigin = jobId && previous.split(/[?#]/, 1)[0] === jobPath(jobId) ? previous : '';
   const scopeLabel = requestId ? 'Records from this Collection Request' : jobId ? 'Records from this Job'
     : 'All persisted validated records';
 
@@ -130,7 +132,7 @@ function Ledger({ jobId, requestId, scopeProblem, invalidJob }: {
       <div><h1>Data Explorer</h1><p className="muted">{scopeProblem ? 'Record scope needs attention' : scopeLabel}</p></div>
       {!scopeProblem && <div className="ledger-navigation">
         {requestId && <Link to={requestPath(requestId)}>View collection request</Link>}
-        {jobId && <Link to={jobPath(jobId)}>View job details</Link>}
+        {jobId && (jobOrigin ? <ReturnLink to={jobOrigin}>Back to Job</ReturnLink> : <Link to={jobPath(jobId)}>View job details</Link>)}
         <ContextLink id="ledger-browse-articles" to={requestId ? requestArticlesPath(requestId) : articlesPath}>Browse articles</ContextLink>
       </div>}
     </div>

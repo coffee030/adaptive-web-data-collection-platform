@@ -228,7 +228,7 @@ test('Record lineage opens the actual Job, Source, pinned Profile and Evidence d
   await page.getByRole('link', { name: 'Open job ' + jobId }).click();
   await expect(page).toHaveURL(jobPath);
   await expect(page.getByRole('heading', { name: 'Execution events' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'View quarantine' })).toHaveAttribute('href', quarantinePath);
+  await expect(page.getByRole('link', { name: 'View quarantine' })).toHaveAttribute('href', quarantinePath + '?from=' + encodeURIComponent(jobPath));
   await page.getByRole('link', { name: 'Open record ' + recordId }).click();
   await page.getByRole('link', { name: new RegExp('Open source ' + sourceId) }).click();
   await expect(page).toHaveURL(sourcePath);
@@ -241,9 +241,9 @@ test('Record lineage opens the actual Job, Source, pinned Profile and Evidence d
   await page.getByRole('link', { name: 'Open evidence ' + evidenceId }).click();
   await expect(page).toHaveURL(new RegExp(evidencePath + '\\?from='));
   await page.getByRole('link', { name: 'Back to Record Details' }).click();
-  await expect(page).toHaveURL(recordPath);
-  await page.getByRole('link', { name: 'Back to Records' }).click();
-  await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId + '&offset=0');
+  await expect(page).toHaveURL(recordPath + '?from=' + encodeURIComponent(jobPath));
+  await page.getByRole('link', { name: 'Back to Job' }).click();
+  await expect(page).toHaveURL(jobPath);
 });
 
 test('Quarantine is empty for a valid job and reports the real zero counts', async ({ page }) => {
@@ -273,7 +273,7 @@ test('Quarantine shows source positions, long validation errors, pagination and 
   await page.goto(jobPath);
   await page.getByRole('link', { name: 'View quarantine' }).click();
   await expect(page.getByRole('region', { name: 'Job results' })).toContainText('Partial');
-  await expect(page.getByText('Valid', { exact: true }).locator('..')).toHaveText('Valid2');
+  await expect(page.getByText('Accepted', { exact: true }).locator('..')).toHaveText('Accepted2');
   await expect(page.getByText('Invalid', { exact: true }).locator('..')).toHaveText('Invalid11');
   await expect(page.getByText('Duplicates', { exact: true }).locator('..')).toHaveText('Duplicates1');
   await expect(page.getByRole('heading', { name: 'CSV row 5', exact: true })).toBeVisible();
@@ -283,14 +283,15 @@ test('Quarantine shows source positions, long validation errors, pagination and 
   await expect(first).toContainText('Expected integer');
   await expect(page.locator('.quarantine-entry')).toHaveCount(10);
   await page.getByRole('button', { name: 'Next quarantine entries page' }).click();
-  await expect(page).toHaveURL(quarantinePath + '?offset=10');
+  const secondPage = quarantinePath + '?from=' + encodeURIComponent(jobPath) + '&offset=10';
+  await expect(page).toHaveURL(secondPage);
   await expect(page.getByRole('heading', { name: 'HTML item 1', exact: true })).toBeVisible();
   await expect(page.getByText(long)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.getByRole('link', { name: 'Open evidence ' + evidenceId }).click();
-  await expect(page).toHaveURL(evidencePath);
+  await expect(page).toHaveURL(evidencePath + '?from=' + encodeURIComponent(secondPage));
   await page.goBack();
-  await expect(page).toHaveURL(quarantinePath + '?offset=10');
+  await expect(page).toHaveURL(secondPage);
 });
 
 test('Quarantine handles a missing job and a backend failure with retry', async ({ page }) => {
@@ -322,7 +323,7 @@ test('Evidence shows safe stored metadata, preserves lineage and links back to t
   await expect(page.getByRole('link', { name: 'View job records' })).toHaveAttribute('href', recordsPath + '?job_id=' + jobId);
   await page.getByRole('link', { name: 'Open job ' + jobId }).click();
   await expect(page).toHaveURL(jobPath);
-  await expect(page.getByRole('table', { name: 'Related records preview' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Related records preview' })).toBeVisible();
 });
 
 for (const [path, label] of [[recordPath, 'Record'], [evidencePath, 'Evidence']] as const) {

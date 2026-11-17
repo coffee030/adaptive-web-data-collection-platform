@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useResource } from '../../lib/useResource';
-import { getJob, jobsPath, listEvents, maxOffset } from './api';
+import { apiGet } from '../../lib/api';
+import { getJob, jobsPath, listEvents, maxOffset, sameId } from './api';
 import type { CollectionJob, ExecutionEvent } from './api';
-import { Loading, Pagination, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
+import { Loading, Pagination, RequestProblem, Status, Timestamp } from '../../components/feedback';
 import { profilePath } from '../profiles/api';
 import { evidenceDetailPath, listJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
-import { captureLabel, EvidenceLink, PayloadPreview } from '../results/presentation';
+import { captureLabel, clip, marketWarning, PayloadPreview, recordTitle, webLocation } from '../results/presentation';
 import { RecordExport } from '../results/RecordExport';
-import { ContextLink, useResultReturn } from '../results/resultNavigation';
+import { contextFrom, ContextLink, readOffset, resultId, ReturnLink, useResultReturn, useReturnPosition } from '../results/resultNavigation';
 import { sourcePath } from '../sources/api';
-import { requestPath } from '../topic-collections/api';
-import { ErrorDetails, ResultCounts } from './presentation';
+import { requestPath, requestsPath, type CollectionRequest } from '../topic-collections/api';
+import { errorCategory, ErrorDetails, ResultCounts, statusLabels } from './presentation';
+import { loadJobContext, shortId } from './jobContext';
 
 export function JobDetail() {
   const { jobId = '' } = useParams();
@@ -20,22 +22,38 @@ export function JobDetail() {
 
 function JobDetailPage({ id }: { id: string }) {
   const location = useLocation();
+  const origin = contextFrom(location.search);
   const search = location.state?.jobsSearch;
-  const back = typeof search === 'string' && search ? `${jobsPath}?${search}` : jobsPath;
-  const requestId = typeof location.state?.requestId === 'string' ? location.state.requestId : '';
+  const back = origin.split('?')[0] === jobsPath ? origin
+    : typeof search === 'string' && search ? `${jobsPath}?${search}` : jobsPath;
+  const knownRequest = resultId(typeof location.state?.requestId === 'string' ? location.state.requestId : null);
+  const requestOrigin = origin.startsWith(requestsPath + '/') ? resultId(origin.split(/[?#]/, 1)[0]?.slice(requestsPath.length + 1) ?? null) : '';
+  const loadRequest = useCallback((signal: AbortSignal) => apiGet<CollectionRequest>(requestPath(requestOrigin), signal), [requestOrigin]);
+  const parent = useResource(loadRequest, 0, false, !!requestOrigin && !knownRequest).result;
+  const requestId = knownRequest || (parent.state === 'ready' && parent.data.jobs.some(({ job }) => sameId(id, job.job_id)) ? requestOrigin : '');
+  const validId = !!resultId(id);
   const [revision, setRevision] = useState(0);
   const [manualRevision, setManualRevision] = useState(0);
-  const [recordOffset, setRecordOffset] = useState(0);
   const load = useCallback((signal: AbortSignal) => getJob(id, signal), [id]);
-  const { result, refreshing, resolvedRevision } = useResource(load, revision, true);
+  const { result, refreshing, resolvedRevision, refreshError } = useResource(load, revision, true, validId, true);
   const job = result.state === 'ready' ? result.data : undefined;
   const active = job?.status === 'pending' || job?.status === 'running';
   const readEvents = useCallback((signal: AbortSignal) => listEvents(id, signal), [id]);
-  const events = useResource(readEvents, resolvedRevision, true, !!job);
+  const events = useResource(readEvents, resolvedRevision, true, !!job, true);
   const poll = useCallback(() => setRevision(current => current + 1), []);
+  const busy = refreshing || (!!job && events.refreshing);
+  useResultReturn(!!job);
+  const restoring = useReturnPosition();
+  const hasJob = !!job;
+  useEffect(() => {
+    if (!hasJob || restoring || !['#events-title', '#job-evidence-title'].includes(location.hash)) return;
+    const heading = document.getElementById(location.hash.slice(1));
+    heading?.focus({ preventScroll: true });
+    heading?.scrollIntoView({ block: 'start' });
+  }, [active, hasJob, location.hash, restoring]);
 
   useEffect(() => {
-    if (!active || refreshing || events.refreshing) return;
+    if (!active || busy) return;
     let timer: number | undefined;
     function schedule() {
       window.clearTimeout(timer);
@@ -47,9 +65,10 @@ function JobDetailPage({ id }: { id: string }) {
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', schedule);
     };
-  }, [active, refreshing, events.refreshing, poll, revision]);
+  }, [active, busy, events.refreshError, poll, revision]);
 
   function refresh() {
+    if (busy) return;
     setManualRevision(current => current + 1);
     poll();
   }
@@ -57,20 +76,24 @@ function JobDetailPage({ id }: { id: string }) {
   return (
     <>
       <nav aria-label="Breadcrumb" className="breadcrumb">
-        <Link to={back}>Collection Jobs</Link>
-        {requestId && <Link to={requestPath(requestId)}>Collection request</Link>}
+        <ReturnLink to={back}>Collection Jobs</ReturnLink>
+        {requestId && <ReturnLink to={requestPath(requestId)}>Collection request</ReturnLink>}
       </nav>
       <div className="page-heading detail-heading">
         <div>
           <h1>Job Details</h1>
-          <p className="identifier muted">{id}</p>
+          {validId && <p className="muted">Job {shortId(id)}</p>}
         </div>
-        {result.state !== 'error' &&
-          <button type="button" onClick={refresh} disabled={refreshing || (!!job && events.refreshing)}>
+        {validId && result.state !== 'error' &&
+          <button type="button" onClick={refresh} aria-disabled={busy}>
             Refresh job
           </button>}
       </div>
-      {result.state === 'loading' && <div className="panel"><Loading>Loading job details…</Loading></div>}
+      {location.state?.jobConfirmed && <p className="source-confirmation" role="status">Job submission confirmed. Current status appears below.</p>}
+      {!validId && <div className="panel notice">
+        <p role="alert">Invalid Job ID. Select a Job from the list.</p><ReturnLink to={back}>Back to jobs</ReturnLink>
+      </div>}
+      {validId && result.state === 'loading' && <div className="panel"><Loading>Loading job details…</Loading></div>}
       {result.state === 'error' && (
         <div className="panel">
           {result.error.status === 404 || result.error.code === 'invalid_request' ? (
@@ -79,95 +102,180 @@ function JobDetailPage({ id }: { id: string }) {
                 <strong>Job not found</strong>
                 <p>Check the job ID or select a job from the list.</p>
               </div>
-              <Link to={back}>Back to jobs</Link>
+              <ReturnLink to={back}>Back to jobs</ReturnLink>
             </div>
           ) : <RequestProblem error={result.error} resource="job details" retry={refresh} />}
         </div>
       )}
       {result.state === 'ready' && (
         <>
-          <JobOverview job={result.data} />
-          <RecordExport scope="job" id={result.data.job_id} pending={active} />
-          <EventTimeline result={events.result} retry={events.retry} />
+          {refreshError && <p className="notice job-stale" role="status">Job refresh failed. Showing the last recorded status. {active && 'Automatic refresh will resume while this page is visible.'}</p>}
+          <JobOverview job={result.data} requestId={requestId} />
+          <ExecutionDiagnostics job={result.data} active={active} />
+          <JobError job={result.data} />
+          <EventTimeline resource={events} />
           {active ? <section className="panel detail-panel" aria-label="Related records">
             <p className="notice muted">Records appear after the job publishes results.</p>
           </section> : <>
             <JobEvidence id={result.data.job_id} revision={manualRevision} requestId={requestId} />
-            <RecordsPreview id={result.data.job_id} offset={recordOffset} setOffset={setRecordOffset}
-              revision={manualRevision} />
+            <RecordsPreview id={result.data.job_id} revision={manualRevision} />
           </>}
+          <RecordExport scope="job" id={result.data.job_id} pending={active} />
+          <JobMetadata job={result.data} />
         </>
       )}
     </>
   );
 }
 
-function JobOverview({ job }: { job: CollectionJob }) {
-  return (
-    <section className="panel detail-panel" aria-labelledby="overview-title">
-      <div className="panel-heading">
-        <h2 id="overview-title">Run overview</h2>
-        <Status value={job.status} />
-        <div className="job-result-links">
-          <Link className="control" to={recordsForJob(job.job_id)}>View job records</Link>
-          <Link className="control" to={quarantinePath(job.job_id)}>View quarantine</Link>
-        </div>
+function JobOverview({ job, requestId }: { job: CollectionJob; requestId: string }) {
+  const contextLoad = useCallback((signal: AbortSignal) => loadJobContext([job], signal),
+    [job.source_id, job.profile_version_id]);
+  const context = useResource(contextLoad).result;
+  const source = context.state === 'ready' ? context.data.sources.get(job.source_id) : undefined;
+  const profile = context.state === 'ready' ? context.data.profiles.get(job.profile_version_id) : undefined;
+  const outcomes: Record<CollectionJob['status'], string> = {
+    pending: job.next_attempt_at ? 'Awaiting a scheduled retry.' : 'Waiting for execution.',
+    running: 'Collection is in progress.',
+    succeeded: 'Collection finished successfully.',
+    partial: job.valid_count ? 'Partial result. Validated records are available.' : 'Partial result. Review the recorded results.',
+    failed: 'Collection failed. Review the recorded error and execution events.',
+  };
+
+  return <section className="panel detail-panel job-outcome" aria-labelledby="overview-title" data-status={job.status}>
+    <div className="panel-heading"><h2 id="overview-title">Run overview</h2><Status value={job.status} /></div>
+    <div className="job-outcome-body">
+      <p className="job-outcome-message" role="status">{outcomes[job.status]}</p>
+      <ResultCounts job={job} />
+      <div className="job-context">
+        <div><span className="muted">Source</span><Link to={sourcePath(job.source_id)}>
+          {source?.source_name ?? 'Source ' + shortId(job.source_id)}
+        </Link></div>
+        <div><span className="muted">Pinned Profile Version</span><Link to={profilePath(job.source_id, job.profile_version_id)}>
+          {profile ? 'Version ' + profile.version : 'Profile ' + shortId(job.profile_version_id)}
+        </Link></div>
+        {requestId && <div><span className="muted">Collection Request</span><ReturnLink to={requestPath(requestId)}>View parent request</ReturnLink></div>}
       </div>
-      {(job.status === 'pending' || job.status === 'running') && (
-        <p className="job-monitor" role="status">
-          {job.status === 'pending' ? 'Pending. Waiting for execution.' : 'Running. Collection is in progress.'}{' '}
-          Status updates while this page is visible.
-        </p>
-      )}
-      <div className="overview-body">
-        <dl className="lineage">
-          <div><dt>Source ID</dt><dd className="identifier"><Link to={sourcePath(job.source_id)}>{job.source_id}</Link></dd></div>
-          <div><dt>Pinned profile version</dt><dd className="identifier">
-            <Link to={profilePath(job.source_id, job.profile_version_id)}>{job.profile_version_id}</Link>
-          </dd></div>
+      <nav className="profile-actions job-outcome-actions" aria-label="Inspect job results">
+        <JobSectionLink target="events-title">Execution events</JobSectionLink>
+        <ContextLink id="job-records" to={recordsForJob(job.job_id)}>View job records</ContextLink>
+        <ContextLink id="job-quarantine" to={quarantinePath(job.job_id)}>View quarantine</ContextLink>
+        {job.finished_at && <JobSectionLink target="job-evidence-title">Capture evidence</JobSectionLink>}
+      </nav>
+    </div>
+  </section>;
+}
+
+function JobSectionLink({ target, children }: { target: string; children: string }) {
+  const { search, state } = useLocation();
+  return <Link to={{ search, hash: '#' + target }} state={state} replace>{children}</Link>;
+}
+
+function ExecutionDiagnostics({ job, active }: { job: CollectionJob; active: boolean }) {
+  const pending = job.status === 'pending';
+  const lease = job.status === 'running' ? job.lease_expires_at : null;
+  const published = job.last_dispatched_at;
+  const publishedForRetry = published && (!job.next_attempt_at || Date.parse(published) >= Date.parse(job.next_attempt_at));
+  return <section className="panel detail-panel" aria-labelledby="job-execution-title">
+    <div className="panel-heading">
+      <h2 id="job-execution-title">Execution and dispatch</h2>
+      <span className="muted timezone">Times in UTC</span>
+    </div>
+    <div className="job-diagnostics">
+      <section aria-labelledby="attempt-title">
+        <h3 id="attempt-title">Execution</h3>
+        <dl className="job-facts">
+          <div><dt>Execution attempts</dt><dd>{job.execution_attempt}</dd></div>
+          {pending && job.next_attempt_at && <div><dt>Earliest scheduled retry (UTC)</dt>
+            <dd><Timestamp value={job.next_attempt_at} /></dd></div>}
+          {lease && <div><dt>Execution lease deadline (UTC)</dt><dd><Timestamp value={lease} /></dd></div>}
         </dl>
-        <dl className="times">
-          <div><dt>Created (UTC)</dt><dd><Timestamp value={job.created_at} /></dd></div>
-          <div><dt>Started (UTC)</dt><dd><Timestamp value={job.started_at} /></dd></div>
-          <div><dt>Finished (UTC)</dt><dd><Timestamp value={job.finished_at} /></dd></div>
+        {pending && job.next_attempt_at && <p className="muted">A new attempt is recorded when a worker claims this Job.</p>}
+        {lease && Date.parse(lease) < Date.now() && <p className="job-lease-note">Lease deadline passed. Check the latest persisted execution events.</p>}
+      </section>
+      <section aria-labelledby="dispatch-title">
+        <h3 id="dispatch-title">Dispatch</h3>
+        <dl className="job-facts">
+          <div><dt>Dispatch attempts</dt><dd>{job.dispatch_attempts}</dd></div>
+          {published && <div><dt>Last confirmed dispatch (UTC)</dt><dd><Timestamp value={published} /></dd></div>}
+          {pending && job.dispatch_due_at && <div><dt>{publishedForRetry && !job.dispatch_error_code
+            ? 'Next dispatch check (UTC)' : 'Dispatch due (UTC)'}</dt><dd><Timestamp value={job.dispatch_due_at} /></dd></div>}
         </dl>
-        <ResultCounts job={job} />
+        {pending && <p className="muted">{publishedForRetry && !job.dispatch_error_code
+          ? 'A dispatch was recorded. This Job is waiting for an execution claim.'
+          : job.next_attempt_at ? 'The scheduled retry is awaiting confirmed dispatch.'
+            : 'This Job is pending and awaiting confirmed dispatch.'}</p>}
+        {job.dispatch_error_code && <p className="job-lease-note">
+          {job.dispatch_error_code === 'broker_unavailable' ? 'A previous broker publication could not be confirmed.' : 'A dispatch error was recorded.'}
+          {' '}<code>{job.dispatch_error_code}</code>
+        </p>}
+      </section>
+    </div>
+    {active && <p className="job-monitor muted">Status refreshes while this page is visible.</p>}
+  </section>;
+}
+
+function JobError({ job }: { job: CollectionJob }) {
+  if (!job.error) return null;
+  return <section className="panel detail-panel job-error-panel" aria-labelledby="job-error-title">
+    <div className="panel-heading"><h2 id="job-error-title">Recorded error</h2></div>
+    <div className="notice">
+      <strong>{errorCategory(job.error)}</strong>
+      <p className="muted">{job.execution_attempt > 0 && `Execution attempt ${job.execution_attempt}`}
+        {job.status === 'failed' && `${job.execution_attempt > 0 ? ' · ' : ''}Job ended in Failed`}</p>
+      <ErrorDetails error={job.error} />
+      <p className="job-error-next">Possible next steps</p>
+      <div className="profile-actions">
+        <JobSectionLink target="events-title">Review execution events</JobSectionLink>
+        <Link to={sourcePath(job.source_id)}>Inspect Source access policy</Link>
+        <Link to={profilePath(job.source_id, job.profile_version_id)}>Inspect pinned Profile Version</Link>
       </div>
-      {(job.status === 'partial' || job.status === 'failed' || job.error) && (
-        <div className="notice outcome" data-status={job.status}>
-          <strong>{job.status === 'partial' ? 'Partial result' : job.status === 'failed' ? 'Job failed' : 'Reported error'}</strong>
-          {job.status === 'partial' && job.invalid_count > 0 && <p>See quarantine for rejected candidates.</p>}
-          {job.error && <ErrorDetails error={job.error} />}
-        </div>
-      )}
-    </section>
-  );
+    </div>
+  </section>;
+}
+
+function JobMetadata({ job }: { job: CollectionJob }) {
+  return <details className="panel detail-panel job-metadata">
+    <summary>Technical metadata</summary>
+    <dl className="job-facts">
+      <div><dt>Job ID</dt><dd><code>{job.job_id}</code></dd></div>
+      <div><dt>Source ID</dt><dd><code>{job.source_id}</code></dd></div>
+      <div><dt>Profile Version ID</dt><dd><code>{job.profile_version_id}</code></dd></div>
+      <div><dt>Configuration hash</dt><dd><code>{job.config_hash}</code></dd></div>
+      <div><dt>Created (UTC)</dt><dd><Timestamp value={job.created_at} /></dd></div>
+      {job.started_at && <div><dt>Started (UTC)</dt><dd><Timestamp value={job.started_at} /></dd></div>}
+      {job.finished_at && <div><dt>Finished (UTC)</dt><dd><Timestamp value={job.finished_at} /></dd></div>}
+    </dl>
+  </details>;
 }
 
 const eventLabels: ReadonlyMap<string, string> = new Map([
   ['JOB_CREATED', 'Job created'],
-  ['DISPATCHED', 'Sent to worker queue'],
+  ['DISPATCHED', 'Dispatch confirmed'],
   ['DISPATCH_FAILED', 'Dispatch failed'],
-  ['CLAIMED', 'Worker started the run'],
+  ['CLAIMED', 'Execution claimed'],
   ['RETRY_SCHEDULED', 'Retry scheduled'],
-  ['WORKER_LOST', 'Worker lease expired'],
+  ['WORKER_LOST', 'Lease expiry recorded'],
   ['RECOVERY_REQUESTED', 'Recovery requested'],
   ['SUCCEEDED', 'Run succeeded'],
   ['PARTIAL', 'Run produced partial results'],
   ['FAILED', 'Run failed'],
 ]);
 
-function EventTimeline({ result, retry }: {
-  result: ReturnType<typeof useResource<ExecutionEvent[]>>['result']; retry: () => void;
-}) {
+function EventTimeline({ resource }: { resource: ReturnType<typeof useResource<ExecutionEvent[]>> }) {
+  const { result, retry, refreshing, refreshError } = resource;
   return (
     <section className="panel detail-panel" aria-labelledby="events-title">
       <div className="panel-heading">
-        <h2 id="events-title">Execution events</h2>
+        <h2 id="events-title" tabIndex={-1}>Execution events</h2>
         <span className="muted timezone">Times in UTC</span>
       </div>
       {result.state === 'loading' && <Loading>Loading execution events…</Loading>}
       {result.state === 'error' && <RequestProblem error={result.error} resource="execution events" retry={retry} />}
+      {refreshError && <div className="notice job-stale">
+        <p role="status">Timeline refresh failed. Showing the last recorded events.</p>
+        <button type="button" disabled={refreshing} onClick={retry}>Reload execution events</button>
+      </div>}
       {result.state === 'ready' && (result.data.length === 0
         ? <p className="notice" role="status">No execution events recorded.</p>
         : <ol className="timeline" aria-label="Execution events in API order">
@@ -176,14 +284,17 @@ function EventTimeline({ result, retry }: {
               <Timestamp value={event.occurred_at} />
               <div className="event-body">
                 <div className="event-label">
-                  {event.kind && <>
-                    <strong>{eventLabels.get(event.kind) ?? 'Execution event'}</strong>
-                    <code className="muted">{event.kind}</code>
-                  </>}
-                  <Status value={event.status} />
-                  {!!event.execution_attempt && <span className="muted">Attempt {event.execution_attempt}</span>}
+                  <strong>{event.kind ? eventLabels.get(event.kind) ?? 'Unrecognized execution event' : 'Historical status update'}</strong>
+                  <span className="muted">{statusLabels[event.status]}
+                    {event.execution_attempt != null && ` · Attempt ${event.execution_attempt}`}</span>
                 </div>
                 {event.error && <ErrorDetails error={event.error} />}
+                <details className="event-metadata"><summary>Event metadata</summary>
+                  <dl className="job-facts">
+                    <div><dt>Event kind</dt><dd><code>{event.kind ?? 'Not recorded'}</code></dd></div>
+                    <div><dt>Event ID</dt><dd><code>{event.event_id}</code></dd></div>
+                  </dl>
+                </details>
               </div>
             </li>
           ))}
@@ -197,26 +308,21 @@ const recordsPageSize = 10;
 function JobEvidence({ id, revision, requestId }: { id: string; revision: number; requestId: string }) {
   const load = useCallback((signal: AbortSignal) => listJobEvidence(id, signal), [id]);
   const { result, retry } = useResource(load, revision);
-  const { hash } = useLocation();
-  useResultReturn(result.state === 'ready');
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    if (hash === '#job-evidence-title') {
-      heading.current?.focus({ preventScroll: true });
-      heading.current?.scrollIntoView({ block: 'start' });
-    }
-  }, [hash]);
   return (
     <section className="panel detail-panel" aria-labelledby="job-evidence-title">
-      <div className="panel-heading"><h2 id="job-evidence-title" ref={heading} tabIndex={-1}>Capture evidence</h2></div>
+      <div className="panel-heading"><h2 id="job-evidence-title" tabIndex={-1}>Capture evidence</h2></div>
       {result.state === 'loading' && <Loading>Loading capture evidence…</Loading>}
       {result.state === 'error' && <RequestProblem error={result.error} resource="capture evidence" retry={retry} />}
       {result.state === 'ready' && (result.data.length > 0
-        ? <ul className="notice job-evidence-list">
+        ? <ul className="job-evidence-list" role="list" aria-label="Saved captures">
           {result.data.map(evidence => <li key={evidence.evidence_id}>
-            {captureLabel(evidence)}{evidence.adapter_type === 'web' ? ` · Page ${evidence.page_number} ` : ' '}
+            <div>
+              <strong>{captureLabel(evidence)}{evidence.adapter_type === 'web' ? ` · Page ${evidence.page_number}` : ''}</strong>
+              <p className="muted">{evidence.adapter_type === 'web' ? webLocation(evidence.original_location) : evidence.original_location}</p>
+            </div>
+            <div className="job-capture-time"><Timestamp value={evidence.captured_at} /> UTC</div>
             <ContextLink id={'job-capture-' + evidence.evidence_id} to={evidenceDetailPath(evidence.evidence_id, requestId)}
-              className="identifier" aria-label={`Open evidence ${evidence.evidence_id}`}>{evidence.evidence_id}</ContextLink>
+              aria-label={`Inspect capture · Open evidence ${evidence.evidence_id}`}>Inspect capture</ContextLink>
           </li>)}
         </ul>
         : <p className="notice">No capture evidence was saved for this job.</p>)}
@@ -224,9 +330,10 @@ function JobEvidence({ id, revision, requestId }: { id: string; revision: number
   );
 }
 
-function RecordsPreview({ id, offset, setOffset, revision }: {
-  id: string; offset: number; setOffset: (offset: number) => void; revision: number;
-}) {
+function RecordsPreview({ id, revision }: { id: string; revision: number }) {
+  const [search, setSearch] = useSearchParams();
+  const { state } = useLocation();
+  const offset = readOffset(search, 'records_offset');
   const heading = useRef<HTMLHeadingElement>(null);
   const load = useCallback((signal: AbortSignal) => listRecords(id, recordsPageSize, offset, signal), [id, offset]);
   const { result, retry } = useResource(load, revision);
@@ -240,35 +347,36 @@ function RecordsPreview({ id, offset, setOffset, revision }: {
       {result.state === 'error' && <RequestProblem error={result.error} resource="related records" retry={retry} />}
       {result.state === 'ready' && (
         <>
+          {__PLATFORM_SYNTHETIC_DEMO__ && result.data.slice(0, recordsPageSize).some(record => record.payload.dataset === marketWarning) &&
+            <p className="ledger-warning"><strong>{marketWarning}</strong></p>}
           {result.data.length === 0 ? (
             <p className="notice" role="status">{offset ? 'This page is empty.' : 'No validated records for this job.'}</p>
           ) : (
-            <TableRegion label="Related records table, scroll horizontally for more columns">
-              <table className="records-table">
-                <caption className="sr-only">Related records preview</caption>
-                <thead><tr>
-                  <th scope="col">Record ID</th><th scope="col">Payload preview</th>
-                  <th scope="col">Record type</th><th scope="col">Schema version</th><th scope="col">Evidence reference</th>
-                </tr></thead>
-                <tbody>
-                  {result.data.slice(0, recordsPageSize).map(record => (
-                    <tr key={record.record_id}>
-                      <th scope="row" className="identifier"><Link to={recordPath(record.record_id)}
-                        state={{ recordsSearch: new URLSearchParams({ job_id: id, offset: String(offset) }).toString() }}
-                        aria-label={`Open record ${record.record_id}`}>{record.record_id}</Link></th>
-                      <td className="payload-cell"><PayloadPreview payload={record.payload} /></td>
-                      <td>{record.record_type}</td>
-                      <td>{record.schema_version}</td>
-                      <td className="identifier"><EvidenceLink id={record.evidence_reference} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableRegion>
+            <ul className="job-record-list" role="list" aria-label="Related records preview">
+              {result.data.slice(0, recordsPageSize).map(record => {
+                const title = clip(recordTitle(record), 72);
+                return <li key={record.record_id}>
+                  <div>
+                    <ContextLink className="job-record-title" id={'job-record-' + record.record_id} to={recordPath(record.record_id)}
+                      aria-label={`${title} · Open record ${record.record_id}`}>{title}</ContextLink>
+                    <p className="muted">{record.record_type} · Schema {record.schema_version}</p>
+                  </div>
+                  <div><PayloadPreview payload={record.payload} /></div>
+                  <ContextLink id={'job-record-capture-' + record.record_id} to={evidenceDetailPath(record.evidence_reference)}
+                    aria-label={`View evidence · Open evidence ${record.evidence_reference}`}>View evidence</ContextLink>
+                </li>;
+              })}
+            </ul>
           )}
           {(offset > 0 || result.data.length > 0) && (
             <Pagination label="Records" offset={offset} size={recordsPageSize} loaded={result.data.length} maxOffset={maxOffset}
-              change={next => { heading.current?.focus(); setOffset(next); }} />
+              change={next => {
+                heading.current?.focus();
+                const params = new URLSearchParams(search);
+                if (next) params.set('records_offset', String(next));
+                else params.delete('records_offset');
+                void setSearch(params, { state, replace: true, preventScrollReset: true });
+              }} />
           )}
         </>
       )}

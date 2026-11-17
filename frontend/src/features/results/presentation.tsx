@@ -5,15 +5,10 @@ import { RequestProblem } from '../../components/feedback';
 import { jobPath } from '../collection-jobs/api';
 import { profilePath } from '../profiles/api';
 import { sourcePath } from '../sources/api';
-import { evidenceDetailPath, type EvidenceMetadata, type GenericRecord, type Lineage, type SourcePosition } from './api';
+import type { EvidenceMetadata, GenericRecord, Lineage, SourcePosition } from './api';
 
 export function Metadata({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return <div className={className}><dt>{label}</dt><dd>{children}</dd></div>;
-}
-
-export function EvidenceLink({ id }: { id: string }) {
-  return <Link className="identifier" to={evidenceDetailPath(id)}
-    aria-label={`Open evidence ${id}`}>{id}</Link>;
 }
 
 export function ProvenanceFields({ lineage }: { lineage: Lineage }) {

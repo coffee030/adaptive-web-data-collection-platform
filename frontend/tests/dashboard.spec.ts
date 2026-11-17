@@ -233,9 +233,10 @@ test('Guided collection offers only eligible sources and recovers a lost respons
   await expect(sources.locator('option')).toHaveCount(2);
   await sources.selectOption(sourceId);
   await expect(page.getByRole('combobox', { name: 'Profile Version' }).locator('option')).toHaveCount(2);
-  await expect(page.getByRole('region', { name: 'Version 2' })).toContainText('title (from Name)');
+  await page.getByText('Profile mapping and collection rules').click();
+  await expect(page.getByText('title (from Name)', { exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'CSV content' }).fill('Name\nNorth Trail\n');
-  await page.getByRole('button', { name: 'Start Collection', exact: true }).click();
+  await page.getByRole('button', { name: 'Submit job', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('did not confirm');
   await expect(sources).toBeDisabled();
   await page.getByRole('button', { name: 'Retry submission' }).click();
@@ -311,7 +312,7 @@ for (const [width, theme] of [[1440, 'light'], [390, 'dark']] as const) {
     await page.goto(jobs + '/new');
     await page.getByRole('radio', { name: /CSV datasets/ }).check();
     await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(sourceId);
-    await expect(page.getByRole('button', { name: 'Start Collection', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Submit job', exact: true })).toBeVisible();
     await audit();
     await page.goto('/records?job_id=' + jobId);
     await expect(page.getByRole('region', { name: 'Quality for this job' }).locator('dd strong')).toHaveText(['2', '3', '1']);

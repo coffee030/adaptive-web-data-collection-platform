@@ -18,12 +18,14 @@ export function readOffset(search: URLSearchParams, key = 'offset') {
   return value && /^\d+$/.test(value) && Number(value) <= maxOffset ? Number(value) : 0;
 }
 
-const resultPath = /^\/(?:records|articles|collection-jobs|collection-requests)(?:\/([^/]+))?$/;
+const resultPath = /^\/(?:records|articles|evidence|collection-jobs|collection-requests)(?:\/([^/]+))?$/;
 
 function safeContext(value: unknown) {
   if (typeof value !== 'string' || value.length > 3500 || !value.startsWith('/') || value.startsWith('//')
     || /[\\\x00-\x20]/.test(value)) return '';
   const path = value.split(/[?#]/, 1)[0] ?? '';
+  const quarantine = /^\/collection-jobs\/([^/]+)\/quarantine$/.exec(path);
+  if (quarantine && resultId(quarantine[1] ?? null)) return value;
   const match = resultPath.exec(path);
   return match && (!match[1] || resultId(match[1])) ? value : '';
 }
@@ -31,10 +33,11 @@ function safeContext(value: unknown) {
 export function withContext(path: string, context: string) {
   const safe = safeContext(context);
   if (!safe) return path;
-  const [pathname, query] = path.split('?');
+  const [address, hash] = path.split('#');
+  const [pathname, query] = (address ?? '').split('?');
   const params = new URLSearchParams(query);
   params.set('from', safe);
-  return pathname + '?' + params;
+  return pathname + '?' + params + (hash ? '#' + hash : '');
 }
 
 export function contextFrom(search: string) {
@@ -84,10 +87,12 @@ export function useReturnPosition() {
   return useNavigationType() === 'POP' && positions.has(key);
 }
 
-export function ContextLink({ to, id, onClick, ...props }: Omit<LinkProps, 'to'> & { to: string; id: string }) {
+export function ContextLink({ to, id, onClick, state, ...props }: Omit<LinkProps, 'to' | 'state'> & {
+  to: string; id: string; state?: object;
+}) {
   const { pathname, search, hash, key } = useLocation();
   const from = pathname + search + hash;
-  return <Link {...props} id={id} to={withContext(to, from)} state={{ resultOrigin: from }}
+  return <Link {...props} id={id} to={withContext(to, from)} state={{ ...state, resultOrigin: from }}
     onClick={event => {
       onClick?.(event);
       if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
@@ -109,6 +114,7 @@ export function ReturnLink({ to, ...props }: Omit<LinkProps, 'to'> & { to: strin
 }
 
 export function returnLabel(path: string) {
+  if (path.split('?')[0]?.endsWith('/quarantine')) return 'Back to Quarantine';
   if (path.startsWith('/collection-jobs/')) return 'Back to Job';
   if (path.startsWith('/articles/')) return 'Back to Article History';
   if (path.startsWith('/articles')) return 'Back to Articles';
