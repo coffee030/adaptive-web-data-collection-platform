@@ -51,6 +51,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('Overview preserves request outcomes and offers scoped results and running jobs', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   const requestId = 'd55c5c68-6bbc-482e-98f1-42e24e768f23';
   const failed = { ...job, job_id: 'older-failed-job', status: 'failed', valid_count: 0 };
   await route(page, '/sources', [source]);
@@ -78,6 +79,11 @@ test('Overview preserves request outcomes and offers scoped results and running 
   await expect(ledger.getByRole('link', { name: 'Running jobs' })).toHaveAttribute('href', jobs + '?status=running');
   await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toHaveAttribute('href', '/collection-requests/' + requestId);
   await expect(ledger).toContainText('2 jobs · 1 partial · 1 failed');
+  const resultLabel = ledger.getByText('Validated records', { exact: true });
+  await expect(resultLabel).toBeVisible();
+  const heading = (await resultLabel.boundingBox())!;
+  const resultCell = (await ledger.locator('.request-ledger-result').first().boundingBox())!;
+  expect(Math.abs(heading.x - resultCell.x)).toBeLessThan(1);
   const recentJobs = page.getByRole('region', { name: 'Recent jobs' });
   await expect(recentJobs.getByRole('listitem')).toHaveCount(5);
   await expect(recentJobs.getByRole('link', { name: new RegExp(jobId) })).toHaveAttribute('href', jobs + '/' + jobId);

@@ -262,7 +262,7 @@ for (const [width, theme] of [[1440, 'light'], [900, 'dark'], [768, 'system'], [
     await page.getByRole('button', { name: 'Review disable' }).press('Enter');
     await expect(page.getByRole('form', { name: 'Disable binding' })).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
-    expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
     await page.getByRole('button', { name: 'Cancel', exact: true }).press('Enter');
     await expect(page.getByRole('button', { name: 'Review disable' })).toBeFocused();
     expect(consoleErrors).toEqual([]);

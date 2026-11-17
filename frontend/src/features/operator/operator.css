@@ -47,6 +47,7 @@ button.operator-danger:hover { background: var(--error-surface); }
 .catalog-editor legend { font-weight: 650; margin-block-end: var(--sm); }
 .binding-ledger th:first-child { inline-size: 36%; }
 .binding-ledger th:nth-child(2), .binding-ledger th:nth-child(3) { inline-size: 22%; }
+.binding-ledger th[scope="row"] a { display: inline-flex; align-items: center; min-block-size: 24px; }
 .binding-ledger [data-status="eligible"] { --status-ink: var(--success); }
 .binding-ledger [data-status="unavailable"] { --status-ink: var(--warning); }
 .binding-feedback { margin: var(--sm) var(--md); }

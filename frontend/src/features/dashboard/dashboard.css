@@ -70,14 +70,14 @@
 .active-job-list { display: flex; flex-wrap: wrap; gap: var(--sm) var(--md); list-style: none; padding: 0; margin: 0; }
 .active-job-list a { font-weight: 650; }
 .refresh-indicator { font-size: 0.8125rem; }
-.ledger-columns, .request-ledger-row {
+.request-ledger-columns, .request-ledger-row {
   display: grid;
   grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1.1fr);
   align-items: start;
   gap: var(--xs) var(--md);
   padding-inline: var(--overview-inset);
 }
-.ledger-columns {
+.request-ledger-columns {
   padding-block: var(--sm);
   border: 1px solid var(--divider);
   border-radius: var(--radius-compact) var(--radius-compact) 0 0;
@@ -131,7 +131,7 @@
   .topic-index li:not(:nth-child(3n + 1)) { border-inline-start: 0; }
   .topic-index a, .unavailable-topic { align-items: center; padding-block: var(--sm); }
   .request-actions { inline-size: 100%; justify-content: space-between; }
-  .ledger-columns { display: none; }
+  .request-ledger-columns { display: none; }
   .request-ledger { border-block-start: 1px solid var(--divider); }
   .request-ledger-row { grid-template-columns: minmax(0, 1fr) minmax(0, auto); }
   .request-ledger-state, .request-ledger-result { text-align: end; }

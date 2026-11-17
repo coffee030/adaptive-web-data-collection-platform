@@ -165,7 +165,7 @@ export function Overview() {
         </p>
       </div>
       <OverviewResource label="recent collection requests" heading="request-ledger-title" state={requests}>{rows => rows.length ? <>
-        <div className="ledger-columns" aria-hidden="true">
+        <div className="request-ledger-columns" aria-hidden="true">
           <span>Topic / keyword</span><span>Request status / jobs</span><span>Submitted (UTC)</span><span>Validated records</span>
         </div>
         <ol className="request-ledger" role="list">
