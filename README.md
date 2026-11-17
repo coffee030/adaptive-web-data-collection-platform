@@ -32,15 +32,15 @@ The PowerShell commands for operating the same Demo are available as well.
 .\Stop-Platform.bat -Demo
 ```
 
-Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The first successful Start prepares three fictional topics with 18 validated Records, verifiable Evidence, Article History and CSV/JSON downloads. Demo has its own settings and Docker volumes. [Presentation walkthrough](docs/evaluation/M10-FYP-Core-Demo-Runbook.md)
+Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The first successful Start prepares three fictional topics with 18 validated Records, verifiable Evidence, Article History and CSV/JSON downloads. Demo has its own settings and Docker volumes. [Presentation walkthrough](docs/evaluation/M16-FYP-Presentation-Runbook.md)
 
 FTC and New York Fed collection is unavailable in this release. Public website review and opt-in eligibility are documented separately. [Real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
 
 ## Collect by topic
 
 1. **Set up approved sources.** In **Sources**, register and authorize each website. Choose **Keyword search and detail pages** in the profile's **Collection mode**, preview and validate a sample keyword, and approve the profile version. To keep article history, enable **Store article history** in the profile before approval.
-2. **Create a category and topic.** Open **Sources → Categories and topics**. Create a category and add a topic under it. Select the topic, open **Manage approved bindings**, and approve a binding for each source and profile version you want to use.
-3. **Start a collection request.** From **Overview** or the main navigation, open **Collect by topic**. Select your category and topic, choose one to four approved source options, enter a keyword, and select **Start topic collection**. Each selected source and profile pair runs as a separate job.
+2. **Create a category and topic.** Open **Operations → Topics & bindings**. Create a category and add a topic under it. Select the topic, open **Manage approved bindings**, and approve a binding for each source and profile version you want to use.
+3. **Start a collection request.** From **Overview** or the main navigation, open **New Collection**. Select your category and topic, choose one to four approved sources, and enter a keyword. Select **Review collection**, then **Start topic collection**. Each selected source and profile pair runs as a separate job.
 4. **Review results.** In the collection request, check the child job statuses and select **View request records** to see accepted records from the run. A record links to its lineage and capture evidence. If the profile stores article history, open **Article history** to inspect versions and observations. Use a child job's **Quarantine** link to see rejected records.
 5. **Export records.** After the child jobs finish, select **Download CSV** or **Download JSON** on the request page. To export a single source job, open its **Job details** and use the download buttons there.
 
