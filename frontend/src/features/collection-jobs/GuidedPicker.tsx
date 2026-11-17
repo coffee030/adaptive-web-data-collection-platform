@@ -6,9 +6,9 @@ import type { Profile } from '../profiles/api';
 import { listSources, listVersions, sourcePath, sourcesPath, type Adapter, type Source } from '../sources/api';
 import { allowedInputs } from '../sources/collectionInput';
 
-const topics = [
-  { adapter: 'web', label: 'HTML pages', description: 'Collect structured fields from a permitted HTML page.' },
-  { adapter: 'csv', label: 'CSV datasets', description: 'Import rows from a permitted CSV dataset.' },
+const formats = [
+  { adapter: 'web', label: 'HTML pages', description: 'Use a permitted document path or an approved keyword search.' },
+  { adapter: 'csv', label: 'CSV datasets', description: 'Enter CSV content for a permitted dataset.' },
 ] as const;
 
 type EligibleSource = { source: Source; profiles: Profile[] };
@@ -37,11 +37,11 @@ export function GuidedPicker({ locked, children }: {
   locked: boolean; children: (source: Source, profiles: Profile[]) => ReactNode;
 }) {
   const { result, retry } = useResource(eligibleSources);
-  const [topic, setTopic] = useState<Adapter>();
+  const [format, setFormat] = useState<Adapter>();
   const [sourceId, setSourceId] = useState('');
   const options = result.state === 'ready' ? result.data.eligible : [];
-  const topicSources = options.filter(item => item.source.adapter_type === topic);
-  const selected = topicSources.find(item => item.source.source_id === sourceId);
+  const formatSources = options.filter(item => item.source.adapter_type === format);
+  const selected = formatSources.find(item => item.source.source_id === sourceId);
 
   return <section className="panel detail-panel job-create" aria-labelledby="job-input-heading">
     <div className="panel-heading"><h2 id="job-input-heading">Collection setup</h2></div>
@@ -53,13 +53,13 @@ export function GuidedPicker({ locked, children }: {
         <button type="button" onClick={retry} disabled={locked}>Retry source checks</button>
       </div>}
       {options.length > 0 ? <>
-        <fieldset className="topic-options" disabled={locked}>
-          <legend>1. Select a topic</legend>
-          {topics.map(item => {
+        <fieldset className="format-options" disabled={locked}>
+          <legend>1. Select an input format</legend>
+          {formats.map(item => {
             const count = options.filter(option => option.source.adapter_type === item.adapter).length;
-            return <label className="topic-option" key={item.adapter}>
-              <input type="radio" name="topic" value={item.adapter} disabled={!count} checked={topic === item.adapter}
-                onChange={() => { setTopic(item.adapter); setSourceId(''); }} />
+            return <label className="format-option" key={item.adapter}>
+              <input type="radio" name="format" value={item.adapter} disabled={!count} checked={format === item.adapter}
+                onChange={() => { setFormat(item.adapter); setSourceId(''); }} />
               <span>
                 <strong>{item.label}</strong>
                 <span>{item.description}</span>
@@ -68,17 +68,17 @@ export function GuidedPicker({ locked, children }: {
             </label>;
           })}
         </fieldset>
-        {topic && <div className="profile-form guided-step">
+        {format && <div className="profile-form guided-step">
           <label>2. Select a source
             <select value={sourceId} disabled={locked} onChange={event => setSourceId(event.target.value)}>
               <option value="">Choose an authorized source</option>
-              {topicSources.map(({ source }) => <option key={source.source_id} value={source.source_id}>{source.source_name}</option>)}
+              {formatSources.map(({ source }) => <option key={source.source_id} value={source.source_id}>{source.source_name}</option>)}
             </select>
           </label>
           {selected && <p><Link to={sourcePath(selected.source.source_id)}>View source access policy</Link></p>}
         </div>}
         {selected && <div className="guided-step">
-          <h3>3. Review and start</h3>
+          <h3>3. Choose a version and enter input</h3>
           {children(selected.source, selected.profiles)}
         </div>}
       </> : <div className="guided-empty">

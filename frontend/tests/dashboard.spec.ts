@@ -45,39 +45,146 @@ function route(page: Page, path: string, data: unknown, status = 200) {
   return page.route(url => url.pathname === api + path, request => request.fulfill({ json: data, status }));
 }
 
-test('Overview uses newest-first sample and scopes counts to visible jobs', async ({ page }) => {
-  const ids = Array.from({ length: 6 }, (_, index) => `19468130-0bb6-4b43-97a7-f02f550b441${index}`);
+test.beforeEach(async ({ page }) => {
+  await route(page, '/topics', []);
+  await route(page, '/collection-requests', []);
+});
+
+test('Overview preserves request outcomes and offers scoped results and running jobs', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const requestId = 'd55c5c68-6bbc-482e-98f1-42e24e768f23';
+  const failed = { ...job, job_id: 'older-failed-job', status: 'failed', valid_count: 0 };
   await route(page, '/sources', [source]);
+  await route(page, '/collection-requests', [{
+    id: requestId, topic_name: 'Listings', keyword: 'north', status: 'partial', created_at: timestamp,
+    jobs: [{ job }, { job: failed }],
+  }]);
   await page.route(url => url.pathname === api + jobs, request => {
     const query = new URL(request.request().url()).searchParams;
+    expect(query.get('order')).toBe('newest');
+    if (query.get('status') === 'running') return request.fulfill({ json: [{ ...job, status: 'running' }] });
+    if (query.has('status')) return request.fulfill({ json: [] });
     expect(Object.fromEntries(query)).toEqual({ offset: '0', limit: '6', order: 'newest' });
-    return request.fulfill({ json: ids.map((id, index) => ({ ...job, job_id: id, valid_count: index === 5 ? 99 : 2 })) });
+    return request.fulfill({ json: [job, ...Array.from({ length: 5 }, (_, index) => ({
+      ...failed, job_id: 'job-' + index, error: { message: 'Fixture detail unavailable' },
+    }))] });
   });
   await page.route(url => url.pathname === api + '/records', request => {
-    expect(new URL(request.request().url()).searchParams.get('order')).toBe('newest');
+    const query = new URL(request.request().url()).searchParams;
+    if (!query.has('request_id')) expect(query.get('order')).toBe('newest');
     return request.fulfill({ json: [record] });
   });
   await page.goto('/');
-  const summary = page.getByRole('region', { name: 'Recent activity' });
-  await expect(summary).toContainText('latest 5 submitted jobs');
-  await expect(summary.locator('dd')).toHaveText(['10', '15', '5']);
-  const recentJobs = page.getByRole('region', { name: 'Recent collection jobs' });
+  const ledger = page.getByRole('region', { name: 'Recent collection requests' });
+  await expect(ledger.getByRole('link', { name: 'Running jobs' })).toHaveAttribute('href', jobs + '?status=running');
+  await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toHaveAttribute('href', '/collection-requests/' + requestId);
+  await expect(ledger).toContainText('2 jobs · 1 partial · 1 failed');
+  const resultLabel = ledger.getByText('Validated records', { exact: true });
+  await expect(resultLabel).toBeVisible();
+  const heading = (await resultLabel.boundingBox())!;
+  const resultCell = (await ledger.locator('.request-ledger-result').first().boundingBox())!;
+  expect(Math.abs(heading.x - resultCell.x)).toBeLessThan(1);
+  const recentJobs = page.getByRole('region', { name: 'Recent jobs' });
   await expect(recentJobs.getByRole('listitem')).toHaveCount(5);
-  await expect(recentJobs.getByRole('link', { name: new RegExp(ids[0]!) })).toHaveAttribute('href', jobs + '/' + ids[0]);
-  await expect(page.getByRole('region', { name: 'Recent accepted records' })).toContainText('North Trail');
+  await expect(recentJobs.getByRole('link', { name: new RegExp(jobId) })).toHaveAttribute('href', jobs + '/' + jobId);
+  await expect(recentJobs.getByText('Fixture detail unavailable').first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Validated records', exact: true })).toContainText('North Trail');
+
+  await ledger.getByRole('link', { name: /2 records for Listings/ }).click();
+  await expect(page).toHaveURL('/records?request_id=' + requestId);
+  await page.goBack();
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL('/records?request_id=' + requestId);
 });
 
-test('Overview shows real empty states and retries an unavailable records list', async ({ page }) => {
+test('Overview distinguishes setup, loading, and error and retries an unavailable records list', async ({ page }) => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
   await route(page, '/sources', []);
   await route(page, jobs, []);
-  await route(page, '/records', { error: { code: 'database_unavailable' } }, 503);
+  await page.route(url => url.pathname === api + '/records', async request => {
+    await gate;
+    await request.fulfill({ json: { error: { code: 'database_unavailable' } }, status: 503 });
+  });
   await page.goto('/');
-  await expect(page.getByText('No collections yet')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Recent activity' })).toHaveCount(0);
-  await expect(page.getByRole('alert')).toContainText('Backend unavailable');
+  const topicDirectory = page.getByRole('region', { name: 'Collect by topic', exact: true });
+  await expect(topicDirectory.getByText('No eligible topics yet')).toBeVisible();
+  await expect(topicDirectory.getByRole('link', { name: 'Manage sources' })).toHaveAttribute('href', '/sources');
+  await expect(page.getByText('No collection requests yet')).toBeVisible();
+  await expect(page.getByText('No running or pending jobs')).toBeVisible();
+  const records = page.getByRole('region', { name: 'Validated records', exact: true });
+  await expect(records.getByRole('status')).toHaveText('Loading recent records…');
+  release();
+  await expect(records.getByRole('alert')).toContainText('Backend unavailable');
   await route(page, '/records', []);
-  await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByText('No accepted records yet')).toBeVisible();
+  await records.getByRole('button', { name: 'Retry' }).click();
+  await expect(records.getByText('No validated records yet')).toBeVisible();
+  await expect(records.getByRole('heading')).toBeFocused();
+  const refresh = page.getByRole('button', { name: 'Refresh activity' });
+  await refresh.click();
+  await expect(page.getByText('Activity refresh finished')).toBeVisible();
+  await expect(refresh).toBeFocused();
+});
+
+test('An eligible Overview topic opens New Collection with a verified preset and unchecked sources', async ({ page }) => {
+  const category = { id: 'listings', name: 'Listings', active: true };
+  const topic = { id: 'north', category_id: category.id, name: 'North area', active: true };
+  const unavailable = { ...topic, id: 'south', name: 'South area' };
+  const binding = { id: 'binding', source_name: source.source_name, profile_version: 2, eligible: true };
+  await route(page, '/sources', []);
+  await route(page, jobs, []);
+  await route(page, '/records', []);
+  await route(page, '/categories', [category]);
+  await route(page, '/categories/' + category.id, category);
+  await route(page, '/topics', [topic, unavailable]);
+  await route(page, '/topics/' + topic.id, topic);
+  await route(page, '/topics/' + topic.id + '/bindings', [binding]);
+  await route(page, '/topics/' + unavailable.id + '/bindings', []);
+  await page.goto('/');
+  const directory = page.getByRole('region', { name: 'Collect by topic', exact: true });
+  await expect(directory.getByText('No eligible sources', { exact: true })).toBeVisible();
+  await expect(directory.getByRole('link', { name: /South area/ })).toHaveCount(0);
+  await directory.getByRole('link', { name: /North area/ }).click();
+  await expect(page).toHaveURL('/collection-requests/new?topic_id=north');
+  await expect(page.getByRole('region', { name: topic.name, exact: true })).toContainText(category.name);
+  await expect(page.getByRole('heading', { name: topic.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /Controlled listings CSV/ })).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Start topic collection' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: topic.name, exact: true })).toBeVisible();
+});
+
+test('Narrow navigation exposes operations by keyboard and restores focus on Escape', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await route(page, '/sources', []);
+  await route(page, jobs, []);
+  await route(page, '/records', []);
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  const toggle = nav.getByRole('button', { name: 'Operations' });
+  await expect(nav.getByRole('link', { name: 'New Collection' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveCount(0);
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Tab');
+  await expect(nav.getByRole('link', { name: 'Sources' })).toBeFocused();
+  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveCSS('outline-style', 'solid');
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/sources');
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(toggle).toHaveAttribute('data-current', 'true');
+  await page.goBack();
+  await expect(nav.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });
 
 test('System theme reacts, and manual light and dark persist across routes and reloads', async ({ page }) => {
@@ -121,7 +228,7 @@ test('Guided collection offers only eligible sources and recovers a lost respons
   });
   await route(page, jobs + '/' + jobId, job);
   await route(page, jobs + '/' + jobId + '/events', [{ ...job, event_id: jobId, occurred_at: timestamp, kind: 'PARTIAL' }]);
-  await route(page, jobs + '/' + jobId + '/evidence', null);
+  await route(page, jobs + '/' + jobId + '/evidence-pages', []);
   await route(page, '/records', [record]);
   await page.goto(jobs + '/new');
   await expect(page.getByRole('radio', { name: /HTML pages/ })).toBeDisabled();
@@ -132,9 +239,10 @@ test('Guided collection offers only eligible sources and recovers a lost respons
   await expect(sources.locator('option')).toHaveCount(2);
   await sources.selectOption(sourceId);
   await expect(page.getByRole('combobox', { name: 'Profile Version' }).locator('option')).toHaveCount(2);
-  await expect(page.getByRole('region', { name: 'Version 2' })).toContainText('title (from Name)');
+  await page.getByText('Profile mapping and collection rules').click();
+  await expect(page.getByText('title (from Name)', { exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'CSV content' }).fill('Name\nNorth Trail\n');
-  await page.getByRole('button', { name: 'Start Collection', exact: true }).click();
+  await page.getByRole('button', { name: 'Submit job', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('did not confirm');
   await expect(sources).toBeDisabled();
   await page.getByRole('button', { name: 'Retry submission' }).click();
@@ -161,11 +269,11 @@ test('Fields to Display handles mixed payloads without API writes or refetching'
   page.on('request', request => { if (request.url().includes('/api/v1/')) methods.push(request.method()); });
   await route(page, '/sources', [source]);
   await route(page, jobs + '/' + jobId, job);
-  await route(page, '/records', [record, { ...record, record_id: 'another', payload: { price: 12, note: '' } }]);
+  await route(page, '/records', [record, { ...record, record_id: '9ab8e00c-2b2f-74c8-0836-8016b42ac249', payload: { price: 12, note: '' } }]);
   await page.goto('/records?job_id=' + jobId);
-  const table = page.getByRole('table');
-  await expect(table.getByRole('cell', { name: '0', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: 'false', exact: true })).toBeVisible();
+  const ledger = page.getByRole('list', { name: 'Persisted generic records' });
+  await expect(ledger.getByText('0', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('false', { exact: true })).toBeVisible();
   const quality = page.getByRole('region', { name: 'Quality for this job' });
   await expect(quality.locator('dd strong')).toHaveText(['2', '3', '1']);
   await expect(quality.getByRole('link', { name: 'View quarantine' }))
@@ -174,18 +282,18 @@ test('Fields to Display handles mixed payloads without API writes or refetching'
   await page.getByText('Fields to Display').click();
   await page.getByRole('checkbox', { name: 'price', exact: true }).check();
   await page.getByRole('checkbox', { name: 'note', exact: true }).check();
-  await expect(table.getByRole('cell', { name: '12', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: 'Null', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: '(empty)', exact: true })).toBeVisible();
-  await expect(table.getByRole('cell', { name: '—', exact: true })).toHaveCount(3);
-  await expect(table.getByRole('link', { name: 'View record · listing' })).toHaveAttribute('href', '/records/another');
+  await expect(ledger.getByText('12', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('Null', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('(empty)', { exact: true })).toBeVisible();
+  await expect(ledger.getByText('Missing', { exact: true })).toHaveCount(3);
+  await expect(ledger.getByRole('button', { name: 'Inspect listing · 9ab8e00c' })).toBeVisible();
   await page.getByRole('button', { name: 'Reset fields' }).click();
-  await expect(table.getByRole('columnheader', { name: 'price' })).toHaveCount(0);
-  for (const field of ['title', 'count', 'active']) {
+  await expect(page.getByRole('checkbox', { name: 'note', exact: true })).not.toBeChecked();
+  for (const field of ['price', 'count', 'active']) {
     await page.getByRole('checkbox', { name: field, exact: true }).uncheck();
   }
-  await expect(table.getByRole('link', { name: 'listing · View record' }).first())
-    .toHaveAttribute('href', '/records/' + record.record_id);
+  await expect(ledger.getByText('No preview fields selected')).toHaveCount(2);
+  await expect(ledger.getByRole('button', { name: 'Inspect North Trail' })).toBeVisible();
   expect(methods).toEqual(before);
   expect(methods.every(method => method === 'GET')).toBe(true);
 });
@@ -210,17 +318,13 @@ for (const [width, theme] of [[1440, 'light'], [390, 'dark']] as const) {
     await page.goto(jobs + '/new');
     await page.getByRole('radio', { name: /CSV datasets/ }).check();
     await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(sourceId);
-    await expect(page.getByRole('button', { name: 'Start Collection', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Submit job', exact: true })).toBeVisible();
     await audit();
     await page.goto('/records?job_id=' + jobId);
     await expect(page.getByRole('region', { name: 'Quality for this job' }).locator('dd strong')).toHaveText(['2', '3', '1']);
-    const recordsTable = page.getByRole('table', { name: 'Persisted generic records' });
-    await expect(recordsTable.getByRole('columnheader').first()).toHaveText('title');
-    const recordLink = recordsTable.getByRole('link', { name: 'North Trail · View record' });
-    await expect(recordLink).toBeInViewport();
-    const typeCell = recordsTable.getByRole('rowheader');
-    expect((await typeCell.boundingBox())?.width).toBeGreaterThanOrEqual(120);
-    expect((await typeCell.boundingBox())?.height).toBeLessThan(96);
+    const ledger = page.getByRole('list', { name: 'Persisted generic records' });
+    await expect(ledger.getByRole('button', { name: 'Inspect North Trail' })).toBeInViewport();
+    await expect(ledger.getByText(/listing · Schema/)).toBeVisible();
     await audit();
   });
 }

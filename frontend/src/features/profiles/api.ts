@@ -5,6 +5,7 @@ import type { CollectionInput } from '../sources/collectionInput';
 
 export const valueTypes = ['string', 'integer', 'number', 'boolean'] as const;
 export const selectorTypes = ['css', 'xpath'] as const;
+export const paginationLimits = [1, 2, 3, 4, 5] as const;
 type ValueType = typeof valueTypes[number];
 export type SelectorType = typeof selectorTypes[number];
 export interface RecordField { name: string; value_type: ValueType; required: boolean }
@@ -14,9 +15,28 @@ interface Extraction {
   mode: 'text' | 'attribute'; attribute: string | null; resolve_url: boolean;
 }
 interface BaseConfiguration { config_schema_version: '1'; record_schema: Schema }
+interface NextLinkPagination { next_link_selector: string; max_pages: number }
+export interface KeywordSearch {
+  origin: string; path: string; keyword_parameter: string;
+  result_item_selector: string; detail_link_selector: string;
+  pagination?: NextLinkPagination | null;
+  max_detail_pages: number; max_requests: number;
+  max_redirects?: number; max_body_bytes?: number; timeout_seconds?: number; max_seconds?: number; max_attempts?: number;
+}
+export const articleFields = {
+  title: 'Article title', canonical_url: 'Canonical URL', stable_id: 'Stable article ID',
+  author: 'Author', published_at: 'Publication timestamp', summary: 'Summary', body: 'Body',
+} as const;
+export type ArticleField = keyof typeof articleFields;
+export type ArticleMapping = Record<'title', string> & Partial<Record<ArticleField, string | null>>;
 export type Configuration = BaseConfiguration & (
   | { adapter_type: 'csv'; columns: { name: string; column: string }[] }
-  | { adapter_type: 'web'; selector_type: SelectorType; item_selector: string; fields: Extraction[] }
+  | {
+    adapter_type: 'web'; selector_type: SelectorType; item_selector: string; fields: Extraction[];
+    pagination?: NextLinkPagination;
+    search?: KeywordSearch;
+    article?: ArticleMapping;
+  }
 );
 export interface Profile extends ProfileVersion {
   revision: number;
@@ -60,9 +80,9 @@ export const saveProfile = (source: string, id: string, configuration: Configura
   expectedRevision: number, signal: AbortSignal) =>
   apiPut<Profile>(version(source, id), { configuration, expected_revision: expectedRevision }, signal);
 export const previewProfile = (source: string, id: string, sample: Sample, signal: AbortSignal) =>
-  apiPost<Candidate[]>(version(source, id) + '/preview', sample, signal);
+  apiPost<Candidate[]>(version(source, id) + '/preview', sample, signal, 'keyword' in sample ? 50_000 : undefined);
 export const validateProfile = (source: string, id: string, sample: Sample, signal: AbortSignal) =>
-  apiPost<Report>(version(source, id) + '/validate', sample, signal);
+  apiPost<Report>(version(source, id) + '/validate', sample, signal, 'keyword' in sample ? 50_000 : undefined);
 export const approveProfile = (source: string, id: string, report: Report, approver: string, signal: AbortSignal) =>
   apiPost<Profile>(version(source, id) + '/approve', {
     approver, report_id: report.report_id, config_hash: report.config_hash,

@@ -208,9 +208,13 @@ class EventRow(Base):
 class EvidenceRow(Base):
     __tablename__ = "raw_evidence"
     __table_args__ = (
-        sa.UniqueConstraint("job_id", name="uq_evidence_job"),
+        sa.UniqueConstraint("job_id", "page_number", name="uq_evidence_job_page"),
         sa.UniqueConstraint("job_id", "id", name="uq_evidence_job_id"),
-        sa.UniqueConstraint("run_id", name="uq_evidence_run"),
+        sa.CheckConstraint("page_number > 0", name="ck_evidence_page_number"),
+        sa.CheckConstraint(
+            "capture_kind IN ('input', 'search', 'detail')",
+            name="ck_evidence_capture_kind",
+        ),
         sa.CheckConstraint(
             "adapter_type IN ('web', 'csv')", name="ck_evidence_adapter"
         ),
@@ -219,6 +223,8 @@ class EvidenceRow(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     job_id: Mapped[UUID] = mapped_column(sa.ForeignKey("collection_jobs.id"))
     run_id: Mapped[UUID]
+    page_number: Mapped[int] = mapped_column(server_default="1")
+    capture_kind: Mapped[str] = mapped_column(server_default="input")
     storage_reference: Mapped[str] = mapped_column(sa.String(42))
     captured_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True))
     content_type: Mapped[str | None] = mapped_column(sa.Text)
@@ -273,9 +279,10 @@ class QuarantineRow(EvidenceResult, Base):
         ),
         sa.UniqueConstraint(
             "job_id",
+            "evidence_id",
             "position_kind",
             "position_index",
-            name="uq_quarantine_job_position",
+            name="uq_quarantine_evidence_position",
         ),
         sa.CheckConstraint(
             "position_kind IN ('html_item', 'csv_row') AND position_index > 0",

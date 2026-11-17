@@ -3,6 +3,7 @@ import type { CollectionInput } from '../sources/collectionInput';
 
 export const jobStatuses = ['pending', 'running', 'succeeded', 'partial', 'failed'] as const;
 export type JobStatus = (typeof jobStatuses)[number];
+export type JobOrder = 'oldest' | 'newest';
 
 export interface CollectionError {
   code: string;
@@ -74,7 +75,7 @@ export async function createJob(input: JobInput & { request_key: string }, signa
   return job;
 }
 
-export function listJobs(pageSize: number, offset: number, status: JobStatus | '', signal: AbortSignal, order?: 'newest') {
+export function listJobs(pageSize: number, offset: number, status: JobStatus | '', signal: AbortSignal, order?: JobOrder) {
   const query = new URLSearchParams({ limit: String(pageSize + 1), offset: String(offset) });
   if (order) query.set('order', order);
   if (status) query.set('status', status);

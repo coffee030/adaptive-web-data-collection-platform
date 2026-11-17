@@ -1,10 +1,48 @@
 import { ApiError } from '../../lib/api';
-import { isUncertainWrite } from '../../lib/requestIntent';
+import { forgetRequestIntent, isUncertainWrite, prepareRequestIntent } from '../../lib/requestIntent';
 import type { JobInput } from './api';
 
 export interface Submission {
   body: JobInput & { request_key: string };
   storageKey?: string;
+}
+
+const outstandingKey = 'collection-job:unconfirmed';
+let outstanding: Submission | undefined;
+
+function storedFingerprint() {
+  try { return sessionStorage.getItem(outstandingKey); }
+  catch { return null; }
+}
+
+export function pendingJobSubmission() {
+  return { submission: outstanding, requiresExactInput: !outstanding && !!storedFingerprint() };
+}
+
+export async function prepareJobSubmission(input: JobInput) {
+  const fingerprint = storedFingerprint();
+  const intent = await prepareRequestIntent('collection-job', input);
+  if (fingerprint && intent.storageKey !== fingerprint) {
+    forgetRequestIntent(intent);
+    return undefined;
+  }
+  return intent;
+}
+
+export function retainJobSubmission(intent: Submission) {
+  outstanding = intent;
+  if (intent.storageKey) {
+    try { sessionStorage.setItem(outstandingKey, intent.storageKey); }
+    catch { /* The open workspace still holds the original submission in memory. */ }
+  }
+}
+
+export function resolveJobSubmission(intent: Submission) {
+  if (outstanding !== intent) return;
+  outstanding = undefined;
+  forgetRequestIntent(intent);
+  try { sessionStorage.removeItem(outstandingKey); }
+  catch { /* Storage may be unavailable for this tab. */ }
 }
 
 export function submissionError(error: unknown): { message: string; uncertain: boolean } {
@@ -13,7 +51,7 @@ export function submissionError(error: unknown): { message: string; uncertain: b
       ? 'The request timed out.' : 'The backend did not confirm the submission.';
     const detail = error instanceof ApiError && error.status
       ? ` The service returned HTTP ${error.status}.` : '';
-    return { message: message + detail + ' Retry this submission to check for the original Job.', uncertain: true };
+    return { message: message + detail + ' Retry the original submission before changing the Source, Profile Version, or input.', uncertain: true };
   }
   if (!(error instanceof ApiError)) throw error;
   let message: string;

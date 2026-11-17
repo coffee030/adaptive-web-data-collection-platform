@@ -38,24 +38,46 @@ export function apiGet<T>(path: string, signal: AbortSignal) {
   return request<T>(path, signal);
 }
 
-export function apiPost<T>(path: string, body: object, signal: AbortSignal) {
-  return sendJson<T>('POST', path, body, signal);
+export function apiAttachment(path: string, signal: AbortSignal, mediaType: string) {
+  return request<Blob>(path, signal, { headers: { Accept: mediaType } }, 30_000, response => {
+    if (response.headers.get('Content-Type')?.split(';')[0] !== mediaType) {
+      throw new ApiError('invalid-response');
+    }
+    return response.blob();
+  });
+}
+
+export function apiPost<T>(path: string, body: object, signal: AbortSignal, requestTimeout?: number) {
+  return sendJson<T>('POST', path, body, signal, requestTimeout);
+}
+
+export function apiPostWithStatus<T>(path: string, body: object, signal: AbortSignal) {
+  return sendJson<{ status: number; data: T }>('POST', path, body, signal, undefined,
+    async response => ({ status: response.status, data: await response.json() }));
 }
 
 export function apiPut<T>(path: string, body: object, signal: AbortSignal) {
   return sendJson<T>('PUT', path, body, signal);
 }
 
-function sendJson<T>(method: 'POST' | 'PUT', path: string, body: object, signal: AbortSignal) {
+export function apiPatch<T>(path: string, body: object, signal: AbortSignal) {
+  return sendJson<T>('PATCH', path, body, signal);
+}
+
+function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: object, signal: AbortSignal,
+  requestTimeout?: number, read?: (response: Response) => Promise<T>,
+) {
   return request<T>(path, signal, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, requestTimeout, read);
 }
 
-async function request<T>(path: string, signal: AbortSignal, init?: RequestInit): Promise<T> {
-  const timeout = AbortSignal.timeout(timeoutMs);
+async function request<T>(path: string, signal: AbortSignal, init?: RequestInit, requestTimeout = timeoutMs,
+  read: (response: Response) => Promise<T> = response => response.json(),
+): Promise<T> {
+  const timeout = AbortSignal.timeout(requestTimeout);
   const combinedSignal = AbortSignal.any([signal, timeout]);
   try {
     const response = await fetch(`${baseUrl}${path}`, {
@@ -66,8 +88,7 @@ async function request<T>(path: string, signal: AbortSignal, init?: RequestInit)
     });
     if (!response.ok) throw await responseError(response);
     try {
-      const body: T = await response.json();
-      return body;
+      return await read(response);
     } catch {
       throw new ApiError('invalid-response');
     }

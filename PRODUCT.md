@@ -27,7 +27,7 @@ React／TypeScript 前端配合 FastAPI、Pydantic、SQLAlchemy、Alembic、Post
 ## Capabilities and Constraints
 
 - 已有 Source／Profile、Job、Record、quarantine 和 Evidence Metadata API，Job 由 Dispatcher 派送至 Celery Worker。
-- Core 採可信本機模式。HTML 來源限 loopback 和已隔離的 Compose fixture，CSV 輸入限已授權的 dataset。Approval 的 operator 欄位供本機 audit。
+- Core 採可信本機模式。已登記及授權的公開 HTTPS origin 可用核准 Profile 執行靜態 HTML 關鍵字搜尋及詳情擷取。受控 HTTP fixture 和已授權的 CSV dataset 繼續可用。Approval 的 operator 欄位供本機 audit。 [M7 Controlled Website Collection](docs/contracts/M7-controlled-website-collection.md)
 - PostgreSQL 保存 metadata 與 lineage，原始證據檔案保留在本機 storage。UI 顯示可用的 metadata，並依現有 API 支援決定可提供的動作。
 - ML／Sentiment 及 IA／KOL 為獨立下游工作。IA 平台、資料來源和 matching requirements 尚待確認。
 

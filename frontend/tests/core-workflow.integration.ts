@@ -9,6 +9,7 @@ import type { CollectionJob, ExecutionEvent, JobInput } from '../src/features/co
 import type { Profile, Report } from '../src/features/profiles/api';
 import type { EvidenceMetadata, GenericRecord, QuarantineEntry } from '../src/features/results/api';
 import type { Source } from '../src/features/sources/api';
+import { captureM15 } from './m15Capture';
 
 const api = '/api/v1';
 const jobs = '/collection-jobs';
@@ -117,6 +118,161 @@ function jobResponse(page: Page) {
   return page.waitForResponse(reply => new URL(reply.url()).pathname === api + jobs && reply.request().method() === 'POST');
 }
 
+test('M7 browser workflow authorizes a source and traces keyword results to detail captures', async ({ page, request }) => {
+  test.setTimeout(190_000);
+  await page.goto('/sources/new');
+  await page.getByRole('textbox', { name: 'Source name' }).fill(`M7 cards ${randomUUID().slice(0, 8)}`);
+  await page.getByRole('combobox', { name: 'Adapter' }).selectOption('web');
+  await page.getByRole('textbox', { name: 'Permission reference' }).fill('M7 controlled fixture');
+  await page.getByRole('textbox', { name: 'Allowed origins' }).fill(origin);
+  await page.getByRole('textbox', { name: /Allowed path prefixes/ }).fill(`${origin}/m7/cards`);
+  await page.getByRole('button', { name: 'Create source' }).click();
+  await page.getByRole('button', { name: 'Review authorization' }).click();
+  await page.getByRole('button', { name: 'Authorize Source access' }).click();
+  await expect(page.getByRole('button', { name: 'Review revocation' })).toBeVisible();
+  await page.getByRole('link', { name: 'Create draft', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Record type' }).fill('search_fixture');
+  await page.getByRole('combobox', { name: 'Collection mode' }).selectOption('search');
+  await page.getByRole('textbox', { name: 'Search path' }).fill('/m7/cards/search');
+  await page.getByRole('textbox', { name: 'Search result item selector' }).fill('li.result');
+  await page.getByRole('textbox', { name: 'Detail link selector' }).fill('a.item');
+  await page.getByRole('textbox', { name: 'Detail item selector' }).fill('article');
+  await page.getByText('Pagination and request limits', { exact: true }).click();
+  await page.getByRole('textbox', { name: /Search next-link selector/ }).fill('a.next');
+  await page.getByRole('combobox', { name: 'Maximum search pages' }).selectOption('2');
+  await page.getByRole('textbox', { name: 'Output field name' }).fill('title');
+  await page.getByRole('textbox', { name: 'Field selector', exact: true }).fill('h2');
+  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+  const keyword = 'C++ & 茶#/';
+  await page.getByRole('textbox', { name: 'Sample keyword' }).fill(keyword);
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('table', { name: /Preview candidates/ })).toContainText('Alpha', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Validate sample' }).click();
+  await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('textbox', { name: 'Approver label' }).fill('M7 fixture operator');
+  await page.getByRole('checkbox', { name: /confirm approval/ }).check();
+  await page.getByRole('button', { name: 'Approve version' }).click();
+  await expect(page.getByText('Read only', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'New Collection Job', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
+  await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText('Keyword search');
+  await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText(keyword);
+  const submitted = jobResponse(page);
+  await page.getByRole('button', { name: 'Submit job', exact: true }).click();
+  const confirmation = await submitted;
+  expect(confirmation.status()).toBe(201);
+  expect(confirmation.request().postDataJSON().entry).toEqual({ adapter_type: 'web', keyword });
+  const job: CollectionJob = await confirmation.json();
+  const jobPath = `${jobs}/${job.job_id}`;
+  await expect(page.getByRole('region', { name: 'Run overview' }).getByText('Succeeded', { exact: true })).toBeVisible({ timeout: 25_000 });
+  const captures = await get<EvidenceMetadata[]>(request, jobPath + '/evidence-pages');
+  expect(captures.map(capture => capture.capture_kind)).toEqual(['search', 'search', 'detail', 'detail', 'detail']);
+  const records = await get<GenericRecord[]>(request, `/records?job_id=${job.job_id}`);
+  expect(Object.fromEntries(records.map(record => [record.payload.title, record.evidence_reference]))).toEqual({
+    Alpha: captures[2]!.evidence_id, Beta: captures[3]!.evidence_id, Bad: captures[4]!.evidence_id,
+  });
+  const evidence = page.getByRole('region', { name: 'Capture evidence' });
+  await expect(evidence.getByRole('listitem')).toHaveText([/^Search results/, /^Search results/, /^Detail/, /^Detail/, /^Detail/]);
+  await evidence.getByRole('link', { name: 'Open evidence ' + captures[2]!.evidence_id }).click();
+  await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
+  await expect(page.getByText(captures[2]!.content_hash, { exact: true })).toBeVisible();
+  await captureM15(page, 'persisted-detail-evidence');
+  await scan(page, 'm7-detail-evidence', [1440, 390]);
+  console.log(`M7 browser Job ${job.job_id}: five captures and three detail-linked records`);
+
+  for (const [query, terminal] of [['empty', 'failed'], ['detail429', 'partial']] as const) {
+    const submitted = await request.post(api + jobs, { data: {
+      source_id: job.source_id, profile_version_id: job.profile_version_id, request_key: randomUUID(),
+      entry: { adapter_type: 'web', keyword: query },
+    } });
+    expect(submitted.status()).toBe(201);
+    const next: CollectionJob = await submitted.json();
+    const path = jobs + '/' + next.job_id;
+    await page.goto(path);
+    if (query === 'detail429') {
+      await expect(page.getByText('Earliest scheduled retry (UTC)', { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('HTTP 429');
+      await captureM15(page, 'persisted-scheduled-retry');
+    }
+    await expect(page.getByRole('region', { name: 'Run overview' }).locator('.status')).toHaveText(
+      terminal === 'partial' ? 'Partial' : 'Failed', { timeout: 115_000 });
+    const final = await get<CollectionJob>(request, path);
+    const trail = await get<ExecutionEvent[]>(request, path + '/events');
+    expect(final.status).toBe(terminal);
+    expect(final.next_attempt_at).toBeNull();
+    expect(trail.at(-1)?.kind).toBe(terminal.toUpperCase());
+    if (query === 'detail429') {
+      expect(trail.filter(item => item.kind === 'RETRY_SCHEDULED')).toHaveLength(2);
+      expect(trail.filter(item => item.kind === 'CLAIMED').map(item => item.execution_attempt)).toEqual([1, 2, 3]);
+      expect(final.valid_count).toBeGreaterThan(0);
+    } else {
+      expect(final.valid_count).toBe(0);
+      await captureM15(page, 'persisted-failed');
+    }
+    console.log(`M15 ${terminal} Job ${final.job_id}, execution attempts ${final.execution_attempt}`);
+  }
+});
+
+test('M6 browser workflow approves pagination and follows page-level evidence', async ({ page, request }) => {
+  test.setTimeout(60_000);
+  const registered = await registerSource(page, 'web');
+  const authorization = await request.patch(api + registered.path + '/authorization', {
+    data: { approval_status: 'approved' },
+  });
+  expect(authorization.status()).toBe(200);
+  await page.reload();
+  await page.getByRole('link', { name: 'Create draft', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Record type' }).fill('paginated_listing');
+  await page.getByRole('textbox', { name: 'Item selector' }).fill('article');
+  await page.getByText('Pagination and request limits', { exact: true }).click();
+  await page.getByRole('textbox', { name: /Next-link selector/ }).fill('a.next');
+  await page.getByRole('combobox', { name: 'Maximum HTML pages' }).selectOption('3');
+  await page.getByRole('textbox', { name: 'Output field name' }).fill('title');
+  await page.getByRole('textbox', { name: 'Field selector', exact: true }).fill('h2');
+  await page.getByRole('combobox', { name: 'Identity field' }).selectOption('0');
+  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+  const sample = page.getByRole('textbox', { name: 'Document path' });
+  await sample.fill('/pagination/1');
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('table', { name: /Preview candidates/ })).toContainText('Alpha');
+  await page.getByRole('button', { name: 'Validate sample' }).click();
+  await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Approver label' }).fill('M6 fixture operator');
+  await page.getByRole('checkbox', { name: /confirm approval/ }).check();
+  await page.getByRole('button', { name: 'Approve version' }).click();
+  await expect(page.getByText('Read only', { exact: true })).toBeVisible();
+  await expect(page.getByText('Next-link selector (css)', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'New Collection Job', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Document path' }).fill('/pagination/1');
+  const submitted = jobResponse(page);
+  await page.getByRole('button', { name: 'Submit job', exact: true }).click();
+  const confirmation = await submitted;
+  expect(confirmation.status()).toBe(201);
+  const job: CollectionJob = await confirmation.json();
+  const jobPath = `${jobs}/${job.job_id}`;
+  await expect(page).toHaveURL(jobPath);
+  await expect(page.getByRole('region', { name: 'Run overview' }).getByText('Partial', { exact: true })).toBeVisible();
+  const captureList = page.getByRole('region', { name: 'Capture evidence' });
+  await expect(captureList.locator('li strong')).toHaveText(['HTML input · Page 1', 'HTML input · Page 2', 'HTML input · Page 3']);
+  const captures = await get<EvidenceMetadata[]>(request, jobPath + '/evidence-pages');
+  const third = captures[2]!;
+  await captureList.getByRole('link', { name: 'Open evidence ' + third.evidence_id }).click();
+  await expect(page.getByRole('heading', { name: 'Evidence Metadata' })).toBeVisible();
+  await expect(page.getByText(origin + '/pagination/3', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(third.content_hash, { exact: true })).toBeVisible();
+  await page.goBack();
+  await page.getByRole('link', { name: 'View quarantine' }).click();
+  await expect(page.getByRole('heading', { name: 'HTML item 2', exact: true })).toHaveCount(2);
+  for (const evidence of captures.slice(1)) {
+    await expect(page.getByRole('link', { name: 'Open evidence ' + evidence.evidence_id })).toBeVisible();
+  }
+  const records = await get<GenericRecord[]>(request, `/records?job_id=${job.job_id}`);
+  expect(Object.fromEntries(records.map(record => [record.payload.title, record.evidence_reference]))).toEqual({
+    Alpha: captures[0]!.evidence_id, Beta: captures[1]!.evidence_id, Gamma: third.evidence_id,
+  });
+  console.log(`M6 browser Job ${job.job_id}: three evidence pages, three records and two quarantine entries`);
+});
+
 for (const adapter of ['web', 'csv'] as const) {
   test(`Core ${adapter} workflow registers, configures, approves, submits and traces a real Job`, async ({ page, request, baseURL }) => {
     test.setTimeout(180_000);
@@ -171,17 +327,19 @@ for (const adapter of ['web', 'csv'] as const) {
     expect(approved.approval_status).toBe('approved');
     const put = await request.put(api + profile.apiPath, { data: { configuration: approved.configuration } });
     expect(put.status()).toBe(409);
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection' }).click();
+    await page.getByRole('link', { name: 'Single-source collection and CSV import' }).click();
     await page.getByRole('radio', { name: web ? /HTML pages/ : /CSV datasets/ }).check();
     await page.getByRole('combobox', { name: '2. Select a source' }).selectOption(source.source_id);
     await expect(page.getByRole('combobox', { name: 'Profile Version' })).toHaveValue(approved.profile_version_id);
-    await expect(page.getByRole('region', { name: 'Version 1' })).toContainText('Extraction Fields');
+    await page.getByText('Profile mapping and collection rules').click();
+    await expect(page.getByText('Extraction Fields', { exact: true })).toBeVisible();
     const input = page.getByRole('textbox', { name: web ? 'Document path' : 'CSV content' });
     await input.fill(web ? '/table.html' : csv);
     await scan(page, web ? 'job-form-html' : 'job-form-csv');
     await page.setViewportSize({ width: 1280, height: 900 });
     const response = jobResponse(page);
-    await page.getByRole('button', { name: 'Start Collection', exact: true }).click();
+    await page.getByRole('button', { name: 'Submit job', exact: true }).click();
     const created = await response;
     expect(created.status()).toBe(201);
     const accepted: CollectionJob = await created.json();
@@ -225,17 +383,19 @@ for (const adapter of ['web', 'csv'] as const) {
     expect(records).toHaveLength(2);
     expect(new Set(records.map(item => item.payload.title))).toEqual(new Set(web ? ['River Walk', 'Lake View'] : ['North Trail', 'River Walk']));
     const record = records[0]!;
-    const recordsTable = page.getByRole('table', { name: 'Persisted generic records' });
-    await expect(recordsTable.getByRole('row')).toHaveCount(3);
+    const recordsTable = page.getByRole('list', { name: 'Persisted generic records' });
+    await expect(recordsTable.getByRole('listitem')).toHaveCount(2);
     const quality = page.getByRole('region', { name: 'Quality for this job' });
     await expect(quality.locator('dd strong')).toHaveText(web ? ['2', '0', '0'] : ['2', '3', '1']);
     await page.getByText('Fields to Display').click();
+    await page.getByRole('checkbox', { name: 'title', exact: true }).check();
     await page.getByRole('checkbox', { name: 'title', exact: true }).uncheck();
-    await expect(recordsTable.getByRole('columnheader', { name: 'title' })).toHaveCount(0);
+    await expect(recordsTable.getByText('title', { exact: true })).toHaveCount(0);
     expect(await get(request, recordsPath)).toEqual(records);
     await page.getByRole('checkbox', { name: 'title', exact: true }).check();
     if (!web) await scan(page, 'records');
-    await recordsTable.locator(`a[href="/records/${record.record_id}"]`).click();
+    await recordsTable.locator('#inspect-record-' + record.record_id).click();
+    await page.getByRole('link', { name: 'Open Record Details' }).click();
     const json = page.getByRole('region', { name: 'Record payload JSON' });
     await expect(json).toBeVisible();
     expect(JSON.parse((await json.textContent())!)).toEqual(record.payload);
@@ -245,7 +405,10 @@ for (const adapter of ['web', 'csv'] as const) {
     const evidence = await get<EvidenceMetadata>(request, evidencePath);
     await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
     const capturedInput = body.entry.adapter_type === 'csv' ? body.entry.content : bytes;
-    expect(evidence.content_hash).toBe(createHash('sha256').update(capturedInput).digest('hex'));
+    // Windows checkouts may use CRLF while the fixture image was built from an LF checkout.
+    const representations = body.entry.adapter_type === 'web'
+      ? [capturedInput, bytes.toString('utf8').replace(/\r\n/g, '\n')] : [capturedInput];
+    expect(representations.map(value => createHash('sha256').update(value).digest('hex'))).toContain(evidence.content_hash);
     expect(evidence.profile_version_id).toBe(confirmed.profile_version_id);
     expect(quarantine.every(entry => entry.evidence_reference === evidence.evidence_id)).toBe(true);
     if (!web) await scan(page, 'evidence');
@@ -256,6 +419,30 @@ for (const adapter of ['web', 'csv'] as const) {
 
     if (!web && project) {
       const compose = isolatedCompose();
+      compose('stop', 'redis');
+      let dispatchCase: CollectionJob;
+      try {
+        const staged = await request.post(api + jobs, { data: { ...body, request_key: randomUUID() } });
+        expect(staged.status()).toBe(201);
+        dispatchCase = await staged.json();
+        await page.goto(jobs + '/' + dispatchCase!.job_id);
+        await expect(page.getByText('A previous broker publication could not be confirmed.', { exact: false }))
+          .toBeVisible({ timeout: 25_000 });
+        const pending = await get<CollectionJob>(request, jobs + '/' + dispatchCase!.job_id);
+        expect(pending.status).toBe('pending');
+        expect(pending.execution_attempt).toBe(0);
+        expect(pending.dispatch_attempts).toBeGreaterThanOrEqual(1);
+        expect((await get<ExecutionEvent[]>(request, jobs + '/' + pending.job_id + '/events')).map(event => event.kind))
+          .toContain('DISPATCH_FAILED');
+        await captureM15(page, 'persisted-dispatch-failure');
+      } finally {
+        compose('start', '--wait', 'redis');
+      }
+      await expect(page.getByRole('region', { name: 'Run overview' }).locator('.status')).toHaveText('Partial', { timeout: 40_000 });
+      const recoveredDispatch = await get<CollectionJob>(request, jobs + '/' + dispatchCase!.job_id);
+      expect(recoveredDispatch.dispatch_error_code).toBeNull();
+      expect(recoveredDispatch.execution_attempt).toBe(1);
+      console.log('M15 broker recovery', recoveredDispatch.job_id, recoveredDispatch.dispatch_attempts);
       const before = [sourcePath, profile.apiPath, jobPath, jobPath + '/events', recordsPath,
         jobPath + '/quarantine', evidencePath];
       const snapshot = await Promise.all(before.map(route => get(request, route)));
@@ -300,8 +487,8 @@ for (const adapter of ['web', 'csv'] as const) {
       console.log('M4-E restart and real replay', confirmed.job_id, recoveredJob.job_id);
     }
     await page.goto('/');
-    await expect(page.getByRole('region', { name: 'Recent collection jobs' })).toContainText(registered.name);
-    const latest = page.getByRole('region', { name: 'Recent accepted records' });
+    await expect(page.getByRole('region', { name: 'Recent jobs', exact: true })).toContainText(registered.name);
+    const latest = page.getByRole('region', { name: 'Validated records', exact: true });
     await expect(latest).toContainText(web ? 'River Walk' : 'North Trail');
     if (!web) await scan(page, 'dashboard');
     console.log('M4-E acceptance', adapter, confirmed.job_id, confirmed.created_at, confirmed.finished_at,
@@ -343,5 +530,5 @@ test('real Job API rejects pending access, draft versions and unauthorized datas
   expect(refused.status()).toBe(403);
   expect((await refused.json()).error.code).toBe('source_not_approved');
   await expect(page.getByRole('alert')).toContainText('Source access is no longer approved');
-  await expect(page.getByRole('heading', { name: 'New Collection', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Single-source collection and CSV import' })).toBeVisible();
 });

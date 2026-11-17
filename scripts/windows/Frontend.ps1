@@ -67,6 +67,7 @@ function Start-Frontend($Node) {
         API_PROXY_TARGET = "http://127.0.0.1:$($Config.API_PORT)"
         VITE_API_BASE_URL = '/api/v1'
         LOCAL_PROFILE_APPROVAL = $Config.LOCAL_PROFILE_APPROVAL
+        PLATFORM_SYNTHETIC_DEMO = if ($DemoMode) { '1' } else { '0' }
         NODE_OPTIONS = $null
         NODE_PATH = $null
     }
@@ -112,7 +113,7 @@ function Start-Frontend($Node) {
     return $true
 }
 
-function Open-PlatformBrowser($Url) {
+function Open-PlatformBrowser($Url, [switch]$Required) {
     try {
         Start-Process -FilePath $Url -ErrorAction Stop
         Write-Step '[PASS] Sent the URL to your default browser.'
@@ -120,6 +121,6 @@ function Open-PlatformBrowser($Url) {
         try {
             Stop-WithError 'WEB-005' 'Browser Did Not Open' 'Windows could not open the platform URL automatically.' `
                 'The default browser may be missing or its URL association may need repair.' @('Copy the URL below into your browser.') 'Automatic opening failed.'
-        } catch { if (!$_.Exception.Data['LauncherError']) { throw } }
+        } catch { if ($Required -or !$_.Exception.Data['LauncherError']) { throw } }
     }
 }

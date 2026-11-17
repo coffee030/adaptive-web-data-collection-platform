@@ -43,12 +43,19 @@ export interface GenericRecord extends ResultEntry {
   };
 }
 
+export interface RecordDetails extends GenericRecord {
+  request_id: string | null;
+  article_id: string | null;
+}
+
 export interface QuarantineEntry extends ResultEntry {
   problems: RecordProblem[];
 }
 
 export interface EvidenceMetadata extends Lineage {
   evidence_id: string;
+  page_number: number;
+  capture_kind?: 'input' | 'search' | 'detail';
   run_id: string;
   config_hash: string;
   captured_at: string;
@@ -63,34 +70,44 @@ export interface EvidenceMetadata extends Lineage {
 export const recordsPath = '/records';
 export const evidencePath = '/evidence';
 export const recordPath = (id: string) => `${recordsPath}/${encodeURIComponent(id)}`;
-export const evidenceDetailPath = (id: string) => `${evidencePath}/${encodeURIComponent(id)}`;
+export function evidenceDetailPath(id: string, requestId?: string | null) {
+  const path = `${evidencePath}/${encodeURIComponent(id)}`;
+  return requestId ? path + '?' + new URLSearchParams({ request_id: requestId }) : path;
+}
 export const quarantinePath = (jobId: string) => `${jobPath(jobId)}/quarantine`;
 
 export function recordsForJob(jobId: string) {
   return `${recordsPath}?${new URLSearchParams({ job_id: jobId })}`;
 }
 
+export function recordsForRequest(requestId: string) {
+  return `${recordsPath}?${new URLSearchParams({ request_id: requestId })}`;
+}
+
 function pageQuery(pageSize: number, offset: number) {
   return new URLSearchParams({ limit: String(pageSize + 1), offset: String(offset) });
 }
 
-export function listRecords(jobId: string, pageSize: number, offset: number, signal: AbortSignal, order?: 'newest') {
+export function listRecords(jobId: string, pageSize: number, offset: number, signal: AbortSignal,
+  { order, requestId }: { order?: 'newest' | 'oldest'; requestId?: string } = {},
+) {
   const query = pageQuery(pageSize, offset);
   if (order) query.set('order', order);
   if (jobId) query.set('job_id', jobId);
+  if (requestId) query.set('request_id', requestId);
   return apiGet<GenericRecord[]>(`${recordsPath}?${query}`, signal);
 }
 
 export function getRecord(id: string, signal: AbortSignal) {
-  return apiGet<GenericRecord>(recordPath(id), signal);
+  return apiGet<RecordDetails>(recordPath(id) + '?include_lineage=true', signal);
 }
 
 export function getEvidence(id: string, signal: AbortSignal) {
   return apiGet<EvidenceMetadata>(evidenceDetailPath(id), signal);
 }
 
-export function getJobEvidence(id: string, signal: AbortSignal) {
-  return apiGet<EvidenceMetadata | null>(`${jobPath(id)}/evidence`, signal);
+export function listJobEvidence(id: string, signal: AbortSignal) {
+  return apiGet<EvidenceMetadata[]>(`${jobPath(id)}/evidence-pages`, signal);
 }
 
 export function listQuarantine(id: string, pageSize: number, offset: number, signal: AbortSignal) {

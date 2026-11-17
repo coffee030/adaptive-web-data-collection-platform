@@ -93,7 +93,7 @@ function Install-DockerDesktop($System) {
     finally { [IO.File]::Delete($installer) }
 }
 
-function Initialize-Docker($System) {
+function Initialize-Docker($System, [switch]$Offline) {
     $docker = Get-DockerTools
     $engine = Get-LinuxEngine $docker
     if (!(Test-LinuxEngine $engine)) {
@@ -105,7 +105,7 @@ function Initialize-Docker($System) {
         if (!$script:WSL.Available -and $engine.Reason -ne 'access denied') {
             $flag = if ($script:WSL.Outdated) { '--update' } else { '--install' }
             $arguments = if ($flag -eq '--install') { @($flag, '--no-distribution') } else { @($flag) }
-            if (Confirm-Change "WSL 2 could not be verified. Run wsl $($arguments -join ' ') with administrator approval? Windows may request a restart.") {
+            if (!$Offline -and (Confirm-Change "WSL 2 could not be verified. Run wsl $($arguments -join ' ') with administrator approval? Windows may request a restart.")) {
                 Write-Step "[INFO] Requesting Windows approval for wsl $flag."
                 try {
                     $wslSetup = Start-Process -FilePath $script:WSL.File -ArgumentList $arguments -Verb RunAs -PassThru
@@ -122,6 +122,10 @@ function Initialize-Docker($System) {
             }
         }
         if (!$docker.Desktop -and !$docker.CLI) {
+            if ($Offline) {
+                Stop-WithError 'ENV-005' 'Docker Desktop Is Missing' 'Offline Demo setup requires an installed Docker Desktop.' `
+                    'The local Desktop executable and CLI were unavailable.' @('Install Docker Desktop with the WSL 2 backend and rerun Demo setup.')
+            }
             Install-DockerDesktop $System
             $docker = Get-DockerTools
         }
@@ -195,14 +199,14 @@ function Invoke-Npm($Node, [string[]]$Arguments, $Seconds) {
     return Invoke-Tool $file $native $Seconds $Frontend -Environment $processEnv
 }
 
-function Initialize-Node {
+function Initialize-Node([switch]$Offline) {
     $node = Get-NodeTools
     if ($node.State -ne 'healthy') {
         Write-Step "[INFO] Node.js status: $($node.State) $($node.Version)."
         $id = 'OpenJS.NodeJS.22'
         $winget = Find-Application 'winget.exe' @((Join-Path $env:LOCALAPPDATA 'Microsoft/WindowsApps/winget.exe'))
         $available = $null
-        if ($winget) {
+        if ($winget -and !$Offline) {
             $query = Invoke-Tool $winget @('show', '--id', $id, '--exact', '--source', 'winget', '--versions', '--disable-interactivity') 35
             $versions = [regex]::Matches($query.Out, '(?m)^\s*(22\.\d+\.\d+)\s*$')
             $available = $versions | ForEach-Object { [version]$_.Groups[1].Value } |
@@ -236,13 +240,18 @@ function Test-FrontendDependencies($Node) {
     return $check.Code -eq 0
 }
 
-function Initialize-FrontendDependencies($Node) {
+function Initialize-FrontendDependencies($Node, [switch]$Offline) {
     if (!(Test-FrontendDependencies $Node)) {
         Write-Step '[INFO] Installing frontend dependencies from package-lock.json. This can take a few minutes.'
         $installArgs = @('ci', '--include=dev', '--include=optional', '--no-audit', '--no-fund', '--fetch-retries=1')
+        if ($Offline) { $installArgs += @('--offline', '--ignore-scripts') }
         $installed = Invoke-Npm $Node $installArgs 600
         Write-LauncherLog INFO "npm ci exit: $($installed.Code); details: $($installed.Reason)."
         if ($installed.Code -ne 0 -or !(Test-FrontendDependencies $Node)) {
+            if ($Offline) {
+                Stop-WithError 'WEB-001' 'Offline Demo Dependencies Are Unavailable' 'The locked frontend dependencies were unavailable in the local npm cache.' `
+                    $installed.Reason @('Run npm ci in frontend with package registry access, then rerun Demo setup.')
+            }
             Stop-WithError 'WEB-001' 'Frontend Dependency Installation Failed' 'The locked npm packages could not be installed and verified.' `
                 $installed.Reason @('Check network access to the package registry and available disk space.', 'Check that package.json and package-lock.json match this checkout.', 'Run Setup-Platform.bat again.') 'Attempted with npm ci.'
         }

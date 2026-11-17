@@ -9,7 +9,12 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.core.contracts import CollectionError, Contract, canonical_json
+from backend.core.contracts import (
+    MAX_JOB_ATTEMPTS,
+    CollectionError,
+    Contract,
+    canonical_json,
+)
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.persistence.models import EventRow, JobRow
 from backend.persistence.profiles import (
@@ -23,7 +28,7 @@ from .inputs import Entry, check_entry
 JobStatus = Literal["pending", "running", "succeeded", "partial", "failed"]
 TERMINAL = frozenset({"succeeded", "partial", "failed"})
 LEASE_DURATION = timedelta(seconds=90)
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = MAX_JOB_ATTEMPTS
 LOGGER = logging.getLogger(__name__)
 
 
@@ -87,6 +92,33 @@ def job_from_row(row: JobRow) -> Job:
     )
 
 
+def stage_job(
+    session: Session,
+    source_id: UUID,
+    version_id: UUID,
+    config_hash: str,
+    entry: Entry,
+    *,
+    request_key: UUID | None = None,
+) -> JobRow:
+    """Stage the Job and dispatch intent inside its caller's transaction."""
+    data = entry.model_dump(mode="json")
+    row = JobRow(
+        id=uuid4(),
+        source_id=source_id,
+        profile_version_id=version_id,
+        config_hash=config_hash,
+        request_key=request_key,
+        input_hash=hashlib.sha256(canonical_json(data)).hexdigest(),
+        input_payload=data,
+        dispatch_due_at=database_now(session),
+    )
+    session.add(row)
+    session.flush()
+    Jobs._add_event(session, row, "JOB_CREATED")
+    return row
+
+
 class Jobs:
     def __init__(self, sessions: sessionmaker[Session]):
         self.sessions = sessions
@@ -98,8 +130,6 @@ class Jobs:
         entry: Entry,
         request_key: UUID | None = None,
     ):
-        data = entry.model_dump(mode="json")
-        input_hash = hashlib.sha256(canonical_json(data)).hexdigest()
         with self.sessions.begin() as session:
             profiles = ProfileStorage(session)
             source = source_from_row(profiles.source(source_id, lock=True))
@@ -112,7 +142,10 @@ class Jobs:
                 if existing is not None:
                     if (
                         existing.profile_version_id != version_id
-                        or existing.input_hash != input_hash
+                        or existing.input_hash
+                        != hashlib.sha256(
+                            canonical_json(entry.model_dump(mode="json"))
+                        ).hexdigest()
                     ):
                         raise ProfileError(
                             "job_request_conflict",
@@ -124,20 +157,15 @@ class Jobs:
             ProfileRepository.from_snapshot(source, version).approved_for_run(
                 version.profile_version_id
             )
-            check_entry(source, entry.collection_input())
-            row = JobRow(
-                id=uuid4(),
-                source_id=source_id,
-                profile_version_id=version_id,
-                config_hash=version.config_hash,
+            check_entry(source, version.configuration, entry.collection_input())
+            row = stage_job(
+                session,
+                source_id,
+                version_id,
+                version.config_hash,
+                entry,
                 request_key=request_key,
-                input_hash=input_hash,
-                input_payload=data,
-                dispatch_due_at=database_now(session),
             )
-            session.add(row)
-            session.flush()
-            self._add_event(session, row, "JOB_CREATED")
             return job_from_row(row), True
 
     def get(self, job_id: UUID) -> Job:
@@ -257,8 +285,9 @@ class Jobs:
         delay: timedelta,
         *,
         kind: str = "RETRY_SCHEDULED",
+        attempt_limit: int | None = None,
     ) -> Job:
-        if row.execution_attempt >= MAX_ATTEMPTS:
+        if row.execution_attempt >= (attempt_limit or self.attempt_limit(session, row)):
             return self._finish(session, row, "failed", error=error)
         row.status = "pending"
         row.started_at = None
@@ -268,6 +297,14 @@ class Jobs:
         row.dispatch_due_at = row.next_attempt_at
         self._add_event(session, row, kind, error=error)
         return job_from_row(row)
+
+    @staticmethod
+    def attempt_limit(session: Session, row: JobRow) -> int:
+        profile = ProfileStorage(session).profile(row.source_id, row.profile_version_id)
+        # The pinned configuration was validated before approval. Dispatchers only
+        # need its retry bound and never take part in destination validation.
+        search = profile.configuration.get("search") or {}
+        return search.get("max_attempts", MAX_ATTEMPTS)
 
     def _finish(
         self,

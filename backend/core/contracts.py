@@ -3,9 +3,10 @@
 import hashlib
 import json
 import os
+import re
 from datetime import datetime
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from pydantic import (
     BaseModel,
@@ -29,6 +30,14 @@ Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Scalar = str | int | float | bool | None
 AdapterType = Literal["web", "csv"]
 SchemaVersion = Literal["1"]
+MAX_HTML_PAGES = 5
+MAX_DETAIL_PAGES = 10
+MAX_SEARCH_REQUESTS = 20
+MAX_SEARCH_SECONDS = 45
+MAX_SEARCH_BODY_BYTES = 1024 * 1024
+MAX_JOB_ATTEMPTS = 3
+CaptureKind = Literal["input", "search", "detail"]
+PathPrefix = Annotated[str, StringConstraints(min_length=1, max_length=512)]
 
 
 class Contract(BaseModel):
@@ -60,10 +69,35 @@ def loopback_origin(value: str) -> str:
 
 
 COMPOSE_FIXTURE_ORIGIN = "http://collection-fixture:8001"
+DNS_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+PUBLIC_HOST = re.compile(rf"(?:{DNS_LABEL}\.)+[a-z](?:[a-z0-9-]{{0,61}}[a-z0-9])?")
+
+
+def path_segments(path: str) -> tuple[str, ...]:
+    """Use the same unambiguous path interpretation for policy and transport."""
+    if (
+        not path.startswith("/")
+        or "//" in path
+        or not path.isascii()
+        or re.search(r"%(?![0-9a-fA-F]{2})", path)
+    ):
+        raise ValueError("Use an absolute URL path with valid percent escapes")
+    segments = tuple(unquote(segment, errors="strict") for segment in path.split("/"))
+    for segment in segments:
+        if segment in {".", ".."} or any(
+            char in "/\\%;?#" or ord(char) < 32 or ord(char) == 127 for char in segment
+        ):
+            raise ValueError("Ambiguous URL path segment")
+    return segments
 
 
 def controlled_origin(value: str) -> str:
     if value == COMPOSE_FIXTURE_ORIGIN and os.environ.get("M3_COMPOSE_FIXTURE") == "1":
+        return value
+    if value.startswith("https://"):
+        host = value.removeprefix("https://")
+        if len(host) > 253 or not PUBLIC_HOST.fullmatch(host):
+            raise ValueError("Use a lowercase HTTPS DNS origin on the default port")
         return value
     return loopback_origin(value)
 
@@ -76,6 +110,12 @@ class Source(Contract):
     approval_status: Literal["pending", "approved", "revoked"] = "pending"
     allowed_origins: tuple[str, ...] = ()
     allowed_datasets: tuple[Name, ...] = ()
+    allowed_paths: dict[str, tuple[PathPrefix, ...]] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    min_request_interval_ms: Annotated[int, Field(strict=True, ge=1000, le=10_000)] = (
+        Field(default=1000, exclude_if=lambda value: value == 1000)
+    )
 
     @model_validator(mode="after")
     def check_policy(self):
@@ -84,7 +124,21 @@ class Source(Contract):
                 raise ValueError("Web sources require origins only")
             for origin in self.allowed_origins:
                 controlled_origin(origin)
-        elif not self.allowed_datasets or self.allowed_origins:
+            for origin, prefixes in self.allowed_paths.items():
+                if origin not in self.allowed_origins or not 1 <= len(prefixes) <= 16:
+                    raise ValueError(
+                        "Path prefixes require a registered origin and 1–16 paths"
+                    )
+                for prefix in prefixes:
+                    path_segments(prefix)
+                    if any(ord(char) <= 32 for char in prefix) or "//" in prefix:
+                        raise ValueError("Invalid path prefix")
+        elif (
+            not self.allowed_datasets
+            or self.allowed_origins
+            or self.allowed_paths
+            or self.min_request_interval_ms != 1000
+        ):
             raise ValueError("CSV sources require dataset IDs only")
         return self
 
@@ -145,11 +199,70 @@ class ProfileConfiguration(Contract):
         return hashlib.sha256(canonical_json(self.model_dump(mode="json"))).hexdigest()
 
 
+class NextLinkPagination(Contract):
+    next_link_selector: SelectorText
+    max_pages: Annotated[int, Field(strict=True, ge=1, le=MAX_HTML_PAGES)]
+
+
+class KeywordSearch(Contract):
+    origin: Annotated[str, Field(max_length=261)]
+    path: PathPrefix
+    keyword_parameter: Annotated[
+        str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    ]
+    result_item_selector: SelectorText
+    detail_link_selector: SelectorText
+    pagination: NextLinkPagination | None = None
+    max_detail_pages: Annotated[int, Field(strict=True, ge=1, le=MAX_DETAIL_PAGES)] = 5
+    max_requests: Annotated[int, Field(strict=True, ge=3, le=MAX_SEARCH_REQUESTS)] = 12
+    max_redirects: Annotated[int, Field(strict=True, ge=0, le=2)] = 2
+    max_body_bytes: Annotated[
+        int, Field(strict=True, ge=512_000, le=MAX_SEARCH_BODY_BYTES)
+    ] = MAX_SEARCH_BODY_BYTES
+    timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=2)] = 2
+    max_seconds: Annotated[int, Field(strict=True, ge=5, le=MAX_SEARCH_SECONDS)] = (
+        MAX_SEARCH_SECONDS
+    )
+    max_attempts: Annotated[int, Field(strict=True, ge=1, le=MAX_JOB_ATTEMPTS)] = (
+        MAX_JOB_ATTEMPTS
+    )
+
+    @model_validator(mode="after")
+    def check_search_target(self):
+        controlled_origin(self.origin)
+        path_segments(self.path)
+        if "//" in self.path or any(ord(char) <= 32 for char in self.path):
+            raise ValueError(
+                "Search path must be an absolute path without a query or fragment"
+            )
+        return self
+
+
+class ArticleMapping(Contract):
+    title: Name
+    canonical_url: Name | None = None
+    stable_id: Name | None = None
+    author: Name | None = None
+    published_at: Name | None = None
+    summary: Name | None = None
+    body: Name | None = None
+
+
 class ExtractionConfiguration(ProfileConfiguration):
     adapter_type: Literal["web"] = "web"
     selector_type: Literal["css", "xpath"]
     item_selector: SelectorText
     fields: Annotated[tuple[ExtractionField, ...], Field(min_length=1, max_length=64)]
+    # Omitting absent pagination preserves hashes of existing approved profiles.
+    pagination: NextLinkPagination | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    search: KeywordSearch | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    article: ArticleMapping | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("fields")
     @classmethod
@@ -165,6 +278,25 @@ class ExtractionConfiguration(ProfileConfiguration):
     @model_validator(mode="after")
     def check_mappings(self):
         check_field_mapping(self.fields, self.record_schema)
+        if self.search and self.pagination:
+            raise ValueError(
+                "Configure pagination inside keyword search for a search profile"
+            )
+        if self.article:
+            if not self.search:
+                raise ValueError("Article mapping requires keyword search")
+            schema = {field.name: field for field in self.record_schema.fields}
+            for common, name in self.article.model_dump(exclude_none=True).items():
+                field = schema.get(name)
+                allowed_types = (
+                    {"string", "integer"} if common == "stable_id" else {"string"}
+                )
+                if not field or field.value_type not in allowed_types:
+                    raise ValueError(
+                        f"Article field {common} must map to an output field of the correct type"
+                    )
+            if not schema[self.article.title].required:
+                raise ValueError("The mapped article title must be required")
         return self
 
 
@@ -288,6 +420,10 @@ class EvidenceReference(Contract):
     content_hash: Sha256
     http_status: int | None = None
     content_type: str | None = None
+    page_number: Positive = 1
+    capture_kind: CaptureKind = Field(
+        default="input", exclude_if=lambda value: value == "input"
+    )
 
 
 class Provenance(Contract):
@@ -304,6 +440,9 @@ class GenericRecord(Contract):
     schema_version: SchemaVersion
     source_record_key: str | None
     payload: dict[Name, Scalar]
+    extracted_payload: dict[Name, Scalar] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     source_position: SourcePosition
     evidence_reference: Name
     provenance: Provenance
@@ -312,6 +451,9 @@ class GenericRecord(Contract):
 class RecordRejection(Contract):
     source_position: SourcePosition
     problems: tuple[RecordProblem, ...]
+    evidence_reference: Name | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CollectionRunResult(Contract):
@@ -323,3 +465,10 @@ class CollectionRunResult(Contract):
     invalid: tuple[RecordRejection, ...] = ()
     duplicates: tuple[RecordRejection, ...] = ()
     error: CollectionError | None = None
+    additional_evidence: tuple[EvidenceReference, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+
+    @property
+    def all_evidence(self) -> tuple[EvidenceReference, ...]:
+        return ((self.evidence,) if self.evidence else ()) + self.additional_evidence

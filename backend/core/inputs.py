@@ -3,12 +3,17 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from .contracts import CollectionError
+from .contracts import CaptureKind, CollectionError
 
 
 @dataclass(frozen=True)
 class WebInput:
     url: str
+
+
+@dataclass(frozen=True)
+class KeywordInput:
+    keyword: str
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,8 @@ class CapturedInput:
     requested_location: str | None = None
     captured_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     retry_after_seconds: int | None = None
+    page_number: int = 1
+    capture_kind: CaptureKind = "input"
 
 
 class InputError(ValueError):

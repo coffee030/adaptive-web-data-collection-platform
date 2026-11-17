@@ -16,6 +16,8 @@ from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
 
+from backend.application.articles import Articles
+from backend.application.collection import Catalog, CollectionRequests
 from backend.application.jobs import Jobs
 from backend.application.profiles import Profiles
 from backend.application.results import Results
@@ -30,6 +32,8 @@ from backend.persistence.database import (
     session_factory,
 )
 
+from .articles import router as articles_router
+from .collection import router as collection_router
 from .jobs import router as jobs_router
 from .profiles import router as profiles_router
 from .results import router as results_router
@@ -46,6 +50,13 @@ ERROR_STATUSES = {
     "job_not_found": 404,
     "record_not_found": 404,
     "evidence_not_found": 404,
+    "category_not_found": 404,
+    "topic_not_found": 404,
+    "binding_not_found": 404,
+    "collection_request_not_found": 404,
+    "article_not_found": 404,
+    "article_version_not_found": 404,
+    "article_observation_not_found": 404,
     "source_not_approved": 403,
     "destination_denied": 403,
     "dataset_not_allowed": 403,
@@ -60,9 +71,16 @@ ERROR_STATUSES = {
     "draft_revision_conflict": 409,
     "draft_revision_required": 428,
     "job_request_conflict": 409,
+    "collection_request_conflict": 409,
+    "duplicate_catalog_name": 409,
+    "duplicate_binding": 409,
+    "binding_ineligible": 409,
+    "topic_inactive": 409,
     "job_not_pending": 409,
     "job_not_due": 409,
     "invalid_job_transition": 409,
+    "record_export_pending": 409,
+    "record_export_limit": 413,
 }
 
 
@@ -138,6 +156,9 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         app.state.sessions = session_factory(active_engine)
         app.state.profiles = Profiles(app.state.sessions)
         app.state.jobs = Jobs(app.state.sessions)
+        app.state.catalog = Catalog(app.state.sessions)
+        app.state.collection_requests = CollectionRequests(app.state.sessions)
+        app.state.articles = Articles(app.state.sessions)
         app.state.results = Results(app.state.sessions)
         app.state.evidence = LocalEvidenceStore(evidence_root)
         try:
@@ -153,6 +174,8 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     app.add_middleware(LocalConsoleBoundary)
     app.include_router(profiles_router, prefix="/api/v1")
     app.include_router(jobs_router, prefix="/api/v1")
+    app.include_router(collection_router, prefix="/api/v1")
+    app.include_router(articles_router, prefix="/api/v1")
     app.include_router(results_router, prefix="/api/v1")
 
     @app.get("/api/v1/health", response_model=dict[str, str], tags=["health"])

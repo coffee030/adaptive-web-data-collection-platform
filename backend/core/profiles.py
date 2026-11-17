@@ -7,10 +7,13 @@ from uuid import uuid4
 
 from .contracts import (
     Configuration,
+    ExtractionConfiguration,
     ProfileValidationReport,
     Source,
     SourceProfileVersion,
 )
+from .inputs import InputError, KeywordInput
+from .search import initial_input
 
 
 class ProfileError(ValueError):
@@ -220,6 +223,13 @@ class ProfileRepository:
             raise ProfileError(
                 "adapter_mismatch", "Source and profile adapters must match"
             )
+        if isinstance(configuration, ExtractionConfiguration) and configuration.search:
+            try:
+                initial_input(source, configuration, KeywordInput("sample"))
+            except InputError as error:
+                raise ProfileError(
+                    "invalid_search_configuration", str(error)
+                ) from error
 
     def _replace(
         self, profile: SourceProfileVersion, **changes

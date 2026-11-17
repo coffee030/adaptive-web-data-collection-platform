@@ -7,7 +7,7 @@ COPY backend/experiments/scrapling_spike/requirements.txt backend/experiments/sc
 RUN pip install --no-cache-dir -r backend/requirements.txt && pip check \
     && groupadd --gid 10001 collection \
     && useradd --uid 10001 --gid 10001 --no-create-home collection \
-    && install -d -o collection -g collection /data/evidence
+    && install -d -o collection -g collection /data/evidence /data/demo-state
 COPY alembic.ini ./
 COPY backend/ backend/
 USER collection

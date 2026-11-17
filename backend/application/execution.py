@@ -15,7 +15,7 @@ from backend.core.runner import CollectionRunner
 from backend.persistence.results import publish_results
 
 from .inputs import Entry
-from .jobs import MAX_ATTEMPTS, Job, Jobs, job_from_row
+from .jobs import Job, Jobs, job_from_row
 from .profiles import Profiles
 from .retry import retry_delay
 
@@ -66,7 +66,7 @@ class JobExecutor:
         repo = ProfileRepository.from_snapshot(
             source, version, check_source_access=self.profiles._check_source_access
         )
-        return CollectionRunner(repo, self.evidence).run(
+        return CollectionRunner(repo, self.evidence, rate=self.profiles.rate).run(
             version.profile_version_id, ENTRY.validate_python(entry).collection_input()
         )
 
@@ -77,19 +77,21 @@ class JobExecutor:
             if not self.jobs.owns_attempt(session, row, job.execution_attempt):
                 return job_from_row(row)
             if (
-                status == "failed"
-                and result.error
-                and row.execution_attempt < MAX_ATTEMPTS
+                result.error
+                and (delay := retry_delay(result.error, row.execution_attempt))
+                is not None
             ):
-                delay = retry_delay(result.error, row.execution_attempt)
-                if delay is not None:
-                    if result.evidence:
+                limit = self.jobs.attempt_limit(session, row)
+                if row.execution_attempt < limit:
+                    for evidence in result.all_evidence:
                         LOGGER.info(
                             "Job %s retry left unreferenced evidence %s",
                             row.id,
-                            result.evidence.evidence_id,
+                            evidence.evidence_id,
                         )
-                    return self.jobs.retry(session, row, result.error, delay)
+                    return self.jobs.retry(
+                        session, row, result.error, delay, attempt_limit=limit
+                    )
             publish_results(session, row, result, self.evidence)
             return self.jobs._finish(
                 session,

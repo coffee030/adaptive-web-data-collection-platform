@@ -1,11 +1,14 @@
 """Verify the full Compose profile using its running API, containers and volumes."""
 
 import hashlib
+import json
 import os
 import shlex
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
+from itertools import pairwise
 from time import monotonic, sleep
 from uuid import UUID, uuid4
 
@@ -15,6 +18,8 @@ from conftest import ROOT
 from test_vertical_slice import create_approved_source, submit_job
 
 from backend.core.contracts import COMPOSE_FIXTURE_ORIGIN
+from backend.tests.m6_fixture import CONFIGURATION, PAGES, ROOT_PATH
+from backend.tests.m7_fixture import KEYWORD, search_config
 
 
 @pytest.fixture
@@ -119,6 +124,139 @@ def snapshot(client, paths):
         assert response.status_code == 200, response.text
         result[path] = response.json()
     return result
+
+
+def m7_fixture_metrics(prefix):
+    return json.loads(
+        compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "collection-fixture",
+            "python",
+            "-c",
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/m7-metrics').read().decode())",
+        )
+    )
+
+
+def test_m7_two_compose_workers_share_origin_and_preserve_detail_lineage(compose):
+    prefix, url = compose
+    origin = COMPOSE_FIXTURE_ORIGIN
+
+    with httpx2.Client(base_url=url, timeout=30, trust_env=False) as client:
+        registered = [
+            create_approved_source(
+                client,
+                {
+                    "adapter_type": "web",
+                    "allowed_origins": [origin],
+                    "allowed_paths": {origin: [f"/m7/{layout}"]},
+                },
+                search_config(origin, layout),
+                {"adapter_type": "web", "keyword": "quick"},
+            )
+            for layout in ("cards", "catalog")
+        ]
+        before = max(end for _, _, end in m7_fixture_metrics(prefix))
+        compose_command(
+            prefix,
+            "up",
+            "-d",
+            "--no-build",
+            "--no-recreate",
+            "--scale",
+            "worker=2",
+            "worker",
+        )
+        try:
+            workers = compose_command(
+                prefix, "ps", "--status", "running", "--quiet", "worker"
+            ).splitlines()
+            assert len(workers) == 2
+            jobs = [
+                submit_job(
+                    client,
+                    approved,
+                    {"adapter_type": "web", "keyword": KEYWORD},
+                    uuid4(),
+                )[0]["job_id"]
+                for approved in registered
+            ]
+            paths = [f"/api/v1/collection-jobs/{job}" for job in jobs]
+
+            def states():
+                return [client.get(path).json() for path in paths]
+
+            wait_for(
+                lambda: all(item["status"] == "running" for item in states()),
+                seconds=15,
+            )
+            wait_for(
+                lambda: all(item["status"] == "partial" for item in states()),
+                seconds=40,
+            )
+            for job, path, approved, layout in zip(
+                jobs, paths, registered, ("cards", "catalog"), strict=True
+            ):
+                pages = client.get(path + "/evidence-pages").json()
+                assert [item["capture_kind"] for item in pages] == [
+                    "search",
+                    "search",
+                    "detail",
+                    "detail",
+                    "detail",
+                ]
+                assert all(
+                    UUID(item["profile_version_id"])
+                    == UUID(approved["profile_version_id"])
+                    for item in pages
+                )
+                assert client.get(path + "/evidence").json() == pages[0]
+                results = client.get("/api/v1/records", params={"job_id": job}).json()
+                assert {
+                    record["payload"]["title"]: record["evidence_reference"]
+                    for record in results
+                } == {
+                    "Alpha": pages[2]["evidence_id"],
+                    "Beta": pages[3]["evidence_id"],
+                }
+                assert pages[-1]["original_location"].endswith(
+                    f"/m7/{layout}/detail/bad"
+                )
+                assert (
+                    client.get(path + "/quarantine").json()[0]["evidence_reference"]
+                    == pages[-1]["evidence_id"]
+                )
+
+            requests = sorted(
+                (
+                    request
+                    for request in m7_fixture_metrics(prefix)
+                    if request[1] >= before
+                ),
+                key=lambda request: request[1],
+            )
+            assert len(requests) == 12
+            gaps = [
+                next_request[1] - previous[2]
+                for previous, next_request in pairwise(requests)
+            ]
+            assert min(gaps) >= 0.97, gaps
+            print(
+                f"M7 worker jobs {jobs}; {len(requests)} requests; minimum completed-to-start gap {min(gaps):.3f}s"
+            )
+        finally:
+            compose_command(
+                prefix,
+                "up",
+                "-d",
+                "--no-build",
+                "--no-recreate",
+                "--scale",
+                "worker=1",
+                "worker",
+            )
 
 
 def test_compose_html_csv_broker_stop_and_named_volume_restart(compose, config):
@@ -360,4 +498,300 @@ def test_compose_prefork_recovers_after_worker_container_is_killed(compose, conf
                 f"/data/evidence/{UUID(evidence['evidence_id']).hex}/input.bin",
             )
             == raw
+        )
+
+
+def test_compose_multi_page_lineage_survives_worker_loss_and_postgres_restart(compose):
+    prefix, url = compose
+
+    def command(*args):
+        return compose_command(prefix, *args)
+
+    with httpx2.Client(base_url=url, trust_env=False, timeout=3) as client:
+        wait_for(lambda: client.get("/api/v1/health").status_code == 200)
+        origin = COMPOSE_FIXTURE_ORIGIN
+        entry = {"adapter_type": "web", "url": origin + ROOT_PATH + "1"}
+        approved = create_approved_source(
+            client,
+            {"adapter_type": "web", "allowed_origins": [origin]},
+            CONFIGURATION,
+            entry,
+        )
+        try:
+            with block_evidence_publication(prefix):
+                job, _ = submit_job(client, approved, entry, uuid4())
+                job_id = job["job_id"]
+                path = f"/api/v1/collection-jobs/{job_id}"
+                wait_for(lambda: evidence_lock_exists(prefix, granted=False))
+                assert client.get(path).json()["status"] == "running"
+                command("kill", "-s", "SIGKILL", "worker")
+            assert client.get(path + "/evidence-pages").json() == []
+        finally:
+            command("up", "-d", "--wait", "worker")
+
+        wait_for(lambda: client.get(path).json()["status"] == "partial", seconds=115)
+        records_path = f"/api/v1/records?job_id={job_id}"
+        pages_path = path + "/evidence-pages"
+        quarantine_path = path + "/quarantine"
+        events_path = path + "/events"
+        paths = [
+            path,
+            records_path,
+            pages_path,
+            quarantine_path,
+            events_path,
+            path + "/evidence",
+        ]
+        before = snapshot(client, paths)
+        final = before[path]
+        assert final["execution_attempt"] == 2 and final["error"] is None
+        assert (
+            final["valid_count"],
+            final["invalid_count"],
+            final["duplicate_count"],
+        ) == (3, 2, 1)
+        assert [event["kind"] for event in before[events_path]].count(
+            "WORKER_LOST"
+        ) == 1
+        assert [event["kind"] for event in before[events_path]].count("PARTIAL") == 1
+        pages = before[pages_path]
+        assert [item["page_number"] for item in pages] == [1, 2, 3]
+        assert before[path + "/evidence"] == pages[0]
+        assert len({item["run_id"] for item in pages}) == 1
+        assert {
+            item["payload"]["title"]: item["evidence_reference"]
+            for item in before[records_path]
+        } == {
+            title: item["evidence_id"]
+            for title, item in zip(("Alpha", "Beta", "Gamma"), pages, strict=True)
+        }
+        assert [
+            item["source_position"]["index"] for item in before[quarantine_path]
+        ] == [2, 2]
+        assert [item["evidence_reference"] for item in before[quarantine_path]] == [
+            item["evidence_id"] for item in pages[1:]
+        ]
+
+        command(
+            "exec",
+            "-T",
+            "dispatcher",
+            "python",
+            "-c",
+            "from sys import argv; from uuid import UUID; "
+            "from backend.queue.dispatcher import publish_job; publish_job(UUID(argv[1]))",
+            job_id,
+        )
+        skip_message = f"Collection job {job_id} skipped (job_not_pending)".encode()
+        wait_for(lambda: skip_message in command("logs", "--no-color", "worker"))
+        assert snapshot(client, paths) == before
+
+        postgres_id = command("ps", "-q", "postgres")
+        command("restart", "postgres", "api")
+        wait_for(lambda: client.get("/api/v1/health").status_code == 200)
+        assert command("ps", "-q", "postgres") == postgres_id
+        assert snapshot(client, paths) == before
+        approved_id = UUID(approved["profile_version_id"])
+        for capture, (location, raw) in zip(pages, PAGES.items(), strict=True):
+            assert capture["original_location"] == origin + location
+            assert UUID(capture["profile_version_id"]) == approved_id
+            evidence_id = UUID(capture["evidence_id"])
+            detail = f"/api/v1/evidence/{evidence_id}"
+            assert snapshot(client, [detail])[detail] == capture
+            assert capture["content_hash"] == hashlib.sha256(raw).hexdigest()
+            for service in ("api", "worker"):
+                assert (
+                    command(
+                        "exec",
+                        "-T",
+                        service,
+                        "cat",
+                        f"/data/evidence/{evidence_id.hex}/input.bin",
+                    )
+                    == raw
+                )
+        print(
+            f"M6 Job {job_id} recovered on attempt 2 and retained three evidence pages after restart"
+        )
+
+
+def test_m7_recovers_after_worker_loss_and_keeps_terminal_lineage(compose):
+    prefix, url = compose
+    origin = COMPOSE_FIXTURE_ORIGIN
+    with httpx2.Client(base_url=url, trust_env=False, timeout=25) as client:
+        approved = create_approved_source(
+            client,
+            {"adapter_type": "web", "allowed_origins": [origin]},
+            search_config(origin, "cards"),
+            {"adapter_type": "web", "keyword": "quick"},
+        )
+        try:
+            with block_evidence_publication(prefix):
+                job, _ = submit_job(
+                    client,
+                    approved,
+                    {"adapter_type": "web", "keyword": KEYWORD},
+                    uuid4(),
+                )
+                job_id = UUID(job["job_id"])
+                path = f"/api/v1/collection-jobs/{job_id}"
+                wait_for(lambda: evidence_lock_exists(prefix, granted=False))
+                compose_command(prefix, "kill", "-s", "SIGKILL", "worker")
+            assert client.get(path + "/evidence-pages").json() == []
+            # Exercise recovery without waiting for the already tested 90-second lease.
+            compose_command(
+                prefix,
+                *PSQL,
+                "psql",
+                "-c",
+                "UPDATE collection_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' "
+                f"WHERE id = '{job_id}' AND status = 'running'",
+            )
+        finally:
+            compose_command(prefix, "up", "-d", "--wait", "worker")
+
+        wait_for(lambda: client.get(path).json()["status"] == "partial", seconds=40)
+        pages_path = path + "/evidence-pages"
+        records_path = f"/api/v1/records?job_id={job_id}"
+        events_path = path + "/events"
+        paths = [path, pages_path, records_path, events_path, path + "/quarantine"]
+        before = snapshot(client, paths)
+        assert before[path]["execution_attempt"] == 2
+        pages = before[pages_path]
+        assert [page["capture_kind"] for page in pages] == [
+            "search",
+            "search",
+            "detail",
+            "detail",
+            "detail",
+        ]
+        assert {record["evidence_reference"] for record in before[records_path]} == {
+            pages[2]["evidence_id"],
+            pages[3]["evidence_id"],
+        }
+        assert [event["kind"] for event in before[events_path]].count(
+            "WORKER_LOST"
+        ) == 1
+        assert [event["kind"] for event in before[events_path]].count("PARTIAL") == 1
+        compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "dispatcher",
+            "python",
+            "-c",
+            "from sys import argv; from uuid import UUID; "
+            "from backend.queue.dispatcher import publish_job; publish_job(UUID(argv[1]))",
+            str(job_id),
+        )
+        skipped = f"Collection job {job_id} skipped (job_not_pending)".encode()
+        wait_for(
+            lambda: skipped in compose_command(prefix, "logs", "--no-color", "worker")
+        )
+        compose_command(prefix, "restart", "redis", "postgres", "api")
+        wait_for(lambda: client.get("/api/v1/health").status_code == 200)
+        assert snapshot(client, paths) == before
+        for page in pages:
+            raw = compose_command(
+                prefix,
+                "exec",
+                "-T",
+                "api",
+                "cat",
+                f"/data/evidence/{UUID(page['evidence_id']).hex}/input.bin",
+            )
+            assert hashlib.sha256(raw).hexdigest() == page["content_hash"]
+        print(
+            f"M7 Job {job_id} recovered on attempt 2, ignored a duplicate and retained five captures after restart"
+        )
+
+
+def test_compose_revocation_after_search_prevents_next_capture(compose):
+    prefix, url = compose
+    origin = COMPOSE_FIXTURE_ORIGIN
+    keyword = f"revoke-{uuid4().hex}"
+    with httpx2.Client(base_url=url, trust_env=False, timeout=5) as client:
+        approved = create_approved_source(
+            client,
+            {
+                "adapter_type": "web",
+                "allowed_origins": [origin],
+                "allowed_paths": {origin: ["/m7/cards"]},
+            },
+            search_config(origin, "cards"),
+            {"adapter_type": "web", "keyword": "quick"},
+        )
+        # Observe the real fixture within Docker to revoke during the origin cooldown.
+        watch = """
+import json
+import sys
+from time import monotonic, sleep
+from urllib.parse import parse_qs, urlsplit
+from urllib.request import Request, urlopen
+
+origin, source_id, keyword = sys.argv[1:]
+deadline = monotonic() + 20
+while monotonic() < deadline:
+    with urlopen(origin + "/m7-metrics", timeout=2) as reply:
+        requests = json.load(reply)
+    for path, _, _ in requests:
+        if parse_qs(urlsplit(path).query).get("q") == [keyword]:
+            request = Request(
+                f"http://127.0.0.1:8000/api/v1/sources/{source_id}/authorization",
+                data=b'{"approval_status":"revoked"}',
+                headers={"Content-Type": "application/json"},
+                method="PATCH",
+            )
+            with urlopen(request, timeout=2) as reply:
+                assert json.load(reply)["approval_status"] == "revoked"
+            print(path)
+            sys.exit(0)
+    sleep(0.05)
+raise RuntimeError("The fixture did not receive the submitted search")
+"""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            revoke = executor.submit(
+                compose_command,
+                prefix,
+                "exec",
+                "-T",
+                "api",
+                "python",
+                "-c",
+                watch,
+                origin,
+                approved["source_id"],
+                keyword,
+            )
+            job, _ = submit_job(
+                client, approved, {"adapter_type": "web", "keyword": keyword}, uuid4()
+            )
+            search = revoke.result(timeout=25).decode().strip()
+        assert search == f"/m7/cards/search?q={keyword}"
+        job_id = job["job_id"]
+        path = f"/api/v1/collection-jobs/{job_id}"
+        wait_for(lambda: client.get(path).json()["status"] == "failed")
+        pages, records = path + "/evidence-pages", f"/api/v1/records?job_id={job_id}"
+        result = snapshot(client, [path, pages, records])
+        assert result[path]["execution_attempt"] == 1
+        assert result[path]["error"]["code"] == "source_not_approved"
+        assert result[records] == []
+        served_paths = [path for path, _, _ in m7_fixture_metrics(prefix)]
+        assert served_paths[served_paths.index(search) :] == [search]
+        [page] = result[pages]
+        assert (
+            page["capture_kind"] == "search"
+            and page["original_location"] == origin + search
+        )
+        raw = compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "api",
+            "cat",
+            f"/data/evidence/{UUID(page['evidence_id']).hex}/input.bin",
+        )
+        assert hashlib.sha256(raw).hexdigest() == page["content_hash"]
+        print(
+            f"Revoked Source after search for Job {job_id}; retained only capture {page['evidence_id']}"
         )

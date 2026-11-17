@@ -13,6 +13,7 @@ from backend.core.contracts import (
     Configuration,
     Contract,
     Name,
+    PathPrefix,
     ProfileValidationReport,
     Sha256,
     Source,
@@ -36,6 +37,10 @@ class CreateSource(Authorization):
     permission_reference: Name
     allowed_origins: tuple[str, ...] = ()
     allowed_datasets: tuple[Name, ...] = ()
+    allowed_paths: dict[str, tuple[PathPrefix, ...]] = Field(default_factory=dict)
+    min_request_interval_ms: Annotated[int, Field(strict=True, ge=1000, le=10_000)] = (
+        1000
+    )
     request_key: UUID | None = None
 
     def to_source(self):
@@ -73,9 +78,10 @@ def create_source(request: Request, response: Response, body: CreateSource):
     try:
         source = body.to_source()
     except ValidationError as error:
-        raise ProfileError(
-            "invalid_source_policy", "Source requires a valid controlled input policy"
-        ) from error
+        reason = error.errors(
+            include_input=False, include_url=False, include_context=False
+        )[0]["msg"]
+        raise ProfileError("invalid_source_policy", reason) from error
     if body.request_key is None:
         return request.app.state.profiles.register_source(source)
     result, created = request.app.state.profiles.register_source_once(

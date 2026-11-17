@@ -13,10 +13,12 @@ const entry = { adapter_type: 'csv', dataset_id: 'listings', content: 'Name\nAlp
 test('real Source replay after a lost response and real two-editor draft conflict', async ({ page, context, request }) => {
   const name = 'Closure replay ' + randomUUID();
   const keys: string[] = [];
+  let originalBody: Record<string, unknown> = {};
   let registration: Source | undefined;
   await page.route(url => url.pathname === sources, async route => {
     if (route.request().method() !== 'POST') return route.fallback();
     const body = route.request().postDataJSON();
+    originalBody = body;
     keys.push(body.request_key);
     if (keys.length > 1) return route.continue();
     const persisted = await route.fetch();
@@ -37,8 +39,12 @@ test('real Source replay after a lost response and real two-editor draft conflic
   expect(registration).toBeDefined();
   const source = registration!;
   await expect(page).toHaveURL('/sources/' + source.source_id);
+  await expect(page.getByText('Existing registration recovered.', { exact: false })).toBeVisible();
   const rows: Source[] = await (await request.get(sources)).json();
   expect(rows.filter(row => row.source_name === name).map(row => row.source_id)).toEqual([source.source_id]);
+  const conflictingReplay = await request.post(sources, { data: { ...originalBody, source_name: name + ' changed' } });
+  expect(conflictingReplay.status()).toBe(409);
+  expect((await conflictingReplay.json()).error.code).toBe('source_request_conflict');
   const path = `${sources}/${source.source_id}/versions`;
   const configuration = { adapter_type: 'csv', config_schema_version: '1',
     record_schema: { record_type: 'closure', schema_version: '1', fields: [{ name: 'title' }] },
@@ -59,8 +65,11 @@ test('real Source replay after a lost response and real two-editor draft conflic
   expect((await conflict).status()).toBe(409);
   await expect(second.getByRole('alert')).toContainText('Another edit was saved first');
   await expect(second.getByRole('textbox', { name: 'Record type' })).toHaveValue('stale-edit');
-  second.once('dialog', dialog => dialog.accept());
   await second.getByRole('button', { name: 'Reload server version' }).click();
+  await expect(second.getByRole('heading', { name: 'Server revision 2' })).toBeVisible();
+  await expect(second.getByRole('textbox', { name: 'Record type' })).toHaveValue('stale-edit');
+  second.once('dialog', dialog => dialog.accept());
+  await second.getByRole('button', { name: 'Use server configuration' }).click();
   await expect(second.getByRole('textbox', { name: 'Record type' })).toHaveValue('first-edit');
 });
 
@@ -115,4 +124,8 @@ test('failed capture opens Evidence without records and API rejects foreign Host
   }
   const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
+  await page.getByRole('link', { name: 'View job records' }).click();
+  await expect(page.getByRole('region', { name: 'Quality for this job' })).toContainText('Failed');
+  await expect(page.getByText('No records match this Job ID')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Persisted generic records' })).toHaveCount(0);
 });

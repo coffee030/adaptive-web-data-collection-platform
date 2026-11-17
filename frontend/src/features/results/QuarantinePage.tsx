@@ -1,11 +1,12 @@
 import { useCallback, useRef } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { Loading, Pagination, Status, Timestamp } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
 import { getJob, jobPath, maxOffset } from '../collection-jobs/api';
 import { ResultCounts } from '../collection-jobs/presentation';
-import { listQuarantine, recordsForJob, type RecordProblem } from './api';
-import { EvidenceLink, Metadata, ResultProblem, positionLabel } from './presentation';
+import { evidenceDetailPath, listQuarantine, recordsForJob, type RecordProblem } from './api';
+import { Metadata, ResultProblem, positionLabel } from './presentation';
+import { contextFrom, ContextLink, ReturnLink, useResultReturn } from './resultNavigation';
 import { useResultPage } from './useResultPage';
 
 const pageSize = 10;
@@ -19,18 +20,23 @@ const problemLabels: Record<RecordProblem['code'], string> = {
 
 export function QuarantinePage() {
   const { jobId = '' } = useParams();
+  const { search } = useLocation();
   const { offset, changePage } = useResultPage();
   const heading = useRef<HTMLHeadingElement>(null);
   const loadJob = useCallback((signal: AbortSignal) => getJob(jobId, signal), [jobId]);
   const loadEntries = useCallback((signal: AbortSignal) => listQuarantine(jobId, pageSize, offset, signal), [jobId, offset]);
   const job = useResource(loadJob);
   const { result, retry } = useResource(loadEntries);
+  const origin = contextFrom(search);
+  const jobAddress = jobPath(jobId);
+  useResultReturn(result.state === 'ready');
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={jobPath(jobId)}>Back to Job Details</Link></nav>
+      <nav className="breadcrumb" aria-label="Breadcrumb"><ReturnLink
+        to={origin.split(/[?#]/, 1)[0] === jobAddress ? origin : jobAddress}>Back to Job Details</ReturnLink></nav>
       <div className="page-heading detail-heading">
-        <div><h1 ref={heading} tabIndex={-1}>Quarantine</h1><p className="identifier muted">{jobId}</p></div>
+        <div><h1 ref={heading} tabIndex={-1}>Quarantine</h1><p className="muted">Job {jobId.slice(0, 8)}</p></div>
         <Link className="control" to={recordsForJob(jobId)}>View job records</Link>
       </div>
       {job.result.state === 'ready' && (
@@ -47,6 +53,7 @@ export function QuarantinePage() {
       )}
       <section className="panel detail-panel" aria-labelledby="quarantine-list-title">
         <div className="panel-heading"><h2 id="quarantine-list-title">Rejected candidates</h2></div>
+        <p className="notice quarantine-description">These candidates were saved with validation problems. Published records and duplicate totals are tracked separately.</p>
         {result.state === 'loading' && <Loading>Loading quarantine…</Loading>}
         {result.state === 'error' && <ResultProblem error={result.error}
           resource={result.error.status === 404 || result.error.status === 422 ? 'Job' : 'Quarantine'}
@@ -61,14 +68,17 @@ export function QuarantinePage() {
                       <h3>{positionLabel(entry.source_position)}</h3>
                       <p className="muted">{entry.source_position.kind === 'csv_row' ? 'Starting line in source CSV' : 'One-based extraction order'}</p>
                       <dl className="result-metadata">
-                        <Metadata label="Evidence ID"><EvidenceLink id={entry.evidence_reference} /></Metadata>
+                        <Metadata label="Capture evidence"><ContextLink id={'quarantine-capture-' + entry.record_id}
+                          to={evidenceDetailPath(entry.evidence_reference)} aria-label={'View evidence · Open evidence ' + entry.evidence_reference}>
+                          View evidence
+                        </ContextLink></Metadata>
                         <Metadata label="Persisted (UTC)"><Timestamp value={entry.created_at} /></Metadata>
                       </dl>
                     </div>
                     <ul className="quarantine-problems" aria-label="Validation problems">
                       {entry.problems.map((problem, index) => (
                         <li key={index}>
-                          <strong>{problemLabels[problem.code]}</strong>
+                          <strong>{problemLabels[problem.code] ?? 'Validation problem'}</strong>
                           {problem.field != null && <> · <code>{problem.field}</code></>}
                           <p>{problem.message}</p>
                           <code className="muted">{problem.code}</code>
