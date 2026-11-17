@@ -363,10 +363,12 @@ for (const [width, theme] of [[1440, 'light'], [900, 'dark'], [390, 'light'], [3
     await selectCategory.focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { name: 'Topics', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: topic.name, exact: true })).toBeVisible();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: topic.name, exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { name: topic.name, exact: true })).toBeFocused();
+    await expect(pinned(page, 1)).toBeVisible();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: 'Choose another topic' })).toBeFocused();
     await page.keyboard.press('Tab');

@@ -51,6 +51,11 @@ export function apiPost<T>(path: string, body: object, signal: AbortSignal, requ
   return sendJson<T>('POST', path, body, signal, requestTimeout);
 }
 
+export function apiPostWithStatus<T>(path: string, body: object, signal: AbortSignal) {
+  return sendJson<{ status: number; data: T }>('POST', path, body, signal, undefined,
+    async response => ({ status: response.status, data: await response.json() }));
+}
+
 export function apiPut<T>(path: string, body: object, signal: AbortSignal) {
   return sendJson<T>('PUT', path, body, signal);
 }
@@ -59,12 +64,14 @@ export function apiPatch<T>(path: string, body: object, signal: AbortSignal) {
   return sendJson<T>('PATCH', path, body, signal);
 }
 
-function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: object, signal: AbortSignal, requestTimeout?: number) {
+function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: object, signal: AbortSignal,
+  requestTimeout?: number, read?: (response: Response) => Promise<T>,
+) {
   return request<T>(path, signal, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }, requestTimeout);
+  }, requestTimeout, read);
 }
 
 async function request<T>(path: string, signal: AbortSignal, init?: RequestInit, requestTimeout = timeoutMs,

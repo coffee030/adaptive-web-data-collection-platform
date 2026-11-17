@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { Link, Route, Routes, ScrollRestoration, useLocation } from 'react-router';
 import { jobsPath, newJobPath } from '../features/collection-jobs/api';
 import { Overview } from '../features/dashboard/Overview';
@@ -11,7 +11,7 @@ import { sourcesPath } from '../features/sources/api';
 import { SourceList } from '../features/sources/SourceList';
 import { SourceCreate } from '../features/sources/SourceCreate';
 import { SourceDetail } from '../features/sources/SourceDetail';
-import { ProfilePage } from '../features/profiles/ProfilePage';
+import { Loading } from '../components/feedback';
 import { evidencePath, recordsPath } from '../features/results/api';
 import { RecordsExplorer } from '../features/results/RecordsExplorer';
 import { RecordDetail } from '../features/results/RecordDetail';
@@ -20,8 +20,15 @@ import { EvidenceDetail } from '../features/results/EvidenceDetail';
 import { ArticlePage, ArticlesPage } from '../features/topic-collections/Articles';
 import { RequestDetails, RequestList } from '../features/topic-collections/Requests';
 import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
-import { TopicBindings, TopicCatalog } from '../features/topic-collections/TopicCatalog';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
+
+const ProfilePage = lazy(async () => ({ default: (await import('../features/profiles/ProfilePage')).ProfilePage }));
+const TopicCatalog = lazy(async () => ({ default: (await import('../features/topic-collections/TopicCatalog')).TopicCatalog }));
+const TopicBindings = lazy(async () => ({ default: (await import('../features/topic-collections/TopicBindings')).TopicBindings }));
+
+function operatorRoute(page: ReactNode) {
+  return <Suspense fallback={<Loading>Loading operator workspace…</Loading>}>{page}</Suspense>;
+}
 
 export function App() {
   const { pathname, hash } = useLocation();
@@ -80,8 +87,8 @@ export function App() {
             <Route path={requestsPath} element={<RequestList />} />
             <Route path={newRequestPath} element={<NewTopicRequest />} />
             <Route path={requestsPath + '/:requestId'} element={<RequestDetails />} />
-            <Route path={topicsPath} element={<TopicCatalog />} />
-            <Route path={topicsPath + '/:topicId'} element={<TopicBindings />} />
+            <Route path={topicsPath} element={operatorRoute(<TopicCatalog />)} />
+            <Route path={topicsPath + '/:topicId'} element={operatorRoute(<TopicBindings />)} />
             <Route path={articlesPath} element={<ArticlesPage />} />
             <Route path={articlesPath + '/:articleId'} element={<ArticlePage />} />
             <Route path={`${jobsPath}/:jobId`} element={<JobDetail />} />
@@ -92,8 +99,8 @@ export function App() {
             <Route path={sourcesPath} element={<SourceList />} />
             <Route path={sourcesPath + '/new'} element={<SourceCreate />} />
             <Route path={sourcesPath + '/:sourceId'} element={<SourceDetail />} />
-            <Route path={sourcesPath + '/:sourceId/profiles/new'} element={<ProfilePage />} />
-            <Route path={sourcesPath + '/:sourceId/profiles/:profileId'} element={<ProfilePage />} />
+            <Route path={sourcesPath + '/:sourceId/profiles/new'} element={operatorRoute(<ProfilePage />)} />
+            <Route path={sourcesPath + '/:sourceId/profiles/:profileId'} element={operatorRoute(<ProfilePage />)} />
             <Route path="*" element={
               <>
                 <h1>Page not found</h1>

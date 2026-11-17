@@ -57,6 +57,29 @@
 .profile-table caption { text-align: start; padding: var(--sm) var(--md); font-weight: 600; }
 .profile-values dt { color: var(--text-secondary); }
 .profile-values div + div { margin-block-start: var(--xs); }
+.profile-editor .profile-form { gap: var(--lg); }
+.profile-editor .profile-field { overflow-wrap: anywhere; }
+.profile-editor .operator-form-section > button { justify-self: start; }
+.profile-options { min-inline-size: 0; }
+.profile-options > summary { cursor: pointer; font-size: 0.9375rem; font-weight: 600; width: fit-content; }
+.profile-options > :is(.profile-form, .profile-grid) { margin-block-start: var(--md); }
+.profile-save-row { border-block-start: 1px solid var(--divider); padding-block-start: var(--md); }
+.profile-workspace { max-inline-size: 960px; }
+.profile-workspace .profile-body { max-inline-size: none; }
+.profile-workspace h2[tabindex] { scroll-margin-block: var(--md); }
+.profile-section-nav.operator-action-bar { display: flex; flex-wrap: wrap; }
+.profile-section-nav button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.profile-section-nav button:hover { background: var(--selected); }
+.profile-technical dt, .profile-technical dd { overflow-wrap: anywhere; }
+.profile-result > h3 { color: var(--error); }
+.profile-result[data-passed="true"] > h3 { color: var(--success); }
+.profile-result dd { overflow-wrap: anywhere; }
 @media (max-width: 560px) {
   .profile-body { padding: var(--md); }
   .profile-grid { grid-template-columns: minmax(0, 1fr); }

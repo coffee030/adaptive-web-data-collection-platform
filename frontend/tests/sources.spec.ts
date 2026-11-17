@@ -25,7 +25,11 @@ test('Sources navigation, full array, client-side pagination, and revoked access
   await page.route(url => url.pathname === '/api/v1/collection-jobs', route => route.fulfill({ json: [] }));
   await page.route(url => url.pathname === api, route => {
     expect(new URL(route.request().url()).search).toBe('');
-    return route.fulfill({ json: [csv, ...Array.from({ length: 20 }, (_, i) => ({
+    return route.fulfill({ json: [
+      csv,
+      { ...csv, source_id: 'a'.repeat(32), source_name: 'Pending fixture', approval_status: 'pending' },
+      { ...csv, source_id: 'b'.repeat(32), source_name: 'Authorized fixture', approval_status: 'approved' },
+      ...Array.from({ length: 18 }, (_, i) => ({
       ...csv, source_id: String(i), source_name: 'Source ' + i,
     }))] });
   });
@@ -36,6 +40,8 @@ test('Sources navigation, full array, client-side pagination, and revoked access
   await expect(nav.getByRole('link', { name: 'Sources' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('link', { name: csv.source_name })).toHaveAttribute('href', '/sources/' + id);
   await expect(page.getByRole('table').getByText('Revoked').first()).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Pending fixture' })).toContainText('Review access policy');
+  await expect(page.getByRole('row').filter({ hasText: 'Authorized fixture' })).toContainText('View profile versions');
   await page.getByRole('button', { name: 'Next sources page' }).click();
   await expect(page.getByText('Sources 21', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Next sources page' })).toBeDisabled();
@@ -60,6 +66,10 @@ test('503 and retry', async ({ page }) => {
   } }));
   await page.goto('/sources');
   await expect(page.getByRole('alert')).toContainText('Backend unavailable');
+  if (process.env.M14_CAPTURE_OPERATOR === '1') {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.screenshot({ path: test.info().outputPath('source-catalog-recovery.png') });
+  }
   await page.route(url => url.pathname === api, route => route.fulfill({ json: [csv] }));
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByRole('table')).toBeVisible();
@@ -123,6 +133,10 @@ test('keyboard, required fields, duplicate entries, and invalid controlled origi
   await page.getByRole('textbox', { name: 'Allowed origins' }).fill('https://example.com/path');
   await page.getByRole('button', { name: 'Create source' }).click();
   await expect(page.getByText('Use a controlled origin such as', { exact: false })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Allowed origins' }).fill('https://example.com');
+  await page.getByRole('textbox', { name: /Allowed path prefixes/ }).fill('https://different.example/catalog');
+  await page.getByRole('button', { name: 'Create source' }).click();
+  await expect(page.getByText('Enter a registered origin and path', { exact: false })).toBeVisible();
 });
 
 test('creates pending Source once and navigates to persisted detail', async ({ page }) => {
@@ -202,4 +216,63 @@ test('Sources browser link returns to the original array page', async ({ page })
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sources' }).click();
   await expect(page).toHaveURL('/sources?offset=20');
   await expect(page.getByRole('link', { name: csv.source_name })).toBeVisible();
+  await expect(page.getByRole('link', { name: csv.source_name })).toBeFocused();
+});
+
+test('uncertain registration replays the same UUID and shows current persisted access', async ({ page }) => {
+  const requests: object[] = [];
+  const existing = { ...csv, approval_status: 'approved' } as const;
+  await fixture(page, existing);
+  await page.route(url => url.pathname === api, async route => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) await route.abort('connectionreset');
+    else await route.fulfill({ status: 200, json: existing });
+  });
+  await page.goto('/sources/new');
+  await fillSource(page);
+  await page.getByRole('button', { name: 'Create source' }).click();
+  await expect(page.getByRole('alert')).toContainText('Submit the same values again');
+  await page.getByRole('textbox', { name: 'Source name' }).fill('Different registration');
+  await page.getByRole('button', { name: 'Create source' }).click();
+  await expect(page.getByRole('alert')).toContainText('Restore and resubmit the original values');
+  expect(requests).toHaveLength(1);
+  await page.getByRole('textbox', { name: 'Source name' }).fill(csv.source_name);
+  await page.getByRole('button', { name: 'Create source' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Existing registration recovered' })).toBeVisible();
+  await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual(requests[0]);
+});
+
+test('authorization and revocation require separate policy review and reload after a lost response', async ({ page }) => {
+  const web: Source = { ...csv, adapter_type: 'web', approval_status: 'pending', allowed_datasets: [],
+    allowed_origins: ['https://example.test'], allowed_paths: { 'https://example.test': ['/search'] }, min_request_interval_ms: 1500 };
+  const changes: string[] = [];
+  await fixture(page, web);
+  await page.route(url => url.pathname === api + '/' + id, route => route.fulfill({ json: web }));
+  await page.route(url => url.pathname === api + '/' + id + '/authorization', async route => {
+    web.approval_status = route.request().postDataJSON().approval_status;
+    changes.push(web.approval_status);
+    if (web.approval_status === 'revoked') await route.abort('connectionreset');
+    else await route.fulfill({ json: web });
+  });
+  await page.goto('/sources/' + id);
+  await expect(page.getByText('https://example.test', { exact: true })).toBeVisible();
+  await expect(page.getByText('/search', { exact: true })).toBeVisible();
+  await page.getByText('Technical details', { exact: true }).click();
+  await expect(page.getByText('1500 ms')).toBeVisible();
+  await page.getByRole('button', { name: 'Review authorization' }).click();
+  await expect(page.getByText('Current access is')).toContainText('pending');
+  expect(changes).toEqual([]);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('button', { name: 'Review authorization' })).toBeFocused();
+  await page.getByRole('button', { name: 'Review authorization' }).click();
+  await page.getByRole('button', { name: 'Authorize Source access' }).click();
+  await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Review revocation' }).click();
+  await expect(page.getByText(/blocks this Source for future collection/)).toBeVisible();
+  await page.getByRole('button', { name: 'Revoke Source access' }).click();
+  await expect(page.getByRole('alert')).toContainText('could not be confirmed');
+  await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
+  expect(changes).toEqual(['approved', 'revoked']);
 });

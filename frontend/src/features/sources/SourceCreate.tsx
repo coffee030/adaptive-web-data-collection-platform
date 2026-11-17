@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../../lib/api';
 import { forgetRequestIntent, isUncertainWrite, prepareRequestIntent, type RequestIntent } from '../../lib/requestIntent';
 import { createSource, sourcePath, sourcesPath } from './api';
@@ -46,6 +46,10 @@ function submissionProblem(error: unknown): Problem {
       for (const field of error.fields) {
         if (field === 'allowed_origins' || field === 'allowed_datasets') {
           fields.policy = 'Check each policy entry and its length or format.';
+        } else if (field === 'allowed_paths') {
+          fields.paths = 'Check the path prefixes for each registered origin.';
+        } else if (field === 'min_request_interval_ms') {
+          fields.interval = 'Enter a whole number from 1000 to 10000 milliseconds.';
         } else if (field === 'source_name' || field === 'permission_reference' || field === 'adapter_type') {
           fields[field] = `Check the value for ${labels[field].toLowerCase()}.`;
         }
@@ -55,8 +59,7 @@ function submissionProblem(error: unknown): Problem {
     if (error.status === 413) {
       return { message: 'The request is too large. Shorten the allowed input list and submit again.', fields: {} };
     }
-    if (error.kind === 'timeout' || error.kind === 'network' || error.kind === 'invalid-response'
-      || (error.status !== undefined && error.status >= 500)) {
+    if (isUncertainWrite(error)) {
       const reason = error.kind === 'timeout' ? 'The request timed out.'
         : error.status === 503 ? 'The backend is unavailable (HTTP 503).'
           : 'The registration could not be confirmed.';
@@ -74,6 +77,8 @@ export function SourceCreate() {
   const request = useRef<AbortController | null>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const sourcesSearch = typeof state?.sourcesSearch === 'string' ? state.sourcesSearch : '';
 
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => { if (problem) errorSummary.current?.focus(); }, [problem]);
@@ -110,7 +115,12 @@ export function SourceCreate() {
           fields.paths = 'Enter a registered origin and path, such as https://example.com/catalog.';
           break;
         }
-        (allowedPaths[origin] ??= []).push(path);
+        const paths = allowedPaths[origin] ??= [];
+        if (paths.includes(path)) {
+          fields.paths = 'Remove duplicate path prefixes.';
+          break;
+        }
+        paths.push(path);
       }
       if (!Number.isInteger(interval) || interval < 1000 || interval > 10_000) {
         fields.interval = 'Enter a whole number from 1000 to 10000 milliseconds.';
@@ -121,28 +131,33 @@ export function SourceCreate() {
       return;
     }
 
+    const input: CreateSourceInput = {
+      source_name: name, adapter_type: adapter, permission_reference: permission,
+      ...(adapter === 'web' ? { allowed_origins: policy } : { allowed_datasets: policy }),
+      ...(adapter === 'web' && prefixes.length > 0 && { allowed_paths: allowedPaths }),
+      ...(adapter === 'web' && interval !== 1000 && { min_request_interval_ms: interval }),
+    };
+    const previous = unconfirmed.current;
+    if (previous) {
+      const { request_key: _key, ...previousInput } = previous.body;
+      if (JSON.stringify(previousInput) !== JSON.stringify(input)) {
+        setProblem({ message: 'Restore and resubmit the original values to recover the pending registration, or inspect Sources before starting a new form.', fields: {} });
+        return;
+      }
+    }
     const controller = new AbortController();
     request.current = controller;
     setProblem(undefined);
     setSubmitting(true);
     let intent: RequestIntent<CreateSourceInput> | undefined;
     try {
-      const input: CreateSourceInput = {
-        source_name: name, adapter_type: adapter, permission_reference: permission,
-        ...(adapter === 'web' ? { allowed_origins: policy } : { allowed_datasets: policy }),
-        ...(adapter === 'web' && prefixes.length > 0 && { allowed_paths: allowedPaths }),
-        ...(adapter === 'web' && interval !== 1000 && { min_request_interval_ms: interval }),
-      };
-      const previous = unconfirmed.current;
-      const { request_key: _key, ...previousInput } = previous?.body ?? {};
-      intent = previous && JSON.stringify(previousInput) === JSON.stringify(input)
-        ? previous : await prepareRequestIntent('source-registration', input);
+      intent = previous ?? await prepareRequestIntent('source-registration', input);
       controller.signal.throwIfAborted();
-      const source = await createSource(intent.body, controller.signal);
+      const { source, replayed } = await createSource(intent.body, controller.signal);
       if (!controller.signal.aborted) {
         forgetRequestIntent(intent);
         unconfirmed.current = undefined;
-        navigate(sourcePath(source.source_id), { replace: true, state: { createdSourceId: source.source_id } });
+        navigate(sourcePath(source.source_id), { replace: true, state: { ...state, sourcesSearch, createdSourceId: source.source_id, replayed } });
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -175,10 +190,11 @@ export function SourceCreate() {
   return (
     <>
       <SourcesBreadcrumb />
-      <div className="page-heading"><h1>Create source</h1></div>
-      <section className="panel source-form-panel" aria-label="Source registration">
+      <div className="page-heading operator-title"><h1>Create source</h1>
+        <p>Register the inputs this source may use. Access starts pending for a separate policy review.</p>
+      </div>
+      <section className="panel operator-sheet source-form-panel" aria-label="Source registration">
         <form className="source-form" noValidate onSubmit={submit}>
-          <p className="muted">New sources start with pending access authorization.</p>
           {problem && <div className="form-problem" ref={errorSummary} tabIndex={-1} role="alert">
             <strong>Source registration</strong><p>{problem.message}</p>
             {Object.keys(problem.fields).length > 0 && <ul>
@@ -191,57 +207,67 @@ export function SourceCreate() {
             </ul>}
           </div>}
           <fieldset disabled={submitting}>
-            <div className="source-fields">
-              <div>
-                <label htmlFor="source_name">Source name</label>
-                <input name="source_name" required {...fieldProps('source_name')} />
-                {fieldError('source_name')}
+            <div className="operator-form-section">
+              <h2>Source identity</h2>
+              <div className="source-fields">
+                <div>
+                  <label htmlFor="source_name">Source name</label>
+                  <input name="source_name" required {...fieldProps('source_name')} />
+                  {fieldError('source_name')}
+                </div>
+                <div>
+                  <label htmlFor="adapter_type">Adapter</label>
+                  <select name="adapter_type" value={adapter} {...fieldProps('adapter_type')}
+                    onChange={event => {
+                      setAdapter(event.target.value === 'web' ? 'web' : 'csv');
+                      setProblem(undefined);
+                    }}>
+                    <option value="csv">CSV</option>
+                    <option value="web">Controlled web</option>
+                  </select>
+                  {fieldError('adapter_type')}
+                </div>
               </div>
               <div>
-                <label htmlFor="adapter_type">Adapter</label>
-                <select name="adapter_type" value={adapter} {...fieldProps('adapter_type')}
-                  onChange={event => {
-                    setAdapter(event.target.value === 'web' ? 'web' : 'csv');
-                    setProblem(undefined);
-                  }}>
-                  <option value="csv">CSV</option>
-                  <option value="web">Controlled web</option>
-                </select>
-                {fieldError('adapter_type')}
+                <label htmlFor="permission_reference">Permission reference</label>
+                <input name="permission_reference" required {...fieldProps('permission_reference', 'permission-help')} />
+                <p id="permission-help" className="muted">Record the ticket or agreement for the operator to verify before authorizing access.</p>
+                {fieldError('permission_reference')}
               </div>
             </div>
-            <div>
-              <label htmlFor="permission_reference">Permission reference</label>
-              <input name="permission_reference" required {...fieldProps('permission_reference', 'permission-help')} />
-              <p id="permission-help" className="muted">Use a permission ticket or agreement reference.</p>
-              {fieldError('permission_reference')}
+            <div className="operator-form-section">
+              <h2>Allowed inputs</h2>
+              {(['csv', 'web'] as const).map(type => {
+                const active = type === adapter;
+                return <div key={type} hidden={!active}>
+                  <label htmlFor={active ? 'policy' : undefined}>{type === 'web' ? 'Allowed origins' : 'Allowed dataset IDs'}</label>
+                  <textarea name={type} rows={2} required={active} disabled={!active}
+                    {...(active ? fieldProps('policy', 'policy-help') : {})} />
+                  {active && <>
+                    <p id="policy-help" className="muted">{type === 'web'
+                      ? 'One HTTPS origin per line, such as https://example.com. Loopback and Compose fixture origins are also supported for local tests.'
+                      : 'One dataset ID per line. IDs are case-sensitive.'}</p>
+                    {fieldError('policy')}
+                  </>}
+                </div>;
+              })}
+              {adapter === 'web' && <div className="source-fields">
+                <div>
+                  <label htmlFor="paths">Allowed path prefixes (optional)</label>
+                  <textarea name="paths" rows={2} {...fieldProps('paths', 'paths-help')} />
+                  <p id="paths-help" className="muted">Enter one origin and path per line. An origin without listed prefixes permits all its paths.</p>
+                  {fieldError('paths')}
+                </div>
+                <div>
+                  <label htmlFor="interval">Minimum request interval (ms)</label>
+                  <input name="interval" type="number" min={1000} max={10000} defaultValue={1000} {...fieldProps('interval')} />
+                  {fieldError('interval')}
+                </div>
+              </div>}
             </div>
-            {(['csv', 'web'] as const).map(type => {
-              const active = type === adapter;
-              return <div key={type} hidden={!active}>
-                <label htmlFor={active ? 'policy' : undefined}>{type === 'web' ? 'Allowed origins' : 'Allowed dataset IDs'}</label>
-                <textarea name={type} rows={3} required={active} disabled={!active}
-                  {...(active ? fieldProps('policy', 'policy-help') : {})} />
-                {active && <>
-                  <p id="policy-help" className="muted">{type === 'web'
-                    ? 'One HTTPS origin per line, such as https://example.com. Loopback and Compose fixture origins are also supported for local tests.'
-                    : 'One dataset ID per line. IDs are case-sensitive.'}</p>
-                  {fieldError('policy')}
-                </>}
-              </div>;
-            })}
-            {adapter === 'web' && <>
-              <label htmlFor="paths">Allowed path prefixes (optional)</label>
-              <textarea name="paths" rows={2} {...fieldProps('paths', 'paths-help')} />
-              <p id="paths-help" className="muted">Enter one origin and path per line. An origin without listed prefixes permits all its paths.</p>
-              {fieldError('paths')}
-              <label htmlFor="interval">Minimum request interval (ms)</label>
-              <input name="interval" type="number" min={1000} max={10000} defaultValue={1000} {...fieldProps('interval')} />
-              {fieldError('interval')}
-            </>}
             <div className="source-actions">
               <button type="submit" className="primary">Create source</button>
-              <Link className="control" to={sourcesPath}>Cancel</Link>
+              <Link className="control" to={sourcesPath + sourcesSearch}>Cancel</Link>
             </div>
           </fieldset>
           {submitting && <p role="status">Registering source…</p>}

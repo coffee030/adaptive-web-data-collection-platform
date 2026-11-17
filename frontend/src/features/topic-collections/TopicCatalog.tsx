@@ -1,194 +1,212 @@
-import { BackToCollection } from './CollectionReturn';
-import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
-import { Status, TableRegion, Timestamp } from '../../components/feedback';
-import { apiGet, apiPost, apiPut } from '../../lib/api';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
+import { useLocation, useSearchParams } from 'react-router';
+import { Status } from '../../components/feedback';
+import { ApiError, apiGet, apiPost, apiPut } from '../../lib/api';
+import { isUncertainWrite } from '../../lib/requestIntent';
 import { useResource } from '../../lib/useResource';
+import { OperatorLink, OperatorReturn } from '../operator/navigation';
+import { readId, readOffset, rememberPosition, resultId, useResultReturn } from '../results/resultNavigation';
 import { profilePath } from '../profiles/api';
-import { listSources, listVersions, sourcesPath } from '../sources/api';
-import { bindingsPath, categoriesPath, topicsPath, type Binding, type Category, type Topic } from './api';
-import { ActionFeedback, MoreOptions, Page, Resource, useAction, useOptions } from './support';
+import { sourcesPath } from '../sources/api';
+import { categoriesPath, topicsPath, type Category, type Topic } from './api';
+import { ActionFeedback, Page, Resource, useAction } from './support';
+
+type CatalogEditor = { kind: 'category' | 'topic'; item?: Category | Topic; parent?: Category };
+type CatalogValues = Pick<Category, 'name' | 'active'>;
+const topicPath = (id: string) => topicsPath + '/' + encodeURIComponent(id);
 
 export function TopicCatalog() {
+  const { state, key } = useLocation();
+  const [search, setSearch] = useSearchParams();
+  const categoryId = readId(search, 'category_id');
+  const profileSource = resultId(state?.profileSourceId ?? null);
+  const profileVersion = resultId(state?.profileVersionId ?? null);
   const [revision, setRevision] = useState(0);
-  const categories = useOptions<Category>(categoriesPath, '', { revision });
-  const topics = useOptions<Topic>(topicsPath, '', { revision });
-  function reload() { setRevision(value => value + 1); }
+  const [editor, setEditor] = useState<CatalogEditor>();
+  const editTrigger = useRef<HTMLElement | null>(null);
+  const topicsHeading = useRef<HTMLHeadingElement>(null);
+  const focusTopics = useRef('');
+  const loadCategory = useCallback((signal: AbortSignal) =>
+    apiGet<Category>(categoriesPath + '/' + categoryId, signal), [categoryId]);
+  const category = useResource(loadCategory, revision, false, !!categoryId);
+  const currentEditor = editor?.kind === 'topic' && editor.parent?.id !== categoryId ? undefined : editor;
+  useResultReturn(!categoryId || category.result.state === 'ready');
+  useEffect(() => {
+    if (category.result.state === 'ready' && focusTopics.current === categoryId && topicsHeading.current) {
+      focusTopics.current = '';
+      topicsHeading.current.focus();
+    }
+  }, [categoryId, category.result.state]);
+
+  function changeSearch(values: Record<string, string | number>) {
+    const next = new URLSearchParams(search);
+    for (const [key, value] of Object.entries(values)) {
+      if (value) next.set(key, String(value));
+      else next.delete(key);
+    }
+    setSearch(next, { state: { profileSourceId: profileSource, profileVersionId: profileVersion } });
+  }
+
+  function openEditor(event: MouseEvent<HTMLButtonElement>, next: CatalogEditor) {
+    editTrigger.current = event.currentTarget;
+    setEditor(next);
+  }
+
+  function dismissEditor() {
+    setEditor(undefined);
+    requestAnimationFrame(() => editTrigger.current?.focus());
+  }
+
+  function saved(row: Category | Topic, kind: CatalogEditor['kind']) {
+    setRevision(value => value + 1);
+    if (kind === 'category' && row.id !== categoryId) changeSearch({ category_id: row.id, topic_offset: 0 });
+    setEditor(previous => previous && { ...previous, item: row });
+  }
+
   return <>
-    <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={sourcesPath}>Sources</Link></nav>
-    <div className="page-heading"><h1>Categories and topics</h1></div>
-    <Resource label="categories" state={categories.state}>{() => <>
-      <CatalogForm items={categories.rows} label="Category" path={categoriesPath} reload={reload}
-        more={<MoreOptions label="categories" options={categories} />} />
-      <Resource label="topics" state={topics.state}>{() =>
-        <CatalogForm items={topics.rows} label="Topic" path={topicsPath} reload={reload} categories={categories.rows}
-          more={<MoreOptions label="topics" options={topics} />} />
-      }</Resource>
-    </>}</Resource>
+    <nav className="breadcrumb" aria-label="Breadcrumb">
+      {profileSource && profileVersion
+        ? <OperatorReturn to={profilePath(profileSource, profileVersion)}>Profile version</OperatorReturn>
+        : <OperatorReturn to={sourcesPath}>Sources</OperatorReturn>}
+    </nav>
+    <div className="page-heading operator-title"><h1>Categories and topics</h1>
+      <p>Choose a category to manage its topics. Each topic has its own approved Source Bindings.</p>
+    </div>
+    <div className="catalog-workspace">
+      <section className="panel operator-sheet" aria-labelledby="manage-categories">
+        <div className="panel-heading"><h2 id="manage-categories">Categories</h2>
+          <button type="button" onClick={event => openEditor(event, { kind: 'category' })}>New category</button>
+        </div>
+        <Page<Category> path={categoriesPath} label="Categories" revision={revision} empty="No categories on this page."
+          paging={{ offset: readOffset(search, 'category_offset'), change: offset => changeSearch({ category_offset: offset }) }}>
+          {items => <ul className="catalog-list">{items.map(item => <li key={item.id} data-selected={item.id === categoryId}>
+            <div>
+              <button type="button" className="catalog-select" id={'category-' + item.id} aria-pressed={item.id === categoryId} onClick={event => {
+                if (item.id === categoryId) return;
+                rememberPosition(key, event.currentTarget.id);
+                if (window.matchMedia('(max-width: 785px)').matches) focusTopics.current = item.id;
+                setEditor(undefined);
+                changeSearch({ category_id: item.id, topic_offset: 0 });
+              }}>{item.name}</button>
+              <div className="muted">{item.active ? 'Active' : 'Inactive'}</div>
+            </div>
+            <button type="button" onClick={event => openEditor(event, { kind: 'category', item })}
+              aria-label={`Edit category ${item.name}`}>Edit</button>
+          </li>)}</ul>}
+        </Page>
+        {currentEditor?.kind === 'category' && <CatalogForm editor={currentEditor}
+          close={dismissEditor} saved={saved} refresh={() => setRevision(value => value + 1)} />}
+      </section>
+      <section className="panel operator-sheet" aria-label="Topics">
+        {categoryId ? <Resource label="selected category" state={category}>{parent => <>
+          <div className="panel-heading"><div><h2 ref={topicsHeading} tabIndex={-1}>Topics in {parent.name}</h2>
+            {!parent.active && <p className="muted">Inactive category · Topics unavailable for future collection</p>}
+          </div>
+            <button type="button" onClick={event => openEditor(event, { kind: 'topic', parent })}>New topic</button>
+          </div>
+          <Page<Topic> key={parent.id} path={topicsPath} filters={{ category_id: parent.id }} label="Topics" revision={revision}
+            empty="No topics on this page." paging={{ offset: readOffset(search, 'topic_offset'),
+              change: offset => changeSearch({ topic_offset: offset }) }}>
+            {items => <ul className="catalog-list">{items.map(item => <li key={item.id}>
+              <div>
+                <strong>{item.name}</strong>
+                <div className="muted">{item.active ? 'Active' : 'Inactive'}</div>
+              </div>
+              <div className="profile-actions">
+                <button type="button" onClick={event => openEditor(event, { kind: 'topic', item, parent })}
+                  aria-label={`Edit topic ${item.name}`}>Edit</button>
+                <OperatorLink id={'topic-' + item.id} to={topicPath(item.id)} state={{
+                  catalogSearch: search.toString(), profileSourceId: profileSource, profileVersionId: profileVersion,
+                }}
+                  aria-label={`Manage approved bindings for ${item.name}`}>Manage approved bindings</OperatorLink>
+              </div>
+            </li>)}</ul>}
+          </Page>
+        </>}</Resource> : <>
+          <div className="panel-heading"><h2 id="manage-topics">Topics</h2></div>
+          <p className="notice muted">Select a category to view or create its topics.</p>
+        </>}
+        {currentEditor?.kind === 'topic' && <CatalogForm editor={currentEditor} close={dismissEditor}
+          saved={saved} refresh={() => setRevision(value => value + 1)} />}
+      </section>
+    </div>
   </>;
 }
 
-function CatalogForm({ items, label, path, reload, categories, more }: {
-  items: (Category | Topic)[]; label: 'Category' | 'Topic'; path: string; reload: () => void;
-  categories?: Category[];
-  more: ReactNode;
+function CatalogForm({ editor, close, saved, refresh }: {
+  editor: CatalogEditor; close: () => void; saved: (row: Category | Topic, kind: CatalogEditor['kind']) => void;
+  refresh: () => void;
 }) {
-  const [selected, setSelected] = useState<Category | Topic>();
-  const [name, setName] = useState('');
-  const [active, setActive] = useState(true);
-  const [categoryId, setCategoryId] = useState('');
-  const action = useAction();
-  const lower = label.toLowerCase();
-  const options = selected && !items.some(row => row.id === selected.id) ? [...items, selected] : items;
+  const { item, kind, parent } = editor;
+  const path = kind === 'category' ? categoriesPath : topicsPath;
+  const [name, setName] = useState(item?.name ?? '');
+  const [active, setActive] = useState(item?.active ?? true);
+  const [latest, setLatest] = useState<CatalogValues>();
+  const [uncertain, setUncertain] = useState(false);
+  const nameField = useRef<HTMLInputElement>(null);
+  const action = useAction(error => {
+    if (isUncertainWrite(error)) return 'The save could not be confirmed. Check the refreshed catalog before opening another editor.';
+    if (error instanceof ApiError) {
+      if (error.code === 'catalog_changed') return 'This item changed since you opened it. Review the current values before saving.';
+      if (error.code === 'duplicate_catalog_name') return 'This name is already in use.';
+      if (error.code === 'category_not_found') return 'The parent category could not be found. Choose a current category.';
+      if (error.status === 404) return 'This item could not be found. Refresh the catalog.';
+      if (error.status === 422 || error.status === 400) return 'Check the name and active state, then try again.';
+    }
+    return 'The server declined this change. Check the catalog and try again.';
+  });
 
-  function choose(value: string) {
-    const item = items.find(row => row.id === value);
-    setSelected(item);
+  useEffect(() => {
     setName(item?.name ?? '');
     setActive(item?.active ?? true);
-    setCategoryId(item && 'category_id' in item ? item.category_id : '');
-  }
+    setLatest(undefined);
+    setUncertain(false);
+  }, [item]);
+  useEffect(() => { nameField.current?.focus(); }, [kind, item?.id]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim()) return;
-    const data = { name: name.trim(), active };
-    void action.run(
-      signal => selected ? apiPut<Category | Topic>(`${path}/${selected.id}`, data, signal)
-        : apiPost<Category | Topic>(path, categories ? { ...data, category_id: categoryId } : data, signal),
-      row => { setSelected(row); setName(row.name); setActive(row.active); reload(); },
-      selected ? `${label} updated.` : `${label} created.`,
-    );
+    if (action.busy || uncertain || latest || !name.trim()) return;
+    const values = { name: name.trim(), active };
+    void action.run(async signal => {
+      try {
+        if (!item) return await apiPost<Category | Topic>(path, parent ? { ...values, category_id: parent.id } : values, signal);
+        const current = await apiGet<Category | Topic>(path + '/' + item.id, signal);
+        if (current.name !== item.name || current.active !== item.active) {
+          setLatest(current);
+          refresh();
+          throw new ApiError('http', 409, 'catalog_changed');
+        }
+        return await apiPut<Category | Topic>(path + '/' + item.id, values, signal);
+      } catch (error) {
+        if (!signal.aborted && (isUncertainWrite(error) || (error instanceof ApiError && error.status === 404))) {
+          setUncertain(true);
+          refresh();
+        }
+        throw error;
+      }
+    }, row => saved(row, kind), `${kind === 'category' ? 'Category' : 'Topic'} ${item ? 'updated' : 'created'}.`);
   }
 
-  return <section className="panel detail-panel" aria-labelledby={`manage-${lower}`}>
-    <div className="panel-heading"><h2 id={`manage-${lower}`}>{categories ? 'Topics' : 'Categories'}</h2></div>
-    <form className="profile-body" onSubmit={submit}>
-      <fieldset className="profile-form" disabled={action.busy}>
-        <label>{label} to manage
-          <select value={selected?.id ?? ''} onChange={event => choose(event.target.value)}>
-            <option value="">Create a new {lower}</option>
-            {options.map(item => {
-              const category = 'category_id' in item ? categories?.find(row => row.id === item.category_id) : undefined;
-              return <option key={item.id} value={item.id}>
-                {'category_id' in item ? `${category?.name ?? 'Category not loaded'} / ` : ''}{item.name}{item.active ? '' : ' (inactive)'}
-              </option>;
-            })}
-          </select>
-        </label>
-        {more}
-        {categories && !selected && <label>Parent category
-          <select required value={categoryId} onChange={event => setCategoryId(event.target.value)}>
-            <option value="">Select a category</option>
-            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
-        </label>}
-        <label>{label} name
-          <input required maxLength={128} value={name} onChange={event => setName(event.target.value)} />
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={active} onChange={event => setActive(event.target.checked)} />
-          Active {lower}
-        </label>
-        <div className="profile-actions">
-          <button type="submit" className="primary" disabled={!name.trim() || (!!categories && !selected && !categoryId)}>
-            {selected ? 'Save' : 'Create'} {lower}
-          </button>
-          {categories && selected && <Link to={`${topicsPath}/${selected.id}`}>Manage approved bindings</Link>}
-        </div>
-      </fieldset>
-      <ActionFeedback action={action} />
-    </form>
-  </section>;
-}
-
-export function TopicBindings() {
-  const { topicId = '' } = useParams();
-  return <BindingWorkspace key={topicId} topicId={topicId} />;
-}
-
-function BindingWorkspace({ topicId }: { topicId: string }) {
-  const localOperator = __LOCAL_PROFILE_APPROVAL__ && window.location.protocol === 'http:'
-    && window.location.hostname === '127.0.0.1';
-  const load = useCallback((signal: AbortSignal) => apiGet<Topic>(`${topicsPath}/${encodeURIComponent(topicId)}`, signal), [topicId]);
-  const topic = useResource(load);
-  const sources = useResource(listSources, 0, false, localOperator);
-  const [sourceId, setSource] = useState('');
-  const [profileId, setProfile] = useState('');
-  const [operator, setOperator] = useState('');
-  const [revision, setRevision] = useState(0);
-  const action = useAction();
-  const loadVersions = useCallback((signal: AbortSignal) => listVersions(sourceId, signal), [sourceId]);
-  const profiles = useResource(loadVersions, 0, false, !!sourceId);
-  const path = bindingsPath(topicId);
-
-  function changeBinding(actionPath: string, body: object, confirmation: string) {
-    void action.run(signal => apiPost<Binding>(actionPath, body, signal),
-      () => setRevision(value => value + 1), confirmation);
-  }
-
-  return <>
-    <nav className="breadcrumb" aria-label="Breadcrumb"><Link to={topicsPath}>Categories and topics</Link> <BackToCollection /></nav>
-    <Resource label="topic" state={topic}>{item => <>
-      <div className="page-heading collection-text"><h1>{item.name}</h1></div>
-      <section className="panel detail-panel" aria-labelledby="approve-binding">
-        <div className="panel-heading"><h2 id="approve-binding">Approve a source binding</h2></div>
-        {!localOperator ? <p className="notice muted">Binding changes require local operator approval mode.</p>
-          : <form className="profile-body" onSubmit={event => {
-          event.preventDefault();
-          if (sourceId && profileId && operator.trim()) changeBinding(path, {
-            source_id: sourceId, profile_version_id: profileId, approved_by: operator.trim(),
-          }, 'Binding approved.');
-        }}>
-          <fieldset className="profile-form" disabled={action.busy}>
-            <Resource label="authorized sources" state={sources}>{rows => <label>Authorized source
-              <select required value={sourceId} onChange={event => { setSource(event.target.value); setProfile(''); }}>
-                <option value="">Select a source</option>
-                {rows.filter(row => row.adapter_type === 'web' && row.approval_status === 'approved')
-                  .map(row => <option key={row.source_id} value={row.source_id}>{row.source_name}</option>)}
-              </select>
-            </label>}</Resource>
-            {sourceId && <Resource label="approved profiles" state={profiles}>{rows => <label>Approved keyword profile
-              <select required value={profileId} onChange={event => setProfile(event.target.value)}>
-                <option value="">Select a profile version</option>
-                {rows.filter(row => row.approval_status === 'approved' &&
-                  row.configuration.adapter_type === 'web' && row.configuration.search)
-                  .map(row => <option key={row.profile_version_id} value={row.profile_version_id}>Version {row.version}</option>)}
-              </select>
-            </label>}</Resource>}
-            <label>Operator name
-              <input required maxLength={128} value={operator} onChange={event => setOperator(event.target.value)} />
-            </label>
-            <div><button className="primary" type="submit" disabled={!sourceId || !profileId || !operator.trim()}>
-              Approve binding
-            </button></div>
-          </fieldset>
-          <ActionFeedback action={action} />
-        </form>}
-      </section>
-      <section className="panel detail-panel" aria-labelledby="binding-list">
-        <div className="panel-heading"><h2 id="binding-list">Source bindings</h2></div>
-        <Page<Binding> label="Bindings" path={path} revision={revision} empty="This topic has no approved bindings.">
-          {rows => <TableRegion label="Topic source bindings">
-            <table>
-              <thead><tr><th scope="col">Source and profile</th><th scope="col">Approval (UTC)</th>
-                <th scope="col">Eligibility</th><th scope="col">Action</th></tr></thead>
-              <tbody>{rows.map(row => <tr key={row.id}>
-                <th scope="row"><Link to={profilePath(row.source_id, row.profile_version_id)}>
-                  {row.source_name} · Version {row.profile_version}
-                </Link></th>
-                <td>{row.approved_by} <Timestamp value={row.approved_at} /></td>
-                <td><Status value={row.eligible ? 'eligible' : row.disabled_at ? 'disabled' : 'unavailable'} /></td>
-                <td>{!localOperator ? '—' : row.disabled_at ? <button type="button" disabled={action.busy || !operator.trim()}
-                  onClick={() => changeBinding(`${path}/${row.id}/approve`, { approved_by: operator.trim() }, 'Binding approved.')}>
-                  Approve again
-                </button> : <button type="button" disabled={action.busy}
-                  onClick={() => changeBinding(`${path}/${row.id}/disable`, {}, 'Binding disabled.')}>Disable binding</button>}</td>
-              </tr>)}</tbody>
-            </table>
-          </TableRegion>}
-        </Page>
-      </section>
-    </>}</Resource>
-  </>;
+  return <form className="profile-body catalog-editor" onSubmit={submit}>
+    <fieldset className="profile-form" disabled={action.busy}>
+      <legend>{item ? 'Edit' : 'New'} {kind}</legend>
+      {parent && <p className="muted">Parent category · {parent.name}</p>}
+      <label>{kind === 'category' ? 'Category' : 'Topic'} name
+        <input ref={nameField} required maxLength={128} value={name} onChange={event => setName(event.target.value)} />
+      </label>
+      <label className="check"><input type="checkbox" checked={active}
+        onChange={event => setActive(event.target.checked)} />Active {kind}</label>
+      <p className="muted">{kind === 'category' ? 'Deactivating the category makes its topics unavailable for future collection.'
+        : 'Deactivating the topic makes its bindings unavailable for future collection.'} Past requests remain in collection history.</p>
+      <div className="profile-actions">
+        <button type="submit" className="primary" disabled={!name.trim() || uncertain || !!latest}>
+          {item ? 'Save' : 'Create'} {kind}
+        </button>
+        <button type="button" onClick={close}>Close editor</button>
+      </div>
+    </fieldset>
+    <ActionFeedback action={action} />
+    {latest && <p className="notice">Current server values: {latest.name} · {latest.active ? 'Active' : 'Inactive'}. Reopen the item to load these values.</p>}
+  </form>;
 }

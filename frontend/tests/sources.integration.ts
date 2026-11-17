@@ -6,6 +6,12 @@ test('registers a pending CSV source in PostgreSQL and reads actual profile vers
   const api = '/api/v1/sources';
   const health = await request.get('/api/v1/health');
   expect(health.ok()).toBe(true);
+  const invalid = await request.post(api, { data: {
+    source_name: 'M14 invalid policy fixture', adapter_type: 'web', permission_reference: 'Controlled test',
+    allowed_origins: ['https://example.com'], allowed_paths: { 'https://another.example': ['/catalog'] },
+  } });
+  expect(invalid.status()).toBe(400);
+  expect((await invalid.json()).error.code).toBe('invalid_source_policy');
   const fixtureName = 'M4-B approved fixture ' + randomUUID().slice(0, 8);
   const registered = await request.post(api, { data: {
     source_name: fixtureName, adapter_type: 'csv', permission_reference: 'Isolated integration fixture',
@@ -61,7 +67,8 @@ test('registers a pending CSV source in PostgreSQL and reads actual profile vers
   const approved = data.find(version => version.approval_status === 'approved');
   if (!approved) throw new Error('Expected an approved profile from the existing authorized fixture.');
   const versionsTable = page.getByRole('table', { name: /Profile versions/ });
-  const approvedRow = versionsTable.getByRole('row').filter({ hasText: approved.profile_version_id });
-  await expect(approvedRow.getByText(approved.config_hash, { exact: true })).toBeVisible();
-  await expect(approvedRow.getByText(approved.profile_version_id, { exact: true })).toBeVisible();
+  await versionsTable.getByRole('link', { name: `Open profile version ${approved.version}` }).click();
+  await page.getByText('Version technical details', { exact: true }).click();
+  await expect(page.getByText(approved.config_hash, { exact: true })).toBeVisible();
+  await expect(page.getByText(approved.profile_version_id, { exact: true })).toBeVisible();
 });

@@ -11,6 +11,13 @@ import type { ArticleSummary, CollectionRequest, Observation, VersionInfo } from
 const root = '/api/v1';
 const origin = 'http://collection-fixture:8001';
 
+async function operatorCapture(page: Page, name: string, landmark?: string) {
+  if (process.env.M14_CAPTURE_OPERATOR !== '1') return;
+  if (landmark) await page.getByRole('heading', { name: landmark, exact: true })
+    .evaluate(element => element.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: test.info().outputPath('operator-' + name + '.png') });
+}
+
 async function post<T>(request: APIRequestContext, path: string, data: object, status = 201, origin?: string): Promise<T> {
   const response = await request.post(root + path, { data, headers: origin ? { Origin: origin } : undefined });
   expect(response.status(), await response.text()).toBe(status);
@@ -25,6 +32,7 @@ async function register(page: Page, fixture: 'cards' | 'catalog', suffix: string
   await page.getByRole('textbox', { name: 'Permission reference' }).fill('Isolated keyword search fixture');
   await page.getByRole('textbox', { name: 'Allowed origins' }).fill(origin);
   await page.getByRole('textbox', { name: /Allowed path prefixes/ }).fill(`${origin}/m7/${fixture}`);
+  if (fixture === 'cards') await operatorCapture(page, 'registration');
   const posted = page.waitForResponse(reply =>
     reply.request().method() === 'POST' && new URL(reply.url()).pathname === root + '/sources');
   await page.getByRole('button', { name: 'Create source' }).click();
@@ -32,8 +40,12 @@ async function register(page: Page, fixture: 'cards' | 'catalog', suffix: string
   expect(reply.status()).toBe(201);
   const source: Source = await reply.json();
   expect(source.approval_status).toBe('pending');
+  await expect(page.getByRole('button', { name: 'Review authorization' })).toBeVisible();
+  if (fixture === 'cards') await operatorCapture(page, 'pending-source');
+  await page.getByRole('button', { name: 'Review authorization' }).click();
   await page.getByRole('button', { name: 'Authorize Source access' }).click();
-  await expect(page.getByRole('button', { name: 'Revoke Source access' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review revocation' })).toBeVisible();
+  if (fixture === 'cards') await operatorCapture(page, 'approved-source');
   return { name, id: source.source_id };
 }
 
@@ -137,12 +149,18 @@ test('operator configures two sources, traces collection history and downloads p
   test.setTimeout(180_000);
   // Keep the interaction and layout checks independent of the axe runtime.
   const checkAxe = browserName === 'chromium';
+  await page.setViewportSize({ width: 1440, height: 960 });
   const suffix = randomUUID().slice(0, 8);
   const cards = await register(page, 'cards', suffix);
   const catalog = await register(page, 'catalog', suffix);
   const categoryName = `Test category ${suffix}`;
   const topicName = `Test topic ${suffix}`;
 
+  const registeredSources: Source[] = await (await request.get(root + '/sources')).json();
+  const offset = Math.floor(registeredSources.findIndex(row => row.source_id === cards.id) / 20) * 20;
+  await page.goto('/sources' + (offset > 0 ? '?offset=' + offset : ''));
+  await expect(page.getByRole('link', { name: cards.name })).toBeVisible();
+  await operatorCapture(page, 'catalog');
   await page.goto(`/sources/${cards.id}/profiles/new`);
   await page.getByRole('textbox', { name: 'Record type' }).fill('article_fixture');
   await page.getByRole('combobox', { name: 'Collection mode' }).selectOption('search');
@@ -152,18 +170,25 @@ test('operator configures two sources, traces collection history and downloads p
   await page.getByRole('textbox', { name: 'Detail item selector' }).fill('article');
   await page.getByRole('textbox', { name: 'Output field name' }).fill('headline');
   await page.getByRole('textbox', { name: 'Field selector', exact: true }).fill('h2');
+  await page.getByText('Article mapping', { exact: true }).click();
   await page.getByRole('checkbox', { name: 'Store article history' }).check();
   await page.getByRole('combobox', { name: 'Article title' }).selectOption('0');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await operatorCapture(page, 'profile-editor');
   await page.getByRole('button', { name: 'Create draft', exact: true }).click();
   await page.getByRole('textbox', { name: 'Sample keyword' }).fill('quick');
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   await expect(page.getByRole('table', { name: /Preview candidates/ })).toContainText('Alpha', { timeout: 15_000 });
   await page.getByRole('button', { name: 'Validate sample' }).click();
   await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible({ timeout: 15_000 });
+  await operatorCapture(page, 'validation', 'Validation passed');
   await page.getByRole('textbox', { name: 'Approver label' }).fill('M8 profile operator');
   await page.getByRole('checkbox', { name: /confirm approval/ }).check();
+  await operatorCapture(page, 'approval-review', 'Approval review');
   await page.getByRole('button', { name: 'Approve version' }).click();
   await expect(page.getByText('Read only', { exact: true })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await operatorCapture(page, 'immutable-profile');
 
   const version = await post<Profile>(request, `/sources/${catalog.id}/versions`, {
     configuration: {
@@ -185,35 +210,43 @@ test('operator configures two sources, traces collection history and downloads p
     approver: 'M8 profile operator', report_id: report.report_id, config_hash: version.config_hash,
   }, 200, baseURL);
 
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Sources', exact: true }).click();
-  await page.getByRole('link', { name: 'Categories and topics' }).click();
+  await page.getByRole('link', { name: 'Choose topic for binding' }).click();
+  await page.getByRole('button', { name: 'New category' }).click();
   await page.getByRole('textbox', { name: 'Category name' }).fill(categoryName);
   await page.getByRole('button', { name: 'Create category' }).click();
   await expect(page.getByText('Category created.')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Parent category' }).selectOption({ label: categoryName });
+  await page.getByRole('button', { name: 'New topic' }).click();
   await page.getByRole('textbox', { name: 'Topic name' }).fill(topicName);
   await page.getByRole('button', { name: 'Create topic' }).click();
   await expect(page.getByText('Topic created.')).toBeVisible();
   await checkLayout(page, checkAxe);
   await page.screenshot({ path: test.info().outputPath('catalog-light.png'), fullPage: true });
   await page.getByRole('link', { name: 'Manage approved bindings' }).click();
+  const associatedTopic = new URL(page.url()).pathname.split('/').at(-1)!;
+  await expect(page.getByText('No eligible bindings for this topic.')).toBeVisible();
+  await operatorCapture(page, 'no-eligible-binding');
   await page.getByRole('textbox', { name: 'Operator name' }).fill('M8 topic operator');
   for (const source of [cards, catalog]) {
     await page.getByRole('combobox', { name: 'Authorized source' }).selectOption({ value: source.id });
     await page.getByRole('combobox', { name: 'Approved keyword profile' }).selectOption({ label: 'Version 1' });
+    await page.getByRole('button', { name: 'Review binding' }).click();
+    if (source === cards) await operatorCapture(page, 'binding-approval', 'Approve binding');
     await page.getByRole('button', { name: 'Approve binding', exact: true }).click();
     await expect(page.getByRole('link', { name: `${source.name} · Version 1` })).toBeVisible();
   }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await operatorCapture(page, 'binding-management');
 
   async function prepareCollection(keyword: string) {
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'New Collection' }).click();
-    await page.getByRole('button', { name: categoryName, exact: true }).click();
-    await page.getByRole('button', { name: topicName, exact: true }).click();
+    await page.goto(`/topics/${associatedTopic}`);
+    await page.getByRole('link', { name: 'Continue to New Collection' }).click();
+    await expect(page).toHaveURL(`/collection-requests/new?topic_id=${associatedTopic}`);
     for (const source of [cards, catalog]) {
       await page.getByRole('checkbox', { name: `${source.name} Approved profile · Version 1` }).check();
     }
     await page.getByRole('textbox', { name: 'Keyword', exact: true }).fill(keyword);
     await page.getByRole('button', { name: 'Review collection' }).click();
+    if (keyword === 'quick') await operatorCapture(page, 'continue-collection');
   }
   async function submitCollection() {
     const created = page.waitForResponse(reply => reply.request().method() === 'POST' &&
@@ -336,6 +369,26 @@ test('operator configures two sources, traces collection history and downloads p
   await page.goto('/collection-requests');
   await expect(page.getByRole('heading', { name: 'Collection requests' })).toBeVisible();
   await expect(page.locator(`a[href="/collection-requests/${second.id}"]`)).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.getByRole('combobox', { name: 'Theme' }).selectOption('light');
+  await page.goto('/topics/' + associatedTopic);
+  const catalogBinding = page.getByRole('row').filter({ hasText: catalog.name });
+  await catalogBinding.getByRole('button', { name: 'Review disable' }).click();
+  await page.getByRole('button', { name: 'Disable binding', exact: true }).click();
+  await expect(catalogBinding.getByText('Disabled', { exact: true }).first()).toBeVisible();
+  await catalogBinding.getByRole('button', { name: 'Review restore' }).click();
+  await page.getByRole('textbox', { name: 'Restoration approval label' }).fill('M14 fixture restoration');
+  await page.getByRole('button', { name: 'Restore binding approval' }).click();
+  await expect(catalogBinding).toContainText('M14 fixture restoration');
+  await page.goto('/sources/' + cards.id);
+  await page.getByRole('button', { name: 'Review revocation' }).click();
+  await page.getByRole('button', { name: 'Revoke Source access' }).click();
+  await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await operatorCapture(page, 'revoked-source');
+  await page.goto('/topics/' + associatedTopic);
+  await expect(page.getByRole('row').filter({ hasText: cards.name })).toContainText('Unavailable');
+  await expect(catalogBinding).toContainText('Eligible');
   console.log(`M9 requests ${initial.id} → ${second.id}, controlled partial ${partial.id}, article ${articlePath}, evidence ${selectedObservation.evidence_id}, exported ${persisted.length} records`);
 });
 

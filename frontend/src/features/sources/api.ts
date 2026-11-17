@@ -1,4 +1,4 @@
-import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
+import { ApiError, apiGet, apiPatch, apiPostWithStatus } from '../../lib/api';
 import type { Profile } from '../profiles/api';
 
 export const sourcesPath = '/sources';
@@ -38,11 +38,11 @@ export const listVersions = (id: string, signal: AbortSignal) =>
   apiGet<Profile[]>(`${sourcePath(id)}/versions`, signal);
 
 export async function createSource(input: CreateSourceInput & { request_key: string }, signal: AbortSignal) {
-  const source = await apiPost<Source>(sourcesPath, { ...input, approval_status: 'pending' }, signal);
-  if (!source || typeof source.source_id !== 'string' || !/^[\da-f]{32}$/i.test(source.source_id)) {
+  const { status, data: source } = await apiPostWithStatus<Source>(sourcesPath, { ...input, approval_status: 'pending' }, signal);
+  if ((status !== 200 && status !== 201) || !source || typeof source.source_id !== 'string' || !/^[\da-f]{32}$/i.test(source.source_id)) {
     throw new ApiError('invalid-response');
   }
-  return source;
+  return { source, replayed: status === 200 };
 }
 
 export const adapterLabels: Record<Adapter, string> = { web: 'Controlled web', csv: 'CSV' };

@@ -7,6 +7,7 @@ import './app/shell.css';
 import './features/dashboard/dashboard.css';
 import './features/sources/sources.css';
 import './features/profiles/profiles.css';
+import './features/operator/operator.css';
 import './features/results/results.css';
 import './features/collection-jobs/jobs.css';
 

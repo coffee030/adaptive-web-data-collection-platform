@@ -125,17 +125,19 @@ export function MoreOptions({ label, options }: {
   </div>;
 }
 
-export function Page<T>({ path, label, empty, requestId, revision, paging, children }: {
+export function Page<T>({ path, label, empty, requestId, filters, revision, paging, children }: {
   path: string; label: string; empty: string; requestId?: string; revision?: number;
+  filters?: Record<string, string>;
   paging?: { offset: number; change: (offset: number) => void };
   children: (rows: T[]) => ReactNode;
 }) {
   const size = 20;
   const [localOffset, setOffset] = useState(0);
   const offset = paging?.offset ?? localOffset;
+  const query = new URLSearchParams({ ...filters, ...(requestId ? { request_id: requestId } : {}) }).toString();
   const load = useCallback((signal: AbortSignal) => listPage<T>(
-    path, signal, size + 1, offset, requestId ? { request_id: requestId } : {},
-  ), [path, offset, requestId]);
+    path, signal, size + 1, offset, Object.fromEntries(new URLSearchParams(query)),
+  ), [path, offset, query]);
   const state = useResource(load, revision, true);
   return <Resource label={label.toLowerCase()} state={state}>{rows => <>
     {rows.length ? children(rows.slice(0, size)) : <p className="notice muted">{empty}</p>}

@@ -126,8 +126,9 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
   await page.getByRole('textbox', { name: 'Allowed origins' }).fill(origin);
   await page.getByRole('textbox', { name: /Allowed path prefixes/ }).fill(`${origin}/m7/cards`);
   await page.getByRole('button', { name: 'Create source' }).click();
+  await page.getByRole('button', { name: 'Review authorization' }).click();
   await page.getByRole('button', { name: 'Authorize Source access' }).click();
-  await expect(page.getByRole('button', { name: 'Revoke Source access' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review revocation' })).toBeVisible();
   await page.getByRole('link', { name: 'Create draft', exact: true }).click();
   await page.getByRole('textbox', { name: 'Record type' }).fill('search_fixture');
   await page.getByRole('combobox', { name: 'Collection mode' }).selectOption('search');
@@ -135,6 +136,7 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
   await page.getByRole('textbox', { name: 'Search result item selector' }).fill('li.result');
   await page.getByRole('textbox', { name: 'Detail link selector' }).fill('a.item');
   await page.getByRole('textbox', { name: 'Detail item selector' }).fill('article');
+  await page.getByText('Pagination and request limits', { exact: true }).click();
   await page.getByRole('textbox', { name: /Search next-link selector/ }).fill('a.next');
   await page.getByRole('combobox', { name: 'Maximum search pages' }).selectOption('2');
   await page.getByRole('textbox', { name: 'Output field name' }).fill('title');
@@ -186,6 +188,7 @@ test('M6 browser workflow approves pagination and follows page-level evidence', 
   await page.getByRole('link', { name: 'Create draft', exact: true }).click();
   await page.getByRole('textbox', { name: 'Record type' }).fill('paginated_listing');
   await page.getByRole('textbox', { name: 'Item selector' }).fill('article');
+  await page.getByText('Pagination and request limits', { exact: true }).click();
   await page.getByRole('textbox', { name: /Next-link selector/ }).fill('a.next');
   await page.getByRole('combobox', { name: 'Maximum HTML pages' }).selectOption('3');
   await page.getByRole('textbox', { name: 'Output field name' }).fill('title');

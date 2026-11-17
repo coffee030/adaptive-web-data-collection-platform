@@ -120,6 +120,7 @@ test('preview, validation, unsaved warning and revision invalidation', async ({ 
   await leave;
   await expect(page).toHaveURL(uiDraft);
   await page.getByRole('button', { name: 'Save draft' }).click();
+  await page.getByText('Version technical details', { exact: true }).click();
   await expect(page.getByText('b'.repeat(64))).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validation passed' })).toHaveCount(0);
 });
@@ -163,6 +164,7 @@ for (const status of ['approved', 'retired'] as const) {
     await page.goto(uiDraft);
     await expect(page.getByRole('table', { name: 'Output fields' })).toContainText('Name');
     await expect(page.getByText('Demo operator')).toBeVisible();
+    await page.getByText('Version technical details', { exact: true }).click();
     await expect(page.getByText(report.report_id)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save draft' })).toHaveCount(0);
   });
@@ -201,6 +203,135 @@ test('a concurrent configuration change blocks PUT and preserves edits', async (
   await expect(page.getByRole('alert')).toContainText('Another edit was saved first');
   await expect(page.getByRole('textbox', { name: 'Record type' })).toHaveValue('my change');
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Reload server version' }).click();
+  await expect(page.getByRole('heading', { name: 'Server revision 2' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Record type' })).toHaveValue('my change');
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Use server configuration' }).click();
+  await expect(page.getByRole('textbox', { name: 'Record type' })).toHaveValue('listing');
+});
+
+test('an unconfirmed PUT reloads the saved revision without replaying the mutation', async ({ page }) => {
+  const { persist } = await setup(page);
+  let saves = 0;
+  await page.route(url => url.pathname === apiVersion, route => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    saves++;
+    const { configuration } = route.request().postDataJSON();
+    persist({ ...draft, configuration, revision: 2, config_hash: 'c'.repeat(64) });
+    return route.abort('connectionreset');
+  });
+  await page.goto(uiDraft);
+  await page.getByRole('textbox', { name: 'Record type' }).fill('possibly persisted');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('alert')).toContainText('Backend unavailable');
+  await page.getByRole('button', { name: 'Reload server version' }).click();
+  await expect(page.getByRole('heading', { name: 'Server revision 2' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Record type' })).toHaveValue('possibly persisted');
+  expect(saves).toBe(1);
+});
+
+test('a write in flight warns before leaving and reload shows the committed revision', async ({ page }) => {
+  await setup(page);
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  await page.route(url => url.pathname === apiVersion, async route => {
+    if (route.request().method() === 'PUT') await waiting;
+    await route.fallback();
+  });
+  await page.goto(uiDraft);
+  await page.getByRole('textbox', { name: 'Record type' }).fill('committed after navigation warning');
+  const pending = page.waitForRequest(request => request.method() === 'PUT');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await pending;
+  await expect(page.getByRole('textbox', { name: 'Record type' })).toBeDisabled();
+  const warning = page.waitForEvent('dialog');
+  const leave = page.getByRole('link', { name: 'Source details' }).click();
+  const dialog = await warning;
+  expect(dialog.message()).toContain('A request already sent may still complete.');
+  await dialog.dismiss();
+  await leave;
+  await expect(page).toHaveURL(uiDraft);
+  release();
+  await expect(page.getByText('Draft saved.', { exact: false })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Record type' })).toHaveValue('committed after navigation warning');
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+});
+
+test('a disallowed sample leaves the draft and sample available for correction', async ({ page }) => {
+  await setup(page);
+  await page.route(url => url.pathname === apiVersion + '/preview', route =>
+    route.fulfill({ status: 403, json: { error: { code: 'dataset_not_allowed' } } }));
+  await page.goto(uiDraft);
+  await fillSample(page);
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('outside the allowed inputs');
+  await expect(page.getByRole('textbox', { name: 'CSV sample' })).toHaveValue('Name\nRiver Walk\n');
+  await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Approve version' })).toHaveCount(0);
+});
+
+test('source revocation during editing prevents another sample check', async ({ page }) => {
+  const currentSource = { ...source };
+  await setup(page, currentSource);
+  let validates = 0;
+  await page.route(url => url.pathname === apiVersion + '/validate', route => {
+    validates++;
+    return route.fulfill({ json: report });
+  });
+  await page.goto(uiDraft);
+  await fillSample(page);
+  currentSource.approval_status = 'revoked';
+  await page.getByRole('button', { name: 'Validate sample' }).click();
+  await expect(page.getByRole('alert')).toContainText('Source is no longer authorized');
+  await expect(page.getByText('Sample checks require approved Source access.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Validate sample' })).toBeDisabled();
+  expect(validates).toBe(0);
+});
+
+test('a passing report stays inspectable outside the configured operator origin', async ({ page, baseURL }) => {
+  await setup(page);
+  await page.route(url => url.pathname === apiVersion + '/validate', route => route.fulfill({ json: report }));
+  const otherOrigin = new URL(uiDraft, baseURL!);
+  otherOrigin.hostname = 'localhost';
+  await page.goto(otherOrigin.href);
+  await fillSample(page);
+  await page.getByRole('button', { name: 'Validate sample' }).click();
+  await expect(page.getByRole('heading', { name: 'Validation passed' })).toBeVisible();
+  await expect(page.getByText('Changes here require the local operator console', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve version' })).toHaveCount(0);
+});
+
+test('closing editor sections preserves search, XPath and article mappings', async ({ page }) => {
+  const web: Source = { ...source, adapter_type: 'web', allowed_origins: ['http://127.0.0.1:8001'] };
+  await setup(page, web);
+  await page.goto(uiSource + '/profiles/new');
+  await page.getByRole('textbox', { name: 'Record type' }).fill('article');
+  await page.getByRole('combobox', { name: 'Collection mode' }).selectOption('search');
+  await page.getByRole('textbox', { name: 'Search result item selector' }).fill('//li');
+  await page.getByRole('textbox', { name: 'Detail link selector' }).fill('./a');
+  await page.getByRole('combobox', { name: 'Selector type', exact: true }).selectOption('xpath');
+  await page.getByRole('textbox', { name: 'Detail item selector' }).fill('//article');
+  await page.getByRole('textbox', { name: 'Output field name' }).fill('headline');
+  await page.getByRole('textbox', { name: 'Field selector', exact: true }).fill('./h2');
+  const pagination = page.getByText('Pagination and request limits', { exact: true });
+  await pagination.click();
+  await page.getByRole('textbox', { name: 'Search next-link selector' }).fill('//a[@rel="next"]');
+  await page.getByRole('combobox', { name: 'Maximum search pages' }).selectOption('2');
+  await pagination.click();
+  const mapping = page.getByText('Article mapping', { exact: true });
+  await mapping.click();
+  await page.getByRole('checkbox', { name: 'Store article history' }).check();
+  await page.getByRole('combobox', { name: 'Article title' }).selectOption('0');
+  await mapping.click();
+  const post = page.waitForRequest(request => request.method() === 'POST');
+  await page.getByRole('button', { name: 'Create draft' }).click();
+  expect((await post).postDataJSON().configuration).toMatchObject({
+    selector_type: 'xpath', item_selector: '//article',
+    search: { pagination: { next_link_selector: '//a[@rel="next"]', max_pages: 2 } },
+    article: { title: 'headline' },
+  });
 });
 
 for (const status of [404, 503]) {
