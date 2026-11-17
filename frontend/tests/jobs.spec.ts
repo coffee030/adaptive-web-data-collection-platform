@@ -3,6 +3,7 @@ import { chromium, expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import type { CollectionJob, ExecutionEvent } from '../src/features/collection-jobs/api';
 import type { GenericRecord } from '../src/features/results/api';
+import type { CollectionRequest } from '../src/features/topic-collections/api';
 import { captureM15, captureM15Zoom } from './m15Capture';
 
 const jobId = '1b8e00c2-b2f7-4c80-8368-016b42ac249d';
@@ -57,6 +58,79 @@ async function mockDetail(page: Page, job = partialJob, related = [record], time
   await page.route(url => url.pathname === api + jobUrl, route => route.fulfill({ json: job }));
   await page.route(url => url.pathname === api + jobUrl + '/events', route => route.fulfill({ json: timeline }));
   await page.route(url => url.pathname === api + '/records', route => route.fulfill({ json: related }));
+}
+
+const parentId = '23ec0c1c-0eeb-45eb-b6a6-b301a7ae4642';
+const parentPath = '/collection-requests/' + parentId;
+
+function parentWith(job: CollectionJob): CollectionRequest {
+  return {
+    id: parentId, topic_id: parentId, keyword: 'fixtures', topic_name: 'Fixture listings', status: 'partial',
+    created_at: instant, finished_at: instant, refresh_of: null,
+    jobs: [{ binding_id: parentId, approved_by: 'Fixture operator', approved_at: instant,
+      source_name: 'Fixture source', profile_version: 2, job }],
+  };
+}
+
+test('a verified parent Request restores its Job trigger through Back, Forward and the return link', async ({ page }) => {
+  await mockDetail(page);
+  await page.route(api + parentPath, route => route.fulfill({ json: parentWith(partialJob) }));
+  const requestUrl = parentPath + '?scope=preserved';
+  await page.goto(requestUrl);
+  const trigger = page.getByRole('link', { name: 'Job details', exact: true });
+  await trigger.press('Enter');
+  const parent = page.getByRole('link', { name: 'View parent request' });
+  await expect(parent).toHaveAttribute('href', requestUrl);
+  const jobAddress = page.url();
+
+  await page.goBack();
+  await expect(trigger).toBeFocused();
+  await page.goForward();
+  await expect(page).toHaveURL(jobAddress);
+  await parent.click();
+  await expect(page).toHaveURL(requestUrl);
+  await expect(trigger).toBeFocused();
+
+  await page.goto(jobUrl + '?from=' + encodeURIComponent(parentPath));
+  await expect(parent).toHaveAttribute('href', parentPath);
+});
+
+test('a direct Job ignores a parent Request supplied only by router state', async ({ page }) => {
+  await mockDetail(page);
+  let parentReads = 0;
+  await page.route(api + parentPath, route => {
+    parentReads++;
+    return route.fulfill({ json: parentWith(partialJob) });
+  });
+  await page.addInitScript(id => {
+    history.replaceState({ idx: 0, usr: { requestId: id } }, '');
+  }, parentId);
+  await page.goto(jobUrl);
+  await expect(page.getByRole('region', { name: 'Run overview' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'View parent request' })).toHaveCount(0);
+  expect(parentReads).toBe(0);
+});
+
+for (const scenario of ['different child', 'missing request', 'mismatched response ID'] as const) {
+  test(`a Job suppresses a stale parent hint with a ${scenario}`, async ({ page }) => {
+    await mockDetail(page);
+    await page.route(api + parentPath, route => {
+      if (scenario === 'missing request') return route.fulfill({ status: 404, json: {} });
+      if (scenario === 'different child') return route.fulfill({
+        json: parentWith({ ...partialJob, job_id: 'c0254d2c-ee51-4c71-8408-65b8561c95bb' }),
+      });
+      return route.fulfill({ json: { ...parentWith(partialJob), id: 'c0254d2c-ee51-4c71-8408-65b8561c95bb' } });
+    });
+    await page.addInitScript(id => {
+      history.replaceState({ idx: 0, usr: { requestId: id } }, '');
+    }, parentId);
+    const check = page.waitForResponse(api + parentPath);
+    await page.goto(jobUrl + '?from=' + encodeURIComponent(parentPath));
+    await check;
+    await expect(page.getByRole('region', { name: 'Run overview' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View parent request' })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Collection request' })).toHaveCount(0);
+  });
 }
 
 test('invalid timestamps render a fallback and a job can have no capture', async ({ page }) => {

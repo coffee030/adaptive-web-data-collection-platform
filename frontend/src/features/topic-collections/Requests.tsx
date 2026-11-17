@@ -152,11 +152,11 @@ function RequestWorkspace({ requestId }: { requestId: string }) {
                 <p><Link to={profilePath(job.source_id, job.profile_version_id)}>Pinned profile version {profile_version}</Link></p>
                 <p>{job.valid_count} accepted · {job.invalid_count} invalid · {job.duplicate_count} duplicates</p>
                 <div className="profile-actions">
-                  <ContextLink id={'request-job-' + job.job_id} to={jobPath(job.job_id)} state={{ requestId }}>Job details</ContextLink>
+                  <ContextLink id={'request-job-' + job.job_id} to={jobPath(job.job_id)}>Job details</ContextLink>
                   <Link to={recordsForJob(job.job_id)}>Records</Link>
                   <Link to={quarantinePath(job.job_id)}>Quarantine</Link>
                   {job.finished_at && <ContextLink id={'request-evidence-' + job.job_id}
-                    to={jobPath(job.job_id) + '#job-evidence-title'} state={{ requestId }}>Evidence</ContextLink>}
+                    to={jobPath(job.job_id) + '#job-evidence-title'}>Evidence</ContextLink>}
                 </div>
                 <div className="request-job-timing muted">
                   {job.started_at && <div>Started <Timestamp value={job.started_at} /> UTC</div>}

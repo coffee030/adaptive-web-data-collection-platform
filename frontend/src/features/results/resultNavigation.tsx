@@ -87,12 +87,12 @@ export function useReturnPosition() {
   return useNavigationType() === 'POP' && positions.has(key);
 }
 
-export function ContextLink({ to, id, onClick, state, ...props }: Omit<LinkProps, 'to' | 'state'> & {
-  to: string; id: string; state?: object;
+export function ContextLink({ to, id, onClick, ...props }: Omit<LinkProps, 'to' | 'state'> & {
+  to: string; id: string;
 }) {
   const { pathname, search, hash, key } = useLocation();
   const from = pathname + search + hash;
-  return <Link {...props} id={id} to={withContext(to, from)} state={{ ...state, resultOrigin: from }}
+  return <Link {...props} id={id} to={withContext(to, from)} state={{ resultOrigin: from }}
     onClick={event => {
       onClick?.(event);
       if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {

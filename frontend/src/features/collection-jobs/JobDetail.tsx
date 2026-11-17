@@ -26,17 +26,17 @@ function JobDetailPage({ id }: { id: string }) {
   const search = location.state?.jobsSearch;
   const back = origin.split('?')[0] === jobsPath ? origin
     : typeof search === 'string' && search ? `${jobsPath}?${search}` : jobsPath;
-  const knownRequest = resultId(typeof location.state?.requestId === 'string' ? location.state.requestId : null);
   const requestOrigin = origin.startsWith(requestsPath + '/') ? resultId(origin.split(/[?#]/, 1)[0]?.slice(requestsPath.length + 1) ?? null) : '';
-  const loadRequest = useCallback((signal: AbortSignal) => apiGet<CollectionRequest>(requestPath(requestOrigin), signal), [requestOrigin]);
-  const parent = useResource(loadRequest, 0, false, !!requestOrigin && !knownRequest).result;
-  const requestId = knownRequest || (parent.state === 'ready' && parent.data.jobs.some(({ job }) => sameId(id, job.job_id)) ? requestOrigin : '');
   const validId = !!resultId(id);
   const [revision, setRevision] = useState(0);
   const [manualRevision, setManualRevision] = useState(0);
   const load = useCallback((signal: AbortSignal) => getJob(id, signal), [id]);
   const { result, refreshing, resolvedRevision, refreshError } = useResource(load, revision, true, validId, true);
   const job = result.state === 'ready' ? result.data : undefined;
+  const loadRequest = useCallback((signal: AbortSignal) => apiGet<CollectionRequest>(requestPath(requestOrigin), signal), [requestOrigin]);
+  const parent = useResource(loadRequest, 0, false, !!job && !!requestOrigin).result;
+  const requestId = parent.state === 'ready' && sameId(requestOrigin, parent.data.id)
+    && parent.data.jobs.some(({ job }) => sameId(id, job.job_id)) ? requestOrigin : '';
   const active = job?.status === 'pending' || job?.status === 'running';
   const readEvents = useCallback((signal: AbortSignal) => listEvents(id, signal), [id]);
   const events = useResource(readEvents, resolvedRevision, true, !!job, true);
@@ -77,7 +77,7 @@ function JobDetailPage({ id }: { id: string }) {
     <>
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <ReturnLink to={back}>Collection Jobs</ReturnLink>
-        {requestId && <ReturnLink to={requestPath(requestId)}>Collection request</ReturnLink>}
+        {requestId && <ReturnLink to={origin}>Collection request</ReturnLink>}
       </nav>
       <div className="page-heading detail-heading">
         <div>
@@ -110,7 +110,7 @@ function JobDetailPage({ id }: { id: string }) {
       {result.state === 'ready' && (
         <>
           {refreshError && <p className="notice job-stale" role="status">Job refresh failed. Showing the last recorded status. {active && 'Automatic refresh will resume while this page is visible.'}</p>}
-          <JobOverview job={result.data} requestId={requestId} />
+          <JobOverview job={result.data} parentRequest={requestId ? origin : ''} />
           <ExecutionDiagnostics job={result.data} active={active} />
           <JobError job={result.data} />
           <EventTimeline resource={events} />
@@ -128,7 +128,7 @@ function JobDetailPage({ id }: { id: string }) {
   );
 }
 
-function JobOverview({ job, requestId }: { job: CollectionJob; requestId: string }) {
+function JobOverview({ job, parentRequest }: { job: CollectionJob; parentRequest: string }) {
   const contextLoad = useCallback((signal: AbortSignal) => loadJobContext([job], signal),
     [job.source_id, job.profile_version_id]);
   const context = useResource(contextLoad).result;
@@ -154,7 +154,7 @@ function JobOverview({ job, requestId }: { job: CollectionJob; requestId: string
         <div><span className="muted">Pinned Profile Version</span><Link to={profilePath(job.source_id, job.profile_version_id)}>
           {profile ? 'Version ' + profile.version : 'Profile ' + shortId(job.profile_version_id)}
         </Link></div>
-        {requestId && <div><span className="muted">Collection Request</span><ReturnLink to={requestPath(requestId)}>View parent request</ReturnLink></div>}
+        {parentRequest && <div><span className="muted">Collection Request</span><ReturnLink to={parentRequest}>View parent request</ReturnLink></div>}
       </div>
       <nav className="profile-actions job-outcome-actions" aria-label="Inspect job results">
         <JobSectionLink target="events-title">Execution events</JobSectionLink>
