@@ -1,6 +1,5 @@
 #Requires -Version 5.1
 . "$PSScriptRoot/Platform.ps1"
-. "$PSScriptRoot/Install-DemoShortcut.ps1"
 
 $testRoot = Join-Path $Root ('logs/launcher/tests-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $testRoot -Force
@@ -333,33 +332,6 @@ Test-Case 'One-click Demo skips overlapping Windows routes and Docker networks' 
     function Invoke-Docker { return $fail }
     Expect-Error 'NET-004' { Find-DemoSubnets }
 }
-Test-Case 'Desktop installer creates, reuses and updates its own Unicode-path shortcut' {
-    $desktop = Join-Path $testRoot 'Desktop'
-    $a = Join-Path $testRoot ('First checkout ' + [char]0x6E2C)
-    $b = Join-Path $testRoot ('Moved checkout ' + [char]0x8A66)
-    foreach ($folder in $desktop, $a, $b) { $null = New-Item -ItemType Directory -Path $folder }
-    foreach ($folder in $a, $b) {
-        [IO.File]::WriteAllText((Join-Path $folder 'Start-FYP-Demo.bat'), '@exit /b 0')
-    }
-    $path = Join-Path $desktop 'FYP Demo.lnk'
-    Assert ((Install-DemoShortcut $desktop $a) -eq 'Installed') 'The first shortcut was not created.'
-    $initial = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
-    Assert ((Install-DemoShortcut $desktop $a) -eq 'Already installed') 'The valid shortcut was not reused.'
-    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -ceq $initial) 'The valid shortcut was rewritten.'
-    [IO.File]::Delete((Join-Path $a 'Start-FYP-Demo.bat'))
-    Assert ((Install-DemoShortcut $desktop $b) -eq 'Updated') 'The shortcut did not follow the moved checkout.'
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut($path)
-    Assert ($link.TargetPath -ieq (Join-Path $b 'Start-FYP-Demo.bat') -and $link.WorkingDirectory -ieq $b -and !$link.Arguments) 'The shortcut fields were wrong.'
-    $link.Description = 'Unrelated shortcut'
-    $link.Save()
-    $before = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
-    $refused = $false
-    try { $null = Install-DemoShortcut $desktop $b }
-    catch { $refused = $_.Exception.Message -match 'unrelated FYP Demo shortcut' }
-    Assert ($refused -and $before -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))) 'An unrelated shortcut was affected.'
-}
-
 $script:Local = $OriginalLocal
 Write-Host "$($Count - $Failures)/$Count launcher tests passed."
 # Remove the disposable generated credential while keeping the sanitized test log.

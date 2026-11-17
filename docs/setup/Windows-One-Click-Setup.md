@@ -18,9 +18,9 @@
 
 ## Isolated Synthetic Demo
 
-1. With the Windows prerequisites installed, double-click `Install-FYP-Demo-Shortcut.bat` once to create **FYP Demo** on your Desktop. Run the installer again after moving the checkout to update its shortcut.
-2. Double-click **FYP Demo** each time you present. The launcher opens the Dashboard in your default browser when all three baselines are ready. It opens the existing Dashboard if the Demo is already running. You can also double-click `Start-FYP-Demo.bat` in File Explorer.
-3. If startup fails, the launcher window displays the cause, recovery steps and diagnostic log path. Wait for an ongoing startup to finish before clicking again.
+1. Double-click `Start-FYP-Demo.bat` in File Explorer. Follow any prerequisite prompts.
+2. The launcher opens the Dashboard in your default browser when all three baselines are ready. It reuses the saved Demo when you start again from the same checkout.
+3. If startup fails, the launcher displays the cause, recovery steps and diagnostic log path. Wait for an ongoing startup to finish before clicking again.
 
 The first one-click Start prepares the isolated settings and seeds the existing Demo. It prefers Dashboard port `5198` and selects an available nearby port if needed. It checks existing Docker subnets and Windows routes before choosing private subnets for the new Demo. Later launches use the saved settings and reuse the existing data. Windows prerequisite installer prompts require your approval.
 

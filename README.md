@@ -9,7 +9,7 @@ This is a higher diploma final-year project. The current version runs on a trust
 You’ll need Windows 11 with WSL 2, Docker Desktop running in Linux container mode, and Node.js 22.13 or later in the 22.x series.
 
 ```powershell
-git clone --branch feature/M10-core-reliability-evaluation https://github.com/coffee030/adaptive-web-data-collection-platform.git
+git clone --branch main https://github.com/coffee030/adaptive-web-data-collection-platform.git
 cd adaptive-web-data-collection-platform
 .\Setup-Platform.bat
 .\Start-Platform.bat
@@ -21,7 +21,7 @@ A fresh Normal installation opens an empty Dashboard at [127.0.0.1:5197](http://
 
 ### Synthetic Demo
 
-After installing the prerequisites, double-click `Install-FYP-Demo-Shortcut.bat` once. Then double-click **FYP Demo** on your Windows Desktop to start the existing Demo and open its Dashboard. You can also double-click `Start-FYP-Demo.bat` in the checkout. Rerun the shortcut installer from the new location if you move the checkout.
+Double-click `Start-FYP-Demo.bat` in File Explorer. The launcher checks prerequisites, starts the isolated Demo, verifies its three presets and opens the Dashboard in your default browser.
 
 The PowerShell commands for operating the same Demo are available as well.
 
@@ -58,3 +58,5 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 - [Windows setup and troubleshooting](docs/setup/Windows-One-Click-Setup.md)
 - [Example data and manual Docker Compose setup](docs/demo/M5.5-dashboard-demo-runbook.md)
 - [Development and testing](docs/demo/M5-core-demo-runbook.md)
+- [MVP release readiness](docs/evaluation/M16-Release-Readiness.md)
+- [FYP presentation runbook](docs/evaluation/M16-FYP-Presentation-Runbook.md)

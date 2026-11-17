@@ -2,7 +2,7 @@
 
 ## Start an isolated demonstration
 
-Use Windows 11 AMD64, WSL2, Docker Desktop Linux Engine, Node.js 22.13+ in the 22.x series, and an available local browser. Double-click `Install-FYP-Demo-Shortcut.bat` once, then double-click **FYP Demo** on the Desktop whenever you present. The shortcut opens the configured Dashboard after all three baselines are ready. To start directly from the checkout, double-click `Start-FYP-Demo.bat`.
+Use Windows 11 AMD64, WSL2, Docker Desktop Linux Engine, Node.js 22.13+ in the 22.x series, and an available local browser. Double-click `Start-FYP-Demo.bat` from the checkout. The launcher opens the configured Dashboard after all three baselines are ready.
 
 The existing PowerShell workflow is also available.
 
