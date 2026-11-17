@@ -7,8 +7,8 @@
 | 最新已審閱起點 | M15 `0b609b198146fdc2e0ab494e7a4a3b58083abc5d` |
 | M16 最後程式實作提交 | `185981553a14bf005345a5761eb549aa216a785c`。發行文件與 GitHub 審驗結果以獨立文件提交保存。 |
 | Integration branch | [feature/M16-final-mvp-acceptance](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M16-final-mvp-acceptance) |
-| Draft PR | PENDING，候選推送後建立。 |
-| GitHub Actions | PENDING，待 PR 的遠端執行結果。 |
+| Draft PR | [#5 · M16 — Final MVP Acceptance and M6–M16 Integration](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/5)，目標 `main`。 |
+| GitHub Actions | [Draft PR #5 即時驗證報告](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/5/checks)。本機 frontend build 和 Linux unit-check 選取的 187 項測試已通過。 |
 | 獨立技術審閱 | PENDING |
 | Normal PR merge／post-merge verification | PENDING。審驗前 `main` 為 `2f880f9ae1e30fa3fff7e11261194873b8ccd2de`。 |
 | 舊 stacked PRs | #1～#4 保留 Draft，等待整合後驗證。 |
