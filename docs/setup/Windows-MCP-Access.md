@@ -16,7 +16,7 @@ Invoke-RestMethod "$env:FYP_MCP_API_BASE/health"
 
 Add the example's `fyp` tables to this checkout's local `.codex/config.toml`. Fill in the absolute checkout path and the current Demo API port. In a fresh Codex CLI session that trusts the checkout, ask it to call `fyp.list_categories` and report the first Category name and ID. Other local clients can use the same Python executable, arguments `-m mcp_access.server`, checkout root, and environment variable, with stdio transport. [Project configuration example](../../mcp_access/codex.config.example.toml) [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 
-For a one-off read from PowerShell, reuse `$python` and `FYP_MCP_API_BASE` from the setup above.
+For a one-off read from PowerShell, reuse `$python` and `FYP_MCP_API_BASE` from the setup above. This command exposes only `list_categories` from the FYP server.
 
 ```powershell
 $command = (Resolve-Path $python).Path.Replace('\', '/')
@@ -24,6 +24,7 @@ $root = (Get-Location).Path.Replace('\', '/')
 $overrides = @(
     '-c', ('mcp_servers.fyp.command="' + $command + '"'),
     '-c', 'mcp_servers.fyp.args=["-m","mcp_access.server"]',
+    '-c', "mcp_servers.fyp.enabled_tools=['list_categories']",
     '-c', ('mcp_servers.fyp.cwd="' + $root + '"'),
     '-c', ('mcp_servers.fyp.env.FYP_MCP_API_BASE="' + $env:FYP_MCP_API_BASE + '"')
 )
@@ -37,7 +38,7 @@ Complete the setup above before the presentation. Open the Dashboard URL from di
 | Time | Say this to the host | Show in the Dashboard |
 | --- | --- | --- |
 | 0:00–0:45 | “Which approved sources can I use for Fixture Listings under Core Demonstration? Show me the choices and wait.” | The available choices are Demo Catalog and Demo Cards. |
-| 0:45–1:30 | “Collect the keyword quick from both of those sources once. Give me the request ID so I can open it in the Dashboard.” | Open **Collection requests** and choose the exact Request ID. Explain the state the receipt reported. |
+| 0:45–1:30 | “Collect the keyword quick from both of those sources once. Give me the request ID so I can open it in the Dashboard.” | Open `<DASHBOARD_ORIGIN>/collection-requests/<REQUEST_ID>` using the Dashboard origin from diagnostics and the ID returned by the host. The history list labels rows by topic and keyword, so repeated runs can look alike. Explain the state the receipt reported. |
 | 1:30–2:45 | “How did each source finish? Show me one accepted record, where it came from, and the stored SHA-256 for its evidence.” | Check both **Child jobs**, then select **View request records**. Match the Record ID under **Provenance and identifiers** because both headlines can be Alpha. Open **View capture evidence** and compare Evidence ID and **Content SHA-256**. |
 | 2:45–4:00 | “Run one new collection for detail404 using the same two sources. Once it finishes, tell me what each source retained, what failed, and show me the evidence for a retained record.” | In the new Request, show Partial for the parent and both Jobs. Each Job retains one Alpha with zero invalid records and duplicates, and separately reports a fetch error with HTTP 404. Follow the host's retained Record to Evidence. |
 
