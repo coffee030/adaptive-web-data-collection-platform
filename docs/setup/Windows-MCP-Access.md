@@ -30,6 +30,23 @@ $overrides = @(
 codex @overrides --ask-for-approval never exec --ignore-user-config --ephemeral --sandbox read-only --json 'Use only the fyp MCP server. Call list_categories with limit 1 and report the category name and ID.'
 ```
 
+## 提交一次 Topic Collection
+
+1. 使用 `list_categories`、`list_topics` 和 `list_topic_sources` 查閱可選來源。以 **Core Demonstration → Fixture Listings** 為例，選擇 Demo Cards 和 Demo Catalog 的 binding ID。
+2. 使用者明確要求採集後，呼叫 `prepare_collection(topic_id, keyword, binding_ids)`。傳入 1 至 4 個相異的 binding ID。準備結果的 `submitted` 為 `false`，每次準備會產生新的 UUID。呼叫端應先保存完整的 `submission`，再進行提交。
+3. 核對 Topic、keyword、bindings 及 host 的寫入審批。將 `submission` 的四個欄位原樣傳入 `start_collection`。HTTP 201 的 `created` receipt 表示已建立 Request，HTTP 200 的 `replayed` 表示同一意圖已存在。Receipt 含伺服器分派的 `request_id`、當前狀態、每個 binding 及其 Job ID。以 `request_id` 開啟 Dashboard 或限時輪詢 `get_collection_status`，例如每秒一次、最多 90 秒。
+4. 若 MCP 回報 `outcome: unknown` 或 client 在提交後失去回覆，以保存的 key 和同一組參數再呼叫一次 `start_collection`。傳輸錯誤的 `structuredContent` 包含 `request_key` 與 `retry_same_key`。如 key 已遺失，先到 Dashboard 的 **Collection requests** 核對歷史。HTTP 409 的 `collection_request_conflict` 代表該 key 已用於其他意圖。新增另一個明確要求的採集時，重新呼叫 `prepare_collection`。
+
+`start_collection` 每次呼叫只發出一個有時限的 POST，由平台判斷資格並建立 Request 和 Jobs。已接受意圖的重播可取回歷史 receipt。若來源或 binding 後來失去資格，以新 key 提交的混合選擇會整批被拒絕。使用 host 原有的寫入審批設定。
+
+`get_collection_status` 按來源呈現 Job 狀態、已接受、驗證無效和重複的紀錄數，以及已知的錯誤代碼和 HTTP 狀態。部分完成可能保留有效紀錄，可用 `get_collection_records` 查閱。`invalid_count` 計算驗證無效的紀錄。頁面擷取錯誤見各 Job 的錯誤及 Dashboard execution events。
+
+維護者可在獨立 Synthetic Demo 執行以下驗收。它會提交 `quick`、確認相同意圖在新 key 下可另建 Request、模擬已提交但回覆遺失、提交 `detail404`，並在獨立的臨時 Topic 測試 binding 失效。在沒有其他操作者提交的 Demo 上執行，才能比較 Request 和 Job ID 集合。
+
+```powershell
+& $python -m mcp_access.verify_start_demo
+```
+
 ## 重現一筆 Demo 紀錄的證據追溯
 
 1. 在 Dashboard 的 **Collection requests** 開啟已保存的 **Fixture Listings · quick**。從網址複製 Request UUID。
@@ -45,6 +62,6 @@ codex @overrides --ask-for-approval never exec --ignore-user-config --ephemeral 
 ## 疑難排解
 
 - 如 MCP 初始化失敗，檢查 Python 絕對路徑、checkout 工作目錄、依賴套件及 stderr。API base 必須是 `http://127.0.0.1:<port>/api/v1` 或 IPv6 loopback 等效位置。
-- 如收到 API unavailable 或 HTTP 錯誤，執行 `Diagnose-Platform.bat -Demo` 並查 `/api/v1/health`。更新 host 設定後開啟新的 MCP session。
+- 如收到 API unavailable 或 HTTP 錯誤，執行 `Diagnose-Platform.bat -Demo` 並查 `/api/v1/health`。更新 host 設定後開啟新的 MCP session，提交結果不明時沿用已保存的 key 和參數。
 - `get_collection_records` 要求 Request UUID。未知 Request 回傳工具錯誤，已知 Request 的空頁回傳空的 `items`。每頁上限為 25 筆，使用 `next_offset` 繼續。單次 REST 讀取上限為 5 秒和 2 MiB，遇到大小限制時調低 `limit`。
 - `payload` 是擷取的來源資料。每筆預覽最多 12 欄，每個文字值最多 512 字元。省略超長欄名或截短文字時，`payload_truncated` 會標示為 `true`。Evidence 的 `content_hash` 代表後端儲存的 SHA-256。驗證原始擷取內容需要另外取得並重新計算該內容的雜湊。

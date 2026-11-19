@@ -22,6 +22,7 @@ CATEGORY, TOPIC, REQUEST_A, REQUEST_B, EMPTY, UNKNOWN, JOB, SOURCE, PROFILE, EVI
     str(UUID(int=i)) for i in range(1, 11)
 )
 RECORDS = [str(UUID(int=i)) for i in range(11, 14)]
+BINDINGS = [str(UUID(int=i)) for i in range(14, 19)]
 DIGEST = "a" * 64
 
 
@@ -62,8 +63,31 @@ def rest_api():
                 pass
 
         def do_POST(self):
-            calls.append(("POST", self.path, {}))
-            self.reply(405, {})
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            calls.append(("POST", self.path, body))
+            if self.path != "/api/v1/collection-requests":
+                return self.reply(405, {})
+            keyword = body["keyword"]
+            if keyword in ("503", "408"):
+                return self.reply(int(keyword), {"message": "private"})
+            if keyword == "redirect":
+                return self.reply(307, {}, Location="/unexpected")
+            if keyword == "unreadable":
+                self.send_response(201)
+                self.send_header("Content-Length", "7")
+                self.end_headers()
+                self.wfile.write(b"private")
+                return
+            if keyword in ("collection_request_conflict", "binding_ineligible"):
+                return self.reply(409, {"error": {"code": keyword, "message": "private"}})
+            bindings = BINDINGS[:1] if keyword == "wrong_bindings" else BINDINGS[:2]
+            return self.reply(201 if body["binding_ids"] == BINDINGS[:2] else 200, {
+                "id": REQUEST_A, "status": "pending", "details": "private",
+                "jobs": [
+                    {"binding_id": binding_id, "job": {"job_id": job_id, "status": "pending"}}
+                    for binding_id, job_id in zip(bindings, (JOB, UNKNOWN))
+                ],
+            })
 
         def do_GET(self):
             url = urlsplit(self.path)
@@ -86,8 +110,17 @@ def rest_api():
                 return self.reply(200, {
                     "id": REQUEST_A, "status": "partial", "refresh_of": None,
                     "jobs": [
-                        {"job": {"job_id": JOB, "status": "succeeded"}},
-                        {"job": {"job_id": UNKNOWN, "status": "failed"}},
+                        {"job": {"job_id": JOB, "status": "pending", "execution_attempt": 1,
+                                 "next_attempt_at": "2026-11-20T00:00:00Z"}},
+                        {
+                            "binding_id": BINDINGS[1], "source_name": "Controlled source",
+                            "job": {
+                                "job_id": UNKNOWN, "status": "partial", "valid_count": 1,
+                                "invalid_count": 0, "duplicate_count": 0, "source_id": SOURCE,
+                                "profile_version_id": PROFILE,
+                                "error": {"code": "http_error", "http_status": 404, "message": "private"},
+                            },
+                        },
                     ],
                 })
             elif path == "/records":
@@ -154,18 +187,24 @@ async def error(client, tool, **arguments):
     return message
 
 
-def test_stdio_read_only_surface(rest_api):
+def test_stdio_read_trace_and_tool_annotations(rest_api):
     base, calls = rest_api
 
     async def exercise():
         async with client_for(base) as client:
             tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-            assert set(tools) == {
+            reads = {
                 "list_categories", "list_topics", "list_topic_sources", "get_collection_status",
                 "get_collection_records", "get_record_lineage", "get_evidence_metadata",
             }
-            assert all(tool.annotations.read_only_hint for tool in tools.values())
+            assert set(tools) == reads | {"prepare_collection", "start_collection"}
+            assert all(tools[name].annotations.read_only_hint for name in reads)
+            prepare = tools["prepare_collection"].annotations
+            assert prepare.read_only_hint and prepare.idempotent_hint is False
+            start = tools["start_collection"].annotations
+            assert start.read_only_hint is False and start.idempotent_hint and start.open_world_hint
             assert all(tool.annotations.destructive_hint is False for tool in tools.values())
+            assert all(tools[name].annotations.open_world_hint is False for name in reads | {"prepare_collection"})
             record_schema = tools["get_collection_records"].input_schema
             assert record_schema["required"] == ["request_id"]
             assert record_schema["properties"]["limit"]["maximum"] == 25
@@ -182,7 +221,20 @@ def test_stdio_read_only_surface(rest_api):
             assert status["status"] == "partial"
             assert status["refresh_of"] is None
             assert "finished_at" not in status
-            assert [child["job"]["status"] for child in status["jobs"]] == ["succeeded", "failed"]
+            pending, partial = status["jobs"]
+            assert pending["job"]["status"] == "pending"
+            assert pending["job"]["next_attempt_at"] == "2026-11-20T00:00:00Z"
+            assert pending["job"]["error"] is None and pending["job"]["valid_count"] is None
+            assert partial["source_name"] == "Controlled source"
+            assert partial["binding_id"] == BINDINGS[1]
+            assert partial["job"]["status"] == "partial"
+            assert partial["job"]["source_id"] == SOURCE
+            assert partial["job"]["profile_version_id"] == PROFILE
+            assert [partial["job"][name] for name in ("valid_count", "invalid_count", "duplicate_count")] == [1, 0, 0]
+            assert partial["job"]["error"] == {
+                "code": "http_error", "http_status": 404,
+                "summary": "The source returned an HTTP error.",
+            }
 
             first = await read(client, "get_collection_records", request_id=REQUEST_A, limit=1)
             second = await read(
@@ -225,6 +277,84 @@ def test_stdio_read_only_surface(rest_api):
         ("GET", f"/records/{RECORDS[0]}", {"include_lineage": "true"}),
         ("GET", f"/evidence/{EVIDENCE}", {}),
     ]
+
+
+def test_prepare_and_start_stdio(rest_api):
+    base, calls = rest_api
+    intent = {"topic_id": TOPIC, "keyword": "  quick  ", "binding_ids": BINDINGS[:2]}
+
+    async def exercise():
+        async with client_for(base) as client:
+            for invalid in (
+                {"topic_id": "no-id"}, {"topic_id": None}, {"binding_ids": ["no-id"]},
+                {"binding_ids": []}, {"binding_ids": BINDINGS}, {"binding_ids": [BINDINGS[0]] * 2},
+                {"keyword": ""}, {"keyword": " \t "}, {"keyword": "two\nwords"},
+                {"keyword": "x" * 129},
+            ):
+                arguments = intent | invalid
+                await error(client, "prepare_collection", **arguments)
+                await error(client, "start_collection", **arguments, request_key=UNKNOWN)
+            await error(client, "prepare_collection", keyword="quick", binding_ids=BINDINGS[:2])
+            await error(client, "start_collection", **intent)
+            await error(client, "start_collection", **intent, request_key="invalid")
+            prepared = await read(client, "prepare_collection", **intent)
+            fresh = await read(client, "prepare_collection", **intent)
+            assert not prepared["submitted"] and not fresh["submitted"]
+            submission = prepared["submission"]
+            assert UUID(submission["request_key"]).version == 4
+            assert submission["request_key"] != fresh["submission"]["request_key"]
+            assert submission == intent | {"keyword": "quick", "request_key": submission["request_key"]}
+            assert calls == []
+
+            created = await read(client, "start_collection", **submission)
+            assert created == {
+                "request_key": submission["request_key"], "request_id": REQUEST_A,
+                "outcome": "created", "http_status": 201, "status": "pending", "jobs": [
+                    {"binding_id": binding, "job_id": job, "status": "pending"}
+                    for binding, job in zip(BINDINGS, (JOB, UNKNOWN))
+                ],
+            }
+            reordered = submission | {"binding_ids": BINDINGS[:2][::-1]}
+            replayed = await read(client, "start_collection", **reordered)
+            assert replayed == created | {"outcome": "replayed", "http_status": 200}
+        assert calls == [
+            ("POST", "/api/v1/collection-requests", submission),
+            ("POST", "/api/v1/collection-requests", reordered),
+        ]
+
+    asyncio.run(exercise())
+
+
+def test_stdio_submission_errors_are_structured_and_bounded(rest_api):
+    base, calls = rest_api
+
+    async def exercise():
+        async with client_for(base) as client:
+            for keyword, outcome, status, code in (
+                ("503", "unknown", 503, "submission_outcome_unknown"),
+                ("408", "unknown", 408, "submission_outcome_unknown"),
+                ("redirect", "unknown", 307, "submission_outcome_unknown"),
+                ("unreadable", "unknown", 201, "submission_outcome_unknown"),
+                ("wrong_bindings", "unknown", 201, "submission_outcome_unknown"),
+                ("collection_request_conflict", "conflict", 409, "collection_request_conflict"),
+                ("binding_ineligible", "rejected", 409, "binding_ineligible"),
+            ):
+                arguments = {
+                    "topic_id": TOPIC, "keyword": keyword, "binding_ids": BINDINGS[:2],
+                    "request_key": UNKNOWN,
+                }
+                count = len(calls)
+                result = await client.call_tool("start_collection", arguments)
+                assert calls[count:] == [("POST", "/api/v1/collection-requests", arguments)]
+                assert result.is_error
+                payload = result.structured_content
+                assert payload == json.loads(result.content[0].text)
+                assert payload["request_key"] == UNKNOWN and payload["code"] == code
+                assert payload["outcome"] == outcome and payload["http_status"] == status
+                assert payload["retry_same_key"] is (outcome == "unknown")
+                assert len(result.content[0].text) < 500 and "private" not in result.content[0].text
+
+    asyncio.run(exercise())
 
 
 def test_stdio_bounded_errors(rest_api):

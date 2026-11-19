@@ -1,4 +1,4 @@
-"""Read persisted FYP results through a fixed local REST API over MCP stdio."""
+"""Access FYP topic collections through a fixed local REST API over MCP stdio."""
 
 import asyncio
 import json
@@ -6,14 +6,16 @@ import os
 import re
 import sys
 from collections.abc import Callable
-from typing import Annotated
-from uuid import UUID
+from typing import Annotated, Literal
+from uuid import UUID, uuid4
 
 import httpx2
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import ToolAnnotations
-from pydantic import BaseModel, Field, JsonValue
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import AfterValidator, BaseModel, Field, JsonValue, StringConstraints, ValidationError
+
+from backend.core.contracts import Name
 
 MAX_PAGE_SIZE = 25
 MAX_OFFSET = 2_147_483_647
@@ -28,6 +30,109 @@ Row = dict[str, JsonValue]
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
+PREPARE = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=False, openWorldHint=False
+)
+START = ToolAnnotations(
+    # The dispatched jobs may contact approved external sources.
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True
+)
+JOB_ERRORS = {
+    "http_error": "The source returned an HTTP error.",
+    "timeout": "The source request timed out.",
+    "transport_error": "The source request failed.",
+    "source_not_approved": "The source is no longer approved for collection.",
+}
+SUBMISSION_ERRORS = {
+    "invalid_request": "Check the collection arguments.",
+    "topic_not_found": "Choose an existing topic.",
+    "topic_inactive": "Choose an active topic and category.",
+    "binding_ineligible": "One or more selected bindings are unavailable.",
+    "source_not_approved": "A selected source is no longer approved.",
+    "profile_not_approved": "A selected profile version is no longer approved.",
+    "profile_not_found": "A selected profile version is unavailable.",
+    "binding_requires_search": "A selected profile does not support keyword collection.",
+    "destination_denied": "A selected source destination is disallowed.",
+    "collection_request_conflict": "The key already belongs to a different collection intent.",
+}
+
+
+def printable_keyword(value: str) -> str:
+    if not value.isprintable():
+        raise ValueError("Keyword must contain only printable characters")
+    return value
+
+
+def distinct_bindings(value: list[UUID]) -> list[UUID]:
+    if len(value) != len(set(value)):
+        raise ValueError("Select distinct bindings")
+    return value
+
+
+# Match NewRequest's shape without importing the database-backed application layer.
+Keyword = Annotated[Name, AfterValidator(printable_keyword)]
+BindingIds = Annotated[
+    list[UUID], Field(min_length=1, max_length=4), AfterValidator(distinct_bindings)
+]
+Status = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+
+
+class Submission(BaseModel):
+    request_key: UUID
+    topic_id: UUID
+    keyword: Keyword
+    binding_ids: BindingIds
+
+
+class PreparedCollection(BaseModel):
+    submitted: Literal[False] = False
+    submission: Submission
+
+
+class ReceiptJob(BaseModel):
+    binding_id: UUID
+    job_id: UUID
+    status: Status
+
+
+class Receipt(BaseModel):
+    request_key: UUID
+    request_id: UUID
+    outcome: Literal["created", "replayed"]
+    http_status: Literal[200, 201]
+    status: Status
+    jobs: list[ReceiptJob]
+
+
+class SubmissionFailure(BaseModel):
+    request_key: UUID
+    outcome: Literal["unknown", "rejected", "conflict"]
+    code: str
+    http_status: int | None = None
+    retry_same_key: bool = False
+    message: str
+
+
+def submission_result(value: Receipt | SubmissionFailure) -> CallToolResult:
+    return CallToolResult(
+        is_error=isinstance(value, SubmissionFailure),
+        structured_content=value.model_dump(mode="json"),
+        content=[TextContent(type="text", text=value.model_dump_json())],
+    )
+
+
+def unknown_submission(key: UUID, status: int | None = None) -> SubmissionFailure:
+    return SubmissionFailure(
+        request_key=key,
+        outcome="unknown",
+        code="submission_outcome_unknown",
+        http_status=status,
+        retry_same_key=True,
+        message=(
+            "Retry start_collection with this key and the same arguments. "
+            "If the key was lost, check existing collection request history."
+        ),
+    )
 
 
 class Page(BaseModel):
@@ -53,11 +158,24 @@ def api_base(value: str) -> str:
     return value.rstrip("/")
 
 
-async def read_json(url: str, params: dict, missing: str | None):
+def rest_client() -> httpx2.AsyncClient:
     # Ignore proxy configuration and fail on redirects, including local redirects.
-    async with httpx2.AsyncClient(
+    return httpx2.AsyncClient(
         trust_env=False, follow_redirects=False, timeout=TIMEOUT_SECONDS
-    ) as client:
+    )
+
+
+async def response_json(response: httpx2.Response):
+    body = bytearray()
+    async for chunk in response.aiter_raw(chunk_size=64 * 1024):
+        if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+            raise ToolError("FYP API response exceeds 2 MiB. Try a smaller page.")
+        body.extend(chunk)
+    return json.loads(body)
+
+
+async def read_json(url: str, params: dict, missing: str | None):
+    async with rest_client() as client:
         async with client.stream(
             "GET", url, params=params, headers={"Accept-Encoding": "identity"}
         ) as response:
@@ -69,12 +187,67 @@ async def read_json(url: str, params: dict, missing: str | None):
             if status != 200:
                 raise ToolError(f"FYP API rejected the read (HTTP {status}).")
 
-            body = bytearray()
-            async for chunk in response.aiter_raw(chunk_size=64 * 1024):
-                if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
-                    raise ToolError("FYP API response exceeds 2 MiB. Try a smaller page.")
-                body.extend(chunk)
-    return json.loads(body)
+            return await response_json(response)
+
+
+async def post_collection(base: str, submission: Submission) -> Receipt | SubmissionFailure:
+    key = submission.request_key
+    async with rest_client() as client:
+        async with client.stream(
+            "POST",
+            base + "/collection-requests",
+            json=submission.model_dump(mode="json"),
+            headers={"Accept-Encoding": "identity"},
+        ) as response:
+            status = response.status_code
+            has_receipt = status in (200, 201)
+            rejected = 400 <= status < 500 and status != 408
+            if not (has_receipt or rejected):
+                return unknown_submission(key, status)
+
+            try:
+                payload = row(await response_json(response))
+            except (ToolError, httpx2.RequestError, ValueError, RecursionError):
+                payload = {}
+
+            if has_receipt:
+                try:
+                    jobs = [
+                        ReceiptJob(
+                            binding_id=child.get("binding_id"),
+                            **fields(row(child.get("job")), "job_id status"),
+                        )
+                        for child in rows(payload.get("jobs"))
+                    ]
+                    if (
+                        len(jobs) != len(submission.binding_ids)
+                        or {job.binding_id for job in jobs} != set(submission.binding_ids)
+                        or len({job.job_id for job in jobs}) != len(jobs)
+                    ):
+                        return unknown_submission(key, status)
+                    return Receipt(
+                        request_key=key,
+                        request_id=payload.get("id"),
+                        outcome="created" if status == 201 else "replayed",
+                        http_status=status,
+                        status=payload.get("status"),
+                        jobs=jobs,
+                    )
+                except (ToolError, ValidationError):
+                    return unknown_submission(key, status)
+
+            error = payload.get("error")
+            code = error.get("code") if isinstance(error, dict) else None
+            if not isinstance(code, str) or code not in SUBMISSION_ERRORS:
+                code = "submission_rejected"
+            conflict = status == 409 and code == "collection_request_conflict"
+            return SubmissionFailure(
+                request_key=key,
+                outcome="conflict" if conflict else "rejected",
+                code=code,
+                http_status=status,
+                message=SUBMISSION_ERRORS.get(code, "The FYP API rejected the collection."),
+            )
 
 
 def fields(row: Row, names: str) -> Row:
@@ -91,6 +264,32 @@ def row(value) -> Row:
     if not isinstance(value, dict):
         raise ToolError("FYP API returned an unexpected object.")
     return value
+
+
+def public_job(value: JsonValue) -> Row:
+    job = row(value)
+    result = fields(job, "job_id status source_id profile_version_id")
+    for name in ("valid_count", "invalid_count", "duplicate_count", "execution_attempt"):
+        count = job.get(name)
+        result[name] = count if type(count) is int and count >= 0 else None
+    retry_at = job.get("next_attempt_at")
+    result["next_attempt_at"] = (
+        retry_at if isinstance(retry_at, str) and re.fullmatch(r"[0-9T:Z+.-]{1,40}", retry_at)
+        else None
+    )
+    error = job.get("error")
+    result["error"] = None
+    if isinstance(error, dict):
+        code = error.get("code")
+        if not isinstance(code, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", code):
+            code = None
+        status = error.get("http_status")
+        result["error"] = {
+            "code": code,
+            "http_status": status if type(status) is int and 100 <= status <= 599 else None,
+            "summary": JOB_ERRORS.get(code, "See the Dashboard execution events for this job."),
+        }
+    return result
 
 
 def record_links(record: Row) -> Row:
@@ -125,7 +324,7 @@ def record_preview(record: Row) -> Row:
 
 def create_server(base: str) -> MCPServer:
     base = api_base(base)
-    server = MCPServer("FYP persisted collections", log_level="WARNING")
+    server = MCPServer("FYP topic collections", log_level="WARNING")
 
     async def get(path: str, *, missing: str | None = None, **params):
         try:
@@ -192,6 +391,35 @@ def create_server(base: str) -> MCPServer:
             missing="Topic",
         )
 
+    @server.tool(annotations=PREPARE)
+    async def prepare_collection(
+        topic_id: UUID, keyword: Keyword, binding_ids: BindingIds
+    ) -> PreparedCollection:
+        """Prepare arguments and a fresh retry key for a requested collection. Submits nothing."""
+        return PreparedCollection(
+            submission=Submission(
+                request_key=uuid4(), topic_id=topic_id, keyword=keyword, binding_ids=binding_ids
+            )
+        )
+
+    @server.tool(annotations=START)
+    async def start_collection(
+        request_key: UUID, topic_id: UUID, keyword: Keyword, binding_ids: BindingIds
+    ) -> Annotated[CallToolResult, Receipt]:
+        """Submit a collection only when the user asked to run it. To inspect sources, use the read tools.
+
+        Save the prepared key and arguments before calling. After an unknown outcome, replay the
+        same key and intent. Poll get_collection_status with the receipt's request_id.
+        """
+        submission = Submission(
+            request_key=request_key, topic_id=topic_id, keyword=keyword, binding_ids=binding_ids
+        )
+        try:
+            result = await asyncio.wait_for(post_collection(base, submission), TIMEOUT_SECONDS)
+        except (httpx2.RequestError, TimeoutError):
+            result = unknown_submission(request_key)
+        return submission_result(result)
+
     @server.tool(annotations=READ_ONLY)
     async def get_collection_status(request_id: UUID) -> Row:
         """Read an existing request's status and child jobs, including partial or failed outcomes."""
@@ -202,7 +430,7 @@ def create_server(base: str) -> MCPServer:
         result["jobs"] = [
             {
                 **fields(child, "binding_id source_name profile_version"),
-                "job": fields(row(child.get("job")), "job_id status source_id profile_version_id"),
+                "job": public_job(child.get("job")),
             }
             for child in rows(request.get("jobs"))
         ]
