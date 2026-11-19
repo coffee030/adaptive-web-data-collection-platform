@@ -1,22 +1,22 @@
 # M0 Repository Baseline and Prototype Verification
 
-盤點日期為 2026-11-14（香港時間）。範圍為使用者指定的 FYP 工作區及其中的 `Adaptive-Web-Data-Collection-Platform/` 新專案根目錄。
+The inventory ran on 2026-11-14 Hong Kong time. It covered the user-specified FYP workspace and the new `Adaptive-Web-Data-Collection-Platform/` project root.
 
-| 項目 | 盤點結果 |
+| Item | Inventory result |
 | --- | --- |
-| 工作區基線 | 原工作目錄只有 `docs/design-system/dashboard-guidance.md`、`skills/` 和三份 FYP／課程參考文件。`git status` 回報 `not a git repository`。既有 branches、Git diff 和 remotes 無法在原工作目錄取得。 |
-| Source、測試和部署 | 原工作區沒有可執行 backend／frontend、依賴清單、測試、fixtures、Compose 或 `.github/workflows/`。新根目錄的 `backend/` 是本次 Spike。 |
-| 指引 | `skills/AGENTS.md` 在 `skills/` 的作用域內。`skills/.agents/skills/` 提供 `fyp-backend-feature`、`fyp-frontend-design`、`fyp-source-adapter`、`fyp-quality-review`。本次採用後兩者的受控 fixture、安全政策和驗證指引。 |
+| Workspace baseline | The original working directory contained only `docs/design-system/dashboard-guidance.md`, `skills/`, and three FYP or course references. `git status` reported `not a git repository`. Existing branches, Git diff, and remotes were unavailable from that directory. |
+| Source, tests, and deployment | The original workspace had no runnable backend or frontend, dependency lists, tests, fixtures, Compose, or `.github/workflows/`. The new root's `backend/` was this spike. |
+| Instructions | `skills/AGENTS.md` applied within `skills/`. `skills/.agents/skills/` provided `fyp-backend-feature`, `fyp-frontend-design`, `fyp-source-adapter`, and `fyp-quality-review`. This spike applied the last two for controlled fixtures, access policy, and verification. |
 
-## 文件與決策依據
+## Documents and decision evidence
 
-- **已確認** Modular Monolith 加獨立 Celery workers，Scrapling 負責 HTTP／Parsing，Core 管理安全策略及 jobs，Profile 經驗證和人手批准才可供正式 Job 使用。
-- **正式 Proposal** FR01–FR15、NFR、時間表及評核條件。現行 Scrapling 路線和延後功能的影響見 [ADR](../decisions/M0-architecture-decisions.md)。
-- **建議** 沿用受控 pagination、證據 hash、robots 和失敗處理的驗收案例。Dashboard guidance 屬後續 milestone 的設計提案。
-- **待確認** IA 來源權限、平台、matching criteria、輸出和驗收條件，以及正式 Proposal 的技術敘述是否需修訂。
+- **Confirmed.** Modular monolith with independent Celery workers. Scrapling handles HTTP and parsing, and the Core owns access policy and Jobs. Profiles require validation and manual approval before Jobs can use them.
+- **Formal Proposal.** FR01–FR15, NFRs, schedule, and assessment criteria. The ADR explains the Scrapling direction and the effects of deferred features. [Architecture decisions](../decisions/M0-architecture-decisions.md)
+- **Recommended.** Reuse acceptance cases for controlled pagination, evidence hash, robots rules, and failure handling. Dashboard guidance is a design proposal for later milestones.
+- **Pending.** Confirm IA source permission, platforms, matching criteria, outputs, and acceptance, and whether the Proposal's technical description needs revision.
 
-## 原型證據
+## Prototype evidence
 
-Teammate brief 點名 `web_scraping_public_demo`，描述 HTTPX fetching、Beautiful Soup pagination、受控網站、raw HTML／metadata／hash、CLI 和保存的測試結果。指定工作區內未提供預期的 `web_scraping_public_demo/` 原始碼、`web_scraping_public_demo.zip` 或其測試與依賴鎖檔。既有原型測試 **BLOCKED**，文件中的結果為 **未核實原型聲稱**。本次 [Spike 結果](M0-scrapling-spike.md) 屬新實驗。
+The teammate brief named `web_scraping_public_demo` and described HTTPX fetching, Beautiful Soup pagination, controlled sites, raw HTML, metadata and hashes, a CLI, and saved results. The designated workspace did not contain the expected `web_scraping_public_demo/` source, `web_scraping_public_demo.zip`, tests, or dependency locks. Existing prototype tests were **BLOCKED** and reported results remained **unverified prototype claims**. The spike results came from a new experiment. [Spike results](M0-scrapling-spike.md)
 
-可沿用的設計包括 fixture ground truth、page budget、loop prevention、原始 evidence 及錯誤分類。HTTPX／Beautiful Soup fetching 和解析路徑屬舊方向，需在取得獲准範圍內的 source 後再判斷有否可直接重用的 policy 或 fixtures。
+Reusable design ideas include fixture ground truth, page budgets, loop prevention, raw Evidence, and failure classification. HTTPX and Beautiful Soup reflect the older direction. Assess reusable policy or fixtures after obtaining authorised source access.

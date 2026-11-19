@@ -1,6 +1,6 @@
 # M4-E Local Issue Manifest
 
-本機未設定 Git remote。Teammate review 待完成。
+The local checkout had no Git remote configured. Teammate review was pending.
 
 | ID | Scope | Status |
 | --- | --- | --- |

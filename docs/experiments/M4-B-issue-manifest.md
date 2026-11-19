@@ -1,6 +1,6 @@
 # M4-B Local Issue Manifest
 
-此 checkout 沒有設定 Git remote。組員覆核待完成。
+This checkout had no Git remote configured. Teammate review was pending.
 
 | ID | Scope | Status | Verification |
 | --- | --- | --- | --- |
@@ -10,4 +10,4 @@
 | M4-B-04 | Read-only Profile Versions | PASS | Live approved version and controlled draft/retired states |
 | M4-B-05 | Accessibility, integration and Impeccable | PASS | Chrome, axe, real FastAPI/PostgreSQL and source/rendered detector |
 
-驗收證據見 [M4-B Acceptance Report](M4-B-acceptance.md)。
+The acceptance report contains the verification evidence. [M4-B Acceptance Report](M4-B-acceptance.md)

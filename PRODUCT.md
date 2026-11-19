@@ -8,28 +8,28 @@ web
 
 ## Users
 
-主要使用者是獲授權的資料收集操作者，負責建立及核准來源設定、執行受控收集和排查問題。維護者需要沿著 Job、Profile Version、Record 和 Evidence 追查結果。FYP 組員以可重現的本機流程示範及評估系統。
+The primary users are authorised collection operators who create and approve source configurations, run controlled collections, and investigate issues. Maintainers trace results through Jobs, Profile Versions, Records, and Evidence. The FYP team demonstrates and evaluates the system with reproducible local workflows.
 
 ## Product Purpose
 
-Adaptive Scalable and Observable Web Data Collection Platform 將獲准的 HTML 和 CSV 轉成經驗證、可追溯的結構化紀錄。通用 Core 可供獨立應用重用，操作者可知道用了哪個來源、設定版本和證據，也可辨識部分成功及失敗。
+The Adaptive Scalable and Observable Web Data Collection Platform turns permitted HTML and CSV inputs into validated, traceable structured records. Independent applications can reuse the Core. Operators can see the source, configuration version, and evidence used for a run, as well as partial success and failure.
 
 ## Operating Context
 
-- Source 的存取授權與 Profile Version 的擷取核准各自管理。Profile 流程為 Draft → Preview → Validate → Approve。核准是明確操作。
-- Job 固定使用特定 Profile Version。查看執行事件、有效紀錄、quarantine 和 Evidence Metadata 是追查問題的主要方式。
-- 控制台提供 Overview、New Collection、Sources、Collection Jobs 及 Data Explorer。操作狀態以 API 和已驗證的執行證據為準。
+- Manage Source access authorisation separately from Profile Version approval for extraction. The Profile workflow is Draft → Preview → Validate → Approve. Approval requires an explicit action.
+- Each Job is pinned to a specific Profile Version. Use execution events, valid records, quarantine, and Evidence Metadata to investigate issues.
+- The console provides Overview, New Collection, Sources, Collection Jobs, and Data Explorer. The API and verified execution evidence determine the status shown.
 
 ## Stack
 
-React／TypeScript 前端配合 FastAPI、Pydantic、SQLAlchemy、Alembic、PostgreSQL、Scrapling、Redis 及 Celery。團隊以 Windows 11 和接近零預算開發。前端提供本機字型 fallback。
+The React and TypeScript frontend works with FastAPI, Pydantic, SQLAlchemy, Alembic, PostgreSQL, Scrapling, Redis, and Celery. The team develops on Windows 11 with a near-zero budget. The frontend provides local font fallbacks.
 
 ## Capabilities and Constraints
 
-- 已有 Source／Profile、Job、Record、quarantine 和 Evidence Metadata API，Job 由 Dispatcher 派送至 Celery Worker。
-- Core 採可信本機模式。已登記及授權的公開 HTTPS origin 可用核准 Profile 執行靜態 HTML 關鍵字搜尋及詳情擷取。受控 HTTP fixture 和已授權的 CSV dataset 繼續可用。Approval 的 operator 欄位供本機 audit。 [M7 Controlled Website Collection](docs/contracts/M7-controlled-website-collection.md)
-- PostgreSQL 保存 metadata 與 lineage，原始證據檔案保留在本機 storage。UI 顯示可用的 metadata，並依現有 API 支援決定可提供的動作。
-- ML／Sentiment 及 IA／KOL 為獨立下游工作。IA 平台、資料來源和 matching requirements 尚待確認。
+- The Core provides APIs for Sources and Profiles, Jobs, Records, quarantine, and Evidence Metadata. The Dispatcher sends Jobs to Celery workers.
+- The Core runs in trusted local mode. Approved Profiles can search static HTML by keyword and extract details from registered and authorised public HTTPS origins. Controlled HTTP fixtures and authorised CSV datasets remain available. The approval operator field supports local audits. [M7 Controlled Website Collection](docs/contracts/M7-controlled-website-collection.md)
+- PostgreSQL stores metadata and lineage. Local storage holds the raw evidence files. The UI shows available metadata and offers actions supported by the implemented API.
+- ML and sentiment analysis, and IA and KOL discovery, are independent downstream work. The IA platform, sources, and matching requirements still need confirmation.
 
 ## Evidence on Hand
 
@@ -40,6 +40,6 @@ React／TypeScript 前端配合 FastAPI、Pydantic、SQLAlchemy、Alembic、Post
 
 ## Product Principles
 
-- 將 access policy、核准版本和來源證據呈現在需要做決定的位置。
-- 保留真實的部分成功、失敗、未知及不可用狀態。只有在現有 API 支援時才顯示相關操作。
-- 優先使用清楚的狀態名稱、可掃讀的表格和可預測的鍵盤操作。
+- Show the access policy, approved version, and source evidence wherever operators need them to make a decision.
+- Preserve partial success, failure, unknown, and unavailable states. Offer actions when the implemented API supports them.
+- Use clear status names, easy-to-scan tables, and predictable keyboard controls.

@@ -1,10 +1,10 @@
 # M4 Core MVP Demo Runbook
 
-用本機 React Console 操作受控 HTML 和 CSV。需要 Docker Desktop 的 Linux Engine、Docker Compose、Node.js（專案已驗證 22.18.0）、npm，以及可用的 Chrome 或 Playwright Chromium。準備兩個 PowerShell 視窗。工作目錄為 repository root。
+Use the local React Console with controlled HTML and CSV. You need Docker Desktop in Linux container mode, Docker Compose, Node.js (the project verified 22.18.0), npm, and Chrome or Playwright Chromium. Open two PowerShell windows at the repository root.
 
-## 1. 啟動隔離服務
+## 1. Start isolated services
 
-以下 ports 須空閒。密碼保留在這個 PowerShell session。日後重新開啟同一組資料時，使用同一個 project 和原來的 DB 密碼。
+Use free ports. Keep the password in this PowerShell session. To reopen the same data later, use the original project and database password.
 
 ```powershell
 $env:POSTGRES_USER = 'collection_test'
@@ -21,9 +21,9 @@ docker compose @composeArgs up -d --wait
 Invoke-RestMethod http://127.0.0.1:58018/api/v1/health
 ```
 
-如容器剛啟動而 host port 尚未就緒，等候 API 回應 `{"status":"ok"}` 再操作。現行 schema head 為 `0006`。保留同一 shell 的資料庫設定供之後的 restart。
+If containers have started but the host port is not ready, wait for the API to return `{"status":"ok"}`. The schema head at this milestone was `0006`. Keep database settings in the same shell for the later restart.
 
-在另一個 PowerShell 啟動 console。
+Start the console in a second PowerShell window.
 
 ```powershell
 Set-Location frontend
@@ -33,14 +33,14 @@ $env:LOCAL_PROFILE_APPROVAL = '1'
 npm.cmd run dev -- --port 5194 --strictPort
 ```
 
-開啟 [Collection Jobs](http://127.0.0.1:5194/collection-jobs)。Compose fixture 由內部服務提供，React 經 FastAPI 存取。進行以下步驟時請以可信操作員身分在 loopback 操作。
+Open Collection Jobs. The Compose fixture is internal, and React reaches it through FastAPI. Work on loopback as a trusted operator for the following steps. [Collection Jobs](http://127.0.0.1:5194/collection-jobs)
 
-## 2. Register Source 與授權
+## 2. Register and authorise Sources
 
-1. 選 **Sources → Create source**。分別建立具有獨立名稱的 HTML、CSV Source。兩者的 **Permission reference** 可填 `FYP controlled fixture`。
-2. HTML 選 **Controlled web**，**Allowed origins** 填 `http://collection-fixture:8001`。CSV 選 **CSV**，**Allowed dataset IDs** 填 `listings`。
-3. 提交後確認 **Access authorization** 是 **Pending**。只有可信操作員執行下方 terminal step。Source ID 可在 **Access policy** 讀取。
-4. 每個 Source 各執行一次。重新載入 Source detail 並確認 **Approved**。
+1. Select **Sources → Create source**. Create separate HTML and CSV Sources with distinct names. You can use `FYP controlled fixture` as the **Permission reference** for both.
+2. For HTML, select **Controlled web** and enter `http://collection-fixture:8001` under **Allowed origins**. For CSV, select **CSV** and enter `listings` under **Allowed dataset IDs**.
+3. After submission, confirm **Access authorization** is **Pending**. Run the following terminal step as a trusted operator. Find the Source ID under **Access policy**.
+4. Run this once per Source. Reload Source detail and confirm **Approved**.
 
 ```powershell
 $sourceId = '<Source ID from the console>'
@@ -48,52 +48,52 @@ $sourceApi = "http://127.0.0.1:58018/api/v1/sources/$sourceId"
 Invoke-RestMethod -Method Patch -Uri "$sourceApi/authorization" -ContentType 'application/json' -Body '{"approval_status":"approved"}'
 ```
 
-## 3. Configure、Preview、Validate 和 Approve
+## 3. Configure, preview, validate, and approve
 
-從各 Source 點 **Create draft**。Record type 可填 `listing`。Identity field 選 `key`，下列輸出欄位均維持必填。
+Select **Create draft** from each Source. Use `listing` for Record type and `key` for Identity field. Keep all output fields below required.
 
 | Source | Profile configuration | Validation input |
 | --- | --- | --- |
-| HTML | Selector type CSS，Item selector `#entries tr`。輸出 `title` 用 selector `a`、Text；`key` 用 selector `a`、Attribute `data-code`。 | 選允許的 origin，Document path `/table.html` |
-| CSV | `key`、`title`、`count` 分別映射 `Key`、`Name`、`Count`。將 `count` 設為 integer。 | Dataset ID `listings`，貼上下面的 clean sample |
+| HTML | Selector type CSS, Item selector `#entries tr`. For output `title`, select `a` and Text. For `key`, select `a` and Attribute `data-code`. | Select the allowed origin and use Document path `/table.html`. |
+| CSV | Map `key`, `title`, and `count` to `Key`, `Name`, and `Count` respectively. Set `count` to integer. | Dataset ID `listings`. Paste the clean sample below. |
 
 ```csv
 Key,Name,Count
 a0,Sample,1
 ```
 
-按 **Create draft**。如要展示 draft 更新，將 Record type 改為 `listing_item`，按 **Save draft**。輸入樣本，依序按 **Preview** 和 **Validate sample**。Preview 顯示已擷取內容，Validation 必須回報 **Validation passed** 才能核准。於 **Approval review** 填 approver label，確認報告、勾選確認並按 **Approve version**。頁面轉為唯讀。
+Select **Create draft**. To show an edit, change Record type to `listing_item` and select **Save draft**. Enter the sample, then select **Preview** and **Validate sample**. Preview displays extracted data. Wait for **Validation passed** before approval. Under **Approval review**, enter the approver label, review the report, check the confirmation box, and select **Approve version**. The page becomes read-only.
 
-要示範拒絕核准，可先用下節的原始 CSV fixture 做 Validation。它會出現 **Validation failed**。改回 clean sample 後重新 Validate 再核准。
+To demonstrate why approval can be unavailable, validate the original CSV fixture from the next section. It shows **Validation failed**. Restore the clean sample, revalidate, and approve.
 
-## 4. Submit Job 與追溯結果
+## 4. Submit Jobs and trace results
 
-1. 在 Approved Profile 選 **New Collection Job**。核對 Source 和已選 Profile Version。
-2. HTML 選已允許的 origin 並輸入 `/table.html`。CSV 選 `listings`，把下列命令所得的 fixture 內容貼到 **CSV content**。這個 fixture 供部分成功示範。
-3. 按 **Submit job**。成功回應會開啟 **Job Details**。暫停在該頁觀察正式狀態及 execution events。快速 Job 的 Running 可能只在 `CLAIMED` event 可見。也可按 **Refresh job**。
-4. HTML 預期 **Succeeded**，Valid 2、Invalid 0、Duplicates 0。選 **View job records**，開啟其中一筆 Record。
-5. CSV 預期 **Partial**，Valid 2、Invalid 3、Duplicates 1。在 **View quarantine** 核對起始實體行 5、6、7 和 `required_field`、`wrong_type`、`invalid_row`。
-6. 由 Record 或 Quarantine 開啟 **Evidence Metadata**。核對 capture、backend SHA-256、Source 和 Profile。沿連結回到 Job、Source 及已核准版本。Raw evidence 的 checksum 驗證由 backend store 負責。
-7. **Job Details → Capture evidence** 亦可開啟已保存的 metadata。若 failed Job 捕捉了資料但沒有 candidates，可直接由此追查。若 Job 沒有保存 capture，該區會顯示空狀態。
+1. From the approved Profile, select **New Collection Job**. Check the Source and selected Profile Version.
+2. For HTML, select the allowed origin and enter `/table.html`. For CSV, select `listings` and paste the fixture from the command below into **CSV content**. This fixture demonstrates partial success.
+3. Select **Submit job**. A successful reply opens **Job Details**. Stay on the page to observe persisted status and execution events. For quick Jobs, Running may only be visible in the `CLAIMED` event. You can also select **Refresh job**.
+4. HTML should show **Succeeded**, Valid 2, Invalid 0, and Duplicates 0. Select **View job records** and open a Record.
+5. CSV should show **Partial**, Valid 2, Invalid 3, and Duplicates 1. Under **View quarantine**, check physical start lines 5, 6, and 7 and `required_field`, `wrong_type`, and `invalid_row`.
+6. Open **Evidence Metadata** from Record or Quarantine. Check the capture, backend SHA-256, Source, and Profile. Follow links back to Job, Source, and approved version. Backend storage handles raw Evidence checksum verification.
+7. **Job Details → Capture evidence** also opens saved metadata. Use it for failed Jobs that captured data without producing candidates. If the Job saved no capture, the section displays an empty state.
 
-在 repository root 把已提交的 fixture 複製到剪貼簿。
+From the repository root, copy the committed fixture to the clipboard.
 
 ```powershell
 Get-Content -Raw -Encoding utf8 -LiteralPath 'backend/tests/fixtures/m1/listings.csv' | Set-Clipboard
 ```
 
-## 5. 排查與安全停止
+## 5. Troubleshooting and safe shutdown
 
-| 觀察 | 操作 |
+| Observation | Action |
 | --- | --- |
-| Backend unavailable | 檢查 `/api/v1/health`、Compose status 和 Vite 的 `API_PROXY_TARGET`。服務恢復後按 Retry。 |
-| Submit job 未獲確認 | 留在表單，恢復 API 後按 **Retry submission**，服務會以同一 key 檢查是否已有 Job。 |
-| Create source 未獲確認 | 保留表單，服務恢復後用同一組值重送。相同 request key 的重播定位原 Source。 |
-| Draft save conflict | 保留尚未儲存的欄位內容，先查閱或抄錄需要保留的修改，再按 **Reload server version** 並確認。新版本載入後可重新套用所需修改。 |
-| Pending Source 或無可選版本 | 核對 **Access policy**，或重新載入並打開通過 Validation 及 Approval 的版本。 |
-| Approved 操作不可用 | 確認使用 `127.0.0.1` Vite development server，並有設定 `LOCAL_PROFILE_APPROVAL=1`。 |
-| Job 停在 Pending / Running | 查看 **Execution events**。需要排查時，從 terminal 查看隔離服務的 logs。 |
-| Port 已佔用 | 選空閒 ports。更新 Compose 環境、Vite proxy 及瀏覽器網址。 |
+| Backend unavailable | Check `/api/v1/health`, Compose status, and Vite's `API_PROXY_TARGET`. Select Retry after service recovers. |
+| Submit Job unconfirmed | Stay on the form. After the API recovers, select **Retry submission**. The service uses the same key to check for an existing Job. |
+| Create Source unconfirmed | Keep the form and resend the same values after service recovery. Replay with the same request key finds the original Source. |
+| Draft save conflict | Keep unsaved field content. Review or copy edits to retain and then confirm **Reload server version**. Reapply the needed edits after the new version loads. |
+| Pending Source or no selectable version | Check **Access policy**, or reload and open a validated and approved version. |
+| Approval unavailable | Use the Vite development server on `127.0.0.1` and verify `LOCAL_PROFILE_APPROVAL=1`. |
+| Job remains Pending or Running | Check **Execution events**. For diagnosis, read the isolated service logs from the terminal. |
+| Port occupied | Choose free ports and update the Compose environment, Vite proxy, and browser URL. |
 
 ```powershell
 docker compose @composeArgs ps
@@ -102,4 +102,4 @@ docker compose @composeArgs logs --tail 50 api dispatcher worker
 docker compose @composeArgs stop
 ```
 
-`stop` 保留 PostgreSQL、Redis 和 Evidence volumes。可在演練中保留各結果頁 URL，由原 terminal 執行 `docker compose @composeArgs stop postgres`。仍在執行的 API 會暫時回報 `503 database_unavailable`。再執行 `docker compose @composeArgs stop api` 及 `docker compose @composeArgs start --wait postgres api`。等待 `/health`，重新整理 Source、Profile、Job、Records、Quarantine 和 Evidence。核准人標籤是自報 audit 資料。請以同一 loopback origin 存取 Vite，終端操作使用直接 loopback API。用 `stop` 結束整組 demo。
+`stop` retains PostgreSQL, Redis, and Evidence volumes. To rehearse recovery, save the result URLs and run `docker compose @composeArgs stop postgres` from the original terminal. The still-running API temporarily returns `503 database_unavailable`. Run `docker compose @composeArgs stop api` and `docker compose @composeArgs start --wait postgres api`. Wait for `/health`, then refresh Source, Profile, Job, Records, Quarantine, and Evidence. The approver label is supplied by the operator for audit. Use the same loopback origin with Vite and the direct loopback API from the terminal. End the full demo with `stop`.

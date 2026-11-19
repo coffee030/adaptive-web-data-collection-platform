@@ -1,20 +1,20 @@
-# Windows 11 一鍵安裝及啟動
+# One-click installation and startup on Windows 11
 
-## 開始使用
+## Get started
 
-1. 將 repository 複製或解壓到自己有寫入權限的本機 NTFS 資料夾。
-2. 在檔案總管雙擊 `Start-Platform.bat`。如有安裝提示，先閱讀版本、來源和所需權限，再輸入 `YES`，並在系統提示確認。
-3. 首次啟動需要下載依賴和建置 Docker image。待畫面顯示 `[SUCCESS]` 後，預設瀏覽器會收到開啟 [Overview](http://127.0.0.1:5197/) 的要求。也可複製畫面顯示的網址。
-4. 下次雙擊同一個檔案即可再次啟動。已健康的服務、依賴與資料庫會重用。Frontend 已運行時，使用原有分頁或畫面上的 URL。
+1. Clone or extract the repository to a local NTFS folder where you have write access.
+2. Double-click `Start-Platform.bat` in File Explorer. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
+3. The first launch downloads dependencies and builds the Docker image. After `[SUCCESS]`, the launcher asks the default browser to open Overview. You can also copy the URL shown. [Overview](http://127.0.0.1:5197/)
+4. Double-click the same file for later launches. The launcher reuses healthy services, dependencies, and the database. If the frontend is already running, use the existing tab or the URL shown.
 
-| 入口 | 用途 |
+| Entry point | Purpose |
 | --- | --- |
-| `Start-Platform.bat` | 檢查環境、啟動、核對服務健康和開啟瀏覽器。 |
-| `Setup-Platform.bat` | 檢查與修復前置環境、驗證本機設定。 |
-| `Stop-Platform.bat` | 關閉本 checkout 的 Vite 與 Compose 服務，保留 volumes。 |
-| `Diagnose-Platform.bat` | 產生英語診斷報告，Docker 無法連線時仍可使用。 |
+| `Start-Platform.bat` | Checks the environment, starts services, verifies health, and opens the browser. |
+| `Setup-Platform.bat` | Checks and repairs prerequisites and verifies local settings. |
+| `Stop-Platform.bat` | Stops Vite and Compose services for this checkout and retains their volumes. |
+| `Diagnose-Platform.bat` | Produces an English diagnostics report, including when Docker is unreachable. |
 
-自動化可傳入 `-NonInteractive` 關閉 launcher 的安裝同意提示、使用 `-NoBrowser` 關閉 Start 的自動開頁，並設定 `PLATFORM_NO_PAUSE=1` 取得錯誤 exit code。互動使用時 BAT 遇錯會停留供閱讀。
+For automation, use `-NonInteractive` to disable the launcher's installation consent prompt, `-NoBrowser` to prevent Start from opening a tab, and `PLATFORM_NO_PAUSE=1` to return the error exit code. In interactive runs, the batch file pauses on errors so you can read them.
 
 ## Isolated Synthetic Demo
 
@@ -41,54 +41,54 @@ Find Demo diagnostics at `logs/launcher/demo/latest.log`. `DEMO-001` identifies 
 
 Keep the Demo settings and its PostgreSQL, Redis, Evidence and `demo_state` volumes together for backup and restore. Use the Normal commands to operate the Normal project. [Demo architecture and expected results](../evaluation/M10-Demo-Presets-and-Launcher.md)
 
-## 前置條件與權限
+## Prerequisites and permissions
 
-- 64-bit Windows 11、內建 Windows PowerShell 5.1、Docker Desktop Linux Engine、Docker Compose 2.20+、WSL 2。啟動時會檢查 Windows build、CPU 架構、WSL、虛擬化和可測得的 RAM、磁碟空間。Docker Desktop 安裝適用的 Windows build、記憶體與 WSL 最低需求以 Docker 官方頁面為準。 [Docker Desktop Windows 安裝指南](https://docs.docker.com/desktop/setup/install/windows-install/)
-- 建議 Node.js 22.13+（22.x）和 npm。Launcher 也接受符合目前 lockfile 條件的 Node.js 23.5 或以上。日常啟動使用容器內 Python 3.12 和 Windows 上的 locked npm 套件。
-- 若缺少相容 Node.js，launcher 會查詢 WinGet 官方 community source 的 `OpenJS.NodeJS.22`，列出所選 22.x 版本。經確認後，WinGet 核對 installer hash 並啟動互動安裝。若 WinGet 資料源尚未初始化、遭學校封鎖或找不到相容版本，可從 Node.js 官方頁面安裝後再跑 Setup。 [Microsoft WinGet install](https://learn.microsoft.com/windows/package-manager/winget/install) · [Node.js 下載](https://nodejs.org/en/download)
-- Docker Desktop 尚未安裝時，已同意的安裝流程從 Docker 官方下載點取檔，以 Authenticode 核對有效簽章及 Docker 發行者，然後用 WSL 2 per-user 選項啟動安裝。請親自在 Docker Desktop 閱讀並處理授權、初始化與 Windows 權限提示。
-- WSL 2 檢查失敗時，可確認執行 `wsl --install --no-distribution` 或 `wsl --update`。Windows 可能要求系統管理員核准及手動重新開機。若韌體虛擬化停用，依電腦廠商說明在 BIOS/UEFI 開啟 Intel Virtualization Technology 或 AMD SVM Mode。 [Microsoft WSL 指南](https://learn.microsoft.com/windows/wsl/install)
-- 每台電腦的 PowerShell 與組織政策仍適用。若網路下載造成信任封鎖，請以可信來源重新取得 repository，或依學校批准的腳本信任流程處理。
+- Use 64-bit Windows 11, built-in Windows PowerShell 5.1, Docker Desktop in Linux container mode, Docker Compose 2.20 or later, and WSL 2. Startup checks the Windows build, CPU architecture, WSL, virtualisation, and available RAM and disk space where measurable. See Docker's documentation for supported builds and minimum memory and WSL requirements. [Docker Desktop installation for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+- Node.js 22.13 or later in the 22.x series and npm are recommended. The launcher also accepts Node.js 23.5 or later if it satisfies the current lockfile. Normal startup uses Python 3.12 in the container and locked npm packages on Windows.
+- If a compatible Node.js installation is missing, the launcher queries the official WinGet community source for `OpenJS.NodeJS.22` and shows the selected 22.x version. After confirmation, WinGet verifies the installer hash and starts the interactive installation. If WinGet sources are uninitialised, blocked by the school, or lack a compatible version, install from the official Node.js site and rerun Setup. [Install Microsoft WinGet](https://learn.microsoft.com/windows/package-manager/winget/install) [Download Node.js](https://nodejs.org/en/download)
+- If Docker Desktop is missing, the approved installation downloads it from Docker, verifies a valid Authenticode signature and the Docker publisher, and starts the installer with the WSL 2 per-user option. Review and handle licensing, initialisation, and permission prompts in Docker Desktop.
+- When the WSL 2 check fails, review and run `wsl --install --no-distribution` or `wsl --update`. Windows may require administrator approval and a manual restart. If firmware virtualisation is disabled, follow the device manufacturer's instructions for enabling Intel Virtualization Technology or AMD SVM Mode in BIOS/UEFI. [Microsoft WSL installation guide](https://learn.microsoft.com/windows/wsl/install)
+- The computer's PowerShell and organisational policies apply. If a download triggers a trust block, obtain the repository again from a trusted source or follow the school's approved script trust process.
 
-## 設定、資料與受控 Demo
+## Settings, data, and the controlled demo
 
-首次 Setup 或 Start 產生 `.local/launcher.env`。檔案使用受限 Windows ACL，存放本機隨機 PostgreSQL 密碼和每個 checkout 專屬的 Compose project identity。保留檔案和原本的 volumes，就能重用 Sources、Profiles、Jobs、Records、Redis 和 Evidence。勿提交、公開或把檔案內容貼到聊天。
+The first Setup or Start generates `.local/launcher.env`. A restricted Windows ACL protects the file, which stores a random local PostgreSQL password and a Compose project identity specific to the checkout. Retain the file and original volumes to reuse Sources, Profiles, Jobs, Records, Redis, and Evidence. Keep the file private and out of Git and chat.
 
-| 設定 | 預設 | 用途 |
+| Setting | Default | Purpose |
 | --- | --- | --- |
 | `FRONTEND_PORT` | `5197` | Vite HTTP port。 |
-| `API_PORT` | `58097` | FastAPI host port。Vite 同源代理會跟隨。 |
-| `POSTGRES_PORT` | `55497` | PostgreSQL host port。容器內使用 5432。 |
-| `LAUNCHER_FIXTURE` | `0` | 設成 `1` 時啟動現有受控 HTML fixture，網路只在 Docker 內。 |
-| `LOCAL_PROFILE_APPROVAL` | `0` | 信任目前 Windows 帳戶與本機開發環境時，可明確設成 `1`。 |
-| `LAUNCHER_SUBNET`、`LAUNCHER_FIXTURE_SUBNET` | 由 Docker 選擇 | Docker 網段用盡時，可加上兩段各自可用的 RFC 1918 IPv4 `/24`。 |
+| `API_PORT` | `58097` | FastAPI host port. The same-origin Vite proxy follows this setting. |
+| `POSTGRES_PORT` | `55497` | PostgreSQL host port. The container uses 5432. |
+| `LAUNCHER_FIXTURE` | `0` | Set to `1` to start the existing controlled HTML fixture on an internal Docker network. |
+| `LOCAL_PROFILE_APPROVAL` | `0` | Explicitly set to `1` if you trust the current Windows account and the local development environment. |
+| `LAUNCHER_SUBNET`, `LAUNCHER_FIXTURE_SUBNET` | Selected by Docker | If Docker address pools are exhausted, supply two available RFC 1918 IPv4 `/24` subnets. |
 
-先 Stop，再用純文字編輯器修改支援的設定，儲存後 Start。保留其他設定原值。API、PostgreSQL、Vite 均發布於 `127.0.0.1`，Redis 留在 Docker 網路。啟用 approval 時，Vite 會核對 loopback、API 代理和瀏覽器 Host/Origin，FastAPI 也會執行既有 Host/Origin 檢查。Source 授權和 Profile 版本批准仍要分別完成，operator label 是操作者自行填報。
+Stop first, edit the supported settings in a text editor, save, and start again. Keep the other settings at their original values. API, PostgreSQL, and Vite are bound to `127.0.0.1`. Redis stays on the Docker network. With approval enabled, Vite checks the loopback address, API proxy, and browser Host and Origin, and FastAPI runs its existing Host and Origin checks. Source authorisation and Profile Version approval still require separate actions. The operator supplies the operator label.
 
-全新受控 HTML／CSV 示範可先執行 `Setup-Platform.bat` 產生設定，再於首次 Start 前設定 `LAUNCHER_FIXTURE=1`、`LOCAL_PROFILE_APPROVAL=1` 及空閒連接埠。示範亦提供手動 Compose 啟動步驟。 [M5.5 受控示範](../demo/M5.5-dashboard-demo-runbook.md)
+For a fresh controlled HTML or CSV demo, run `Setup-Platform.bat` to create the settings. Before the first Start, set `LAUNCHER_FIXTURE=1`, `LOCAL_PROFILE_APPROVAL=1`, and available ports. The demo guide also includes manual Compose startup. [M5.5 controlled demo](../demo/M5.5-dashboard-demo-runbook.md)
 
-現有手動環境使用自己的 `.env` 和 Compose project，仍可照 M5 Runbook 啟動。若搬移原有 launcher，請先停止舊 checkout，私下保存整份 `launcher.env`，確認目標 Docker Engine 具備該 identity 的原有 volumes，再將備份檔還原到已限制 ACL 的 `.local` 資料夾。對沒有 launcher ownership label 的既有手動資料庫，請以原環境讀取和備份，交由團隊核對 schema 後安排匯入。 [M5 Demo Runbook](../demo/M5-core-demo-runbook.md)
+Existing manual environments retain their own `.env` and Compose projects. Start them using the M5 runbook. To move a launcher, stop the old checkout, privately save the entire `launcher.env`, verify that the destination Docker Engine has the original volumes for that identity, and restore the file to the ACL-restricted `.local` directory. For a manual database without an ownership label, use the original environment to read and back up the data. Ask the team to check the schema and arrange import. [M5 Demo Runbook](../demo/M5-core-demo-runbook.md)
 
-## 停止、重啟、更新與卸載
+## Stop, restart, update, and remove
 
-- 雙擊 `Stop-Platform.bat`。Vite 收到本機停止訊號後會關閉，Docker Compose 停止擁有相符標籤的服務。再雙擊 Start 即可恢復。
-- 更新前先 Stop 並備份設定、PostgreSQL 與 Evidence。更新 repository 後執行 Setup 和 Start。Launcher 以 `package-lock.json` 檢查 frontend、在 backend build inputs 變更時重建 image，並在舊 schema 上執行現有 Alembic migrations。遇 migration 錯誤時，保留 volumes 並查診斷報告。
-- 備份前先記下私人設定所載的 project name。在同一個 Desktop Engine 以邏輯方式備份 PostgreSQL，並另存 `<project>_evidence_data`。需要恢復排隊狀態時也要另存 Redis volume。請存於有權限限制的資料夾，並在獨立測試環境核對備份可還原。
-- 移除 launcher 時，先 Stop 及核對備份，再刪除 checkout。Docker named volumes 可留在 Desktop，之後使用原設定重新連接。清理 Docker CLI 或 Desktop 所有資料的操作請先由該電腦的管理者評估其他專案與備份。
+- Double-click `Stop-Platform.bat`. Vite receives a local shutdown signal and Docker Compose stops services with matching ownership labels. Double-click Start to resume.
+- Before updating, stop the launcher and back up the settings, PostgreSQL, and Evidence. Update the repository and run Setup and Start. The launcher checks the frontend against `package-lock.json`, rebuilds the image when backend build inputs change, and runs the existing Alembic migrations against earlier schemas. If migration fails, keep the volumes and check diagnostics.
+- Before backing up, write down the project name from the private settings. Take a logical backup of PostgreSQL on the same Docker Desktop Engine and back up `<project>_evidence_data` separately. Save the Redis volume as well if you need to restore queue state. Use a restricted folder and verify the restore in an isolated test environment.
+- To remove the launcher, stop it, check your backups, and delete the checkout. You can retain the Docker named volumes and reconnect them later with the original settings. Ask the computer administrator to consider the effect on other projects and backups before clearing Docker CLI or Docker Desktop data.
 
-## 疑難排解
+## Troubleshooting
 
-雙擊 Diagnose，查看畫面所列的報告，或開啟 `logs/launcher/latest.log`。每次執行另有帶時間戳的報告。報告會記錄命令 exit status、容器狀態和從最近服務輸出辨識的錯誤類別。可依錯誤碼找對應處理方法。
+Double-click Diagnose and open the report shown, or open `logs/launcher/latest.log`. The launcher also saves a timestamped report for each run. It records command exit statuses, container states, and error categories identified in recent service output. Use the error code to find the relevant recovery step.
 
-| 錯誤 | 處理 |
+| Error | Recovery |
 | --- | --- |
-| `ENV-003` / `ENV-004` | 核對 BIOS/UEFI 虛擬化、WSL 版本、Windows Virtual Machine Platform 和待完成的重啟。 |
-| `ENV-005`–`ENV-008` | 開啟 Docker Desktop 並完成提示，確認 Linux containers、WSL 2 和 Compose 可用。學校政策造成存取被拒時請聯絡 IT。 |
-| `ENV-009` / `WEB-001` | 核對 Node/npm 版本、套件 registry 存取、磁碟及 lockfile，然後執行 Setup。 |
-| `NET-001`–`NET-003` | 核對畫面上的 port 及可辨識的 PID。在 Stop 後可更改對應 port 為 1024–65535 之間的未使用值。 |
-| `NET-004` | 使用 `docker network ls` 和 `docker network inspect` 查看 Docker 網段，並用 `Get-NetRoute -AddressFamily IPv4` 核對 Windows/VPN 路由。選未重疊的 private `/24` 放入上述 subnet 設定。既有 network 的 subnet 更換需要人工評估。 |
-| `DB-004`–`DB-006` | 查 PostgreSQL 和 Redis 的健康、資料卷權限、原有憑證及 migration 狀態。保留原始設定和 volumes。 |
-| `SVC-001`–`SVC-005` | 查建置網路存取與 container states。Launcher 對失敗的 Redis 或 Celery worker 各最多嘗試一次重啟。 |
-| `WEB-003`–`WEB-005` | 核對 Vite、代理、瀏覽器及 port。若仍在使用平台的瀏覽器有長連線，先關閉該分頁再跑 Stop。 |
+| `ENV-003` / `ENV-004` | Check BIOS/UEFI virtualisation, the WSL version, Windows Virtual Machine Platform, and any pending restart. |
+| `ENV-005`–`ENV-008` | Open Docker Desktop and complete its prompts, then check Linux containers, WSL 2, and Compose. Contact IT if school policy blocks access. |
+| `ENV-009` / `WEB-001` | Check Node and npm versions, registry access, disk space, and the lockfile, then run Setup. |
+| `NET-001`–`NET-003` | Check the reported port and PID if available. After Stop, change the corresponding port to an unused value between 1024 and 65535. |
+| `NET-004` | Use `docker network ls` and `docker network inspect` to review Docker subnets, and `Get-NetRoute -AddressFamily IPv4` to check Windows and VPN routes. Set private, non-overlapping `/24` values in the subnet settings above. Review any change to an existing network's subnet manually. |
+| `DB-004`–`DB-006` | Check PostgreSQL and Redis health, volume permissions, existing credentials, and migration status. Retain the original settings and volumes. |
+| `SVC-001`–`SVC-005` | Check network access for builds and container states. The launcher makes up to one restart attempt each for a failed Redis service or Celery worker. |
+| `WEB-003`–`WEB-005` | Check Vite, the proxy, the browser, and ports. If an open platform tab holds a long-lived connection, close it before running Stop. |
 
-Windows CIM 可用時，報告可提供實體 RAM 和虛擬化資料。磁碟檢查使用 checkout 所在 drive 與 Docker Desktop 的預設安裝 drive。Docker 自訂資料位置所需容量請從 Docker Desktop 核對。已測環境為已配置的 Windows 11 AMD64。全新環境的系統安裝及 ARM64 安裝仍待驗證。
+When Windows CIM is available, the report can include physical RAM and virtualisation data. Disk checks cover the checkout drive and the default Docker Desktop installation drive. Check capacity for custom Docker data locations in Docker Desktop. Verification used a configured Windows 11 AMD64 environment. Fresh system installation and ARM64 installation still need verification.
