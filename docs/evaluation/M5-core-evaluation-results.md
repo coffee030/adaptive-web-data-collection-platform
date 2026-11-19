@@ -8,7 +8,7 @@ Expected values were entered into the runner after reading the fixtures manually
 
 | Fixture | Expected and actual candidates | Accepted | Rejected | Duplicate | Field comparison |
 | --- | ---: | ---: | ---: | ---: | --- |
-| HTML `table.html` | 2／2 | 2 | 0 | 0 | 4/4。Item 1 `c3 / River Walk`，item 2 `d4 / Lake View`。 |
+| HTML `table.html` | 2/2 | 2 | 0 | 0 | 4/4. Item 1 `c3 / River Walk`, item 2 `d4 / Lake View`. |
 | CSV `listings.csv` | 6/6 | 2 | 3 | 1 | 10/10, including boolean, integer, and optional null. Physical lines 2 and 3 were valid. Line 4 duplicated line 2, which was retained. Line 5 lacked a required title, line 6 had the wrong count type, and line 7 had invalid width. |
 
 Bytes for the two initial Jobs per topology were read directly from the Evidence volume and compared with fixtures, four captures in total. Each of the other 24 warm Jobs was checked for the API's SHA-256, lineage, and all valid fields. No accepted outputs were added or missing.
@@ -22,22 +22,22 @@ Bytes for the two initial Jobs per topology were read directly from the Evidence
 
 The first isolated environment built the image in 2.524 s with a cache hit and took 11.540 s from empty PostgreSQL through migration to API readiness for the M4 baseline. Rerunning the final image with another fresh set of volumes took 11.295 s. The first HTML Job `fbfa1400-d2f5-4651-85a1-43e444cfe962` reached an observed terminal state in 727.86 ms, with POST at 10.87 ms and DB execution at 27.81 ms. The Profile was configured and validated through the API beforehand. CSV Job `f698d380-93b9-415c-9a49-1aa35d94b135` took 964.82 ms with the same fixture checksum. A separate stop and start of all corrected services reached health in 5.623 s.
 
-| Warm latency (ms) | 1 replica min／median／max (n=12) | 2 replicas min／median／max (n=12) |
+| Warm latency (ms) | 1 replica min/median/max (n=12) | 2 replicas min/median/max (n=12) |
 | --- | ---: | ---: |
-| POST Job | 10.63／18.79／43.69 | 11.48／19.06／28.23 |
+| POST Job | 10.63/18.79/43.69 | 11.48/19.06/28.23 |
 | GET Job detail at the terminal observation | 2.39/7.34/9.62 | 3.73/8.12/9.44 |
-| GET Records | 3.39／5.67／9.67 | 3.39／5.26／9.29 |
-| DB created → dispatch publication | 632.92／870.80／881.37 | 548.27／864.23／909.72 |
-| DB started → finished | 7.53／10.37／13.87 | 7.86／10.58／27.55 |
-| Client Job submit → observed terminal | 685.07／929.61／1006.92 | 612.22／932.89／1018.69 |
+| GET Records | 3.39/5.67/9.67 | 3.39/5.26/9.29 |
+| DB created → dispatch publication | 632.92/870.80/881.37 | 548.27/864.23/909.72 |
+| DB started → finished | 7.53/10.37/13.87 | 7.86/10.58/27.55 |
+| Client Job submit → observed terminal | 685.07/929.61/1006.92 | 612.22/932.89/1018.69 |
 
 The 12 warm Jobs (4 in flight × 3, with each batch ending after result and replay confirmation) took 2.789 s and 2.728 s. Throughput was **4.30 and 4.40 Jobs/s**, or **8.61 and 8.80 accepted Records/s**. Both workers answered Celery ping and their CPU samples rose under load. Each Job showed one claim and one terminal event. Two-worker versus one-worker throughput was about **1.02×**, below the Proposal's 1.5× target for this fixture. Dispatch wait was much longer than execution, with variation consistent with roughly 1 s Dispatcher polling. Each topology ran once. Four workers, saturation throughput, long-term SLOs, and internet-scale workloads were untested here.
 
-| In-process extraction + validation | Bytes | Candidates | 1-worker session min／median／max (ms) | 2-worker session min／median／max (ms) |
+| In-process extraction + validation | Bytes | Candidates | 1-worker session min/median/max (ms) | 2-worker session min/median/max (ms) |
 | --- | ---: | ---: | ---: | ---: |
-| HTML | 272 | 2 | 0.190／0.208／0.249 | 0.194／0.213／0.239 |
-| CSV | 151 | 6 | 0.080／0.084／0.121 | 0.079／0.080／0.103 |
-| Generated CSV | 11697 | 500 | 4.907／5.028／15.011 | 4.923／5.068／14.937 |
+| HTML | 272 | 2 | 0.190/0.208/0.249 | 0.194/0.213/0.239 |
+| CSV | 151 | 6 | 0.080/0.084/0.121 | 0.079/0.080/0.103 |
+| Generated CSV | 11697 | 500 | 4.907/5.028/15.011 | 4.923/5.068/14.937 |
 
 Each case had one warm-up and 10 timed runs. These single-process microbenchmarks ran on the same Windows Python host with `perf_counter` and excluded web I/O, Evidence, and PostgreSQL. Each session represents only two reruns.
 

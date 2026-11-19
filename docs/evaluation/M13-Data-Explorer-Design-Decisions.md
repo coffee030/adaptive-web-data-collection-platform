@@ -24,7 +24,7 @@ Downloads use existing Job- or Request-scoped CSV and JSON endpoints. All associ
 
 | Option | Browsing, actions, density, and relationships | Keyboard, mobile, performance, and integration |
 | --- | --- | --- |
-| A. `[Ledger] ｜ [Inspector after selection]` | Every row can be inspected. Wide views retain neighbouring records while the adjoining Inspector brings content and Evidence together. Closing it restores the full ledger width. | Uses native links and buttons and switches to one readable surface in narrow layouts. Fetches only the selected Detail and retains a standalone route. Requires URL selection and focus management. |
+| A. `[Ledger] │ [Inspector after selection]` | Every row can be inspected. Wide views retain neighbouring records while the adjoining Inspector brings content and Evidence together. Closing it restores the full ledger width. | Uses native links and buttons and switches to one readable surface in narrow layouts. Fetches only the selected Detail and retains a standalone route. Requires URL selection and focus management. |
 | B. `[Full-width ledger] → [Standalone Detail]` | Maximum ledger density. Each check leaves the browsing view, and repeated checks rely on Back. | Uses existing keyboard and mobile page navigation. Simple integration and low simultaneous data cost, with more effort to compare Records. |
 | C. `[Row] ↓ [Expanded detail] ↓ [Row]` | Details and Evidence stay near the data. Long fields and lineage push subsequent rows away and shift the scroll position. | Intuitive DOM order and one column on mobile. Long content complicates reflow, focus restoration, and stable table columns. Keeping one Detail open bounds requests. |
 

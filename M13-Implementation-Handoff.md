@@ -1,75 +1,75 @@
-# M13 Data Explorer 實作交接
+# M13 Data Explorer implementation handoff
 
-## 審核基準與交付
+## Review baseline and delivery
 
-- 起始 M12 SHA 為 `432119acc2ec0860d316877577bf0efd4c2db9c1`。建立 M13 前，本機與 GitHub 的 M12 HEAD 一致。
-- 最終 M13 實作 SHA 為 `e0e5c48710d2fc8cee01cdd71884d49bcf3c02fa`。後續交接提交包含本檔案及 QA 截圖，完整分支 tip 由 GitHub 或 `git rev-parse feature/M13-evidence-first-data-explorer` 取得。
-- 獨立審查分支為 [feature/M13-evidence-first-data-explorer](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M13-evidence-first-data-explorer)。
-- API／persistence 審核、關聯圖、三種低保真方案及取捨載於 [M13 設計決策](docs/evaluation/M13-Data-Explorer-Design-Decisions.md)。瀏覽器畫面及來源載於 [21 幅截圖索引](docs/evaluation/M13-screenshots/README.md)。
+- Starting M12 SHA was `432119acc2ec0860d316877577bf0efd4c2db9c1`. Local and GitHub M12 HEAD matched before M13 branched.
+- Final M13 implementation SHA was `e0e5c48710d2fc8cee01cdd71884d49bcf3c02fa`. A later commit contains this handoff and QA screenshots. Obtain the full tip from GitHub or `git rev-parse feature/M13-evidence-first-data-explorer`.
+- The feature branch is available for independent review. [feature/M13-evidence-first-data-explorer](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M13-evidence-first-data-explorer)
+- The design review covers API and persistence, entity relationships, and three low-fidelity options. The screenshot index identifies browser evidence and data sources. [M13 design decisions](docs/evaluation/M13-Data-Explorer-Design-Decisions.md) [Index of 21 screenshots](docs/evaluation/M13-screenshots/README.md)
 
-## 操作與資料
+## Workflow and data
 
-Data Explorer 使用 Record Ledger 和可關閉的 Inspector。全域、Job、Request 各有明確範圍。十筆資料加一筆探測下一頁，Oldest／Newest 依 PostgreSQL 實際保存時間及 ID 排序。改範圍或排序時回第一頁。拒絕衝突及無效的 ID。未知、已刪除、超頁或超範圍的選取有明確回饋。資料狀態由 API 提供，Partial 清冊仍顯示實際發布紀錄。Job Quality 保留有效、無效和重複計數及 Quarantine 入口。
+Data Explorer uses a Record Ledger and dismissible Inspector. Global, Job, and Request scopes are explicit. It fetches ten rows plus one to detect another page. Oldest and Newest use PostgreSQL persistence time and ID. Scope or sort changes return to page one. Conflicting and invalid IDs are rejected. Unknown, deleted, off-page, and out-of-scope selections get explicit feedback. API state drives the view. A Partial Request still lists published records. Job Quality keeps valid, invalid, and duplicate counts and the Quarantine link.
 
-Inspector 在寬版隨選取出現在清冊右側，窄版切到全寬檢查。內容、來源和驗證狀態優先，Capture Evidence 及 Article History 動作跟隨實際關聯。關閉或 Escape 可回到相應列。Record Detail 保留完全獨立網址及完整 JSON，長 hash、ID、來源位置及去重鍵收在 provenance disclosure。Evidence 顯示後端保存的擷取種類、HTTP 狀態、頁次、時間、位置及 SHA-256。Web metadata 位置會去掉帳密、query 和 fragment。直接 Evidence 連結有相關 Job Records 後備，已知 Request 可對照 Job 成員後開啟。Job Capture 的 Search、Detail 與 Input 保持分明。
+On wide screens the Inspector opens beside the ledger. It uses full width on narrow screens. Content, Source, and validation state come first, with Capture Evidence and Article History actions based on real links. Close or Escape returns to the row. Record Detail retains a standalone URL and full JSON. Provenance disclosure contains long hashes, IDs, source position, and deduplication key. Evidence displays stored capture kind, HTTP status, page, time, location, and SHA-256. Web metadata strips credentials, query, and fragment. A direct Evidence link can fall back to Job Records. An identified Request can open after verifying Job membership. Search, Detail, and Input capture types remain distinct.
 
-URL 負責範圍、排序、offset、Record 選取與 Article 的版本、觀測及各自 offset。明確返回連結使用受限的內部路徑，原瀏覽歷史存在時沿原項目返回。App Shell 內的 ScrollRestoration 繼續處理整體捲動。M13 另記錄最多 64 次瀏覽歷史的觸發點及捲動位置，配合 REST 返回後還原。Fields to Display 最多保留 12 個 scope，每 scope 最多 160 個已讀頁面欄名和勾選，工作階段重新載入時重置。Missing、Null、空字串、0 和 false 各有清楚表達。顯示設定和瀏覽歷史不在瀏覽器保存 payload。
+The URL stores scope, sort, offset, Record selection, Article version and observation, and their separate offsets. Explicit return uses bounded internal paths and the original history entry when available. App Shell ScrollRestoration still manages general scrolling. M13 also records trigger and scroll position for up to 64 history entries and restores after REST loads. Fields to Display retains up to 12 scopes and 160 field names and selections from visited pages per scope. Session reload resets it. Missing, Null, empty string, 0, and false have distinct labels. Display settings and history store no payload in the browser.
 
-Article 最新內容和版本目錄跨收集。Request 導入後，Observation History 限定於該 Request，單筆觀測的 Request 身份按回應驗證。觀測可開原 Record／Evidence／Job／Source／Profile，並選取實際捕獲的 Content Version。版本和觀測可獨立返回。沒有映射的 Record 繼續使用同一檢查流程。
+Latest Article content and version history span collections. Request entry scopes Observation History to that Request and verifies a selected observation's returned Request ID. Observations link to original Record, Evidence, Job, Source, and Profile, and can select the actual captured Content Version. Version and observation return independently. Unmapped Records keep the same inspection workflow.
 
-整個 Request 或 Job 的下載仍由既有詳情頁操作，保持 CSV／JSON 格式、檔名、所有保存欄位及錯誤回饋。核對終態、5,000 筆／8 MiB 上限和實際 scope 中的紀錄。清冊欄位及分頁只控制顯示。
+Existing detail pages still download the whole Request or Job with CSV and JSON, filenames, every persisted field, and errors. Checks covered terminal state, limits of 5,000 records and 8 MiB, and correct scope. Ledger fields and pagination affect display only.
 
-## 驗證與接受門檻
+## Verification and acceptance
 
-| Gate | 狀態 | 實際結果 |
+| Gate | Status | Actual result |
 | --- | --- | --- |
-| A　API 及資料完整性 | PASS | M8 Article 及 M9 Export 的 PostgreSQL／Redis suite 8 passed。真實 REST 核對 Record ID、Request FK、原 Job、Profile、Evidence、Version。 |
-| B　Record Ledger | PASS | 真實 12 筆 Request 以 UI 對照 Oldest／Newest 及 API Record ID。全域及 Job、Request 入口、空頁、混合欄位、無效範圍和 10 + 1 界限有 Edge 覆蓋。 |
-| C　Inspector | PASS | Edge 驗證開啟、關閉、Escape、深層連結、失效選取、桌面並排及窄版。Record Detail 仍可獨立載入。 |
-| D　Evidence | PASS | 真實 HTML、CSV、Detail Evidence 和 Job Capture，核對 hash、來源和 Profile。含 query／帳密／fragment 的模擬網址在 UI 層去除。 |
-| E　Article History | PASS | 獨立 fixture 切為 Revision 2 後，重新收集產生 Content Version 2。原 Request 的觀測仍開啟 Version 1。觀測／版本 offset 和 reload 另以 mock 驗證。Fixture 回到 Revision 1。 |
-| F　任務延續 | PASS | 真實 Request → 第 2 頁 → Record → Evidence → 原 Inspector → 原頁 → 下一筆。Article → Version／Observation → Record → Evidence → Back × 2。模擬測試另外驗證精確捲動值、欄位及第二／第三筆、Back／Forward。 |
-| G　下載及狀態 | PASS | 控制環境真實下載 Request／Job CSV 與 JSON，內容依 API 逐欄核對。兩個 Partial 子 Job 的 Request 有實際驗證紀錄。另一個 Failed Job 沒有已驗證紀錄。等待和上限錯誤由 UI 及 API 測試覆蓋。 |
-| H　響應及可及性 | PASS | Edge 1440、900、768、390、320 px 及 Chrome 原生 200% 縮放。代表畫面未發現整頁水平溢出或 axe WCAG 2／2.1 A、AA 違規。鍵盤、焦點、手機觸控模擬、Light／Dark／System 及 reduced motion 均有執行證據。 |
-| I　回歸及交接 | PASS | `npm.cmd run build` 通過 TypeScript 和 Vite。完整 mocked Edge suite 119 passed。現有 Windows launcher harness 29/29 passed。實作、驗證及畫面準備供獨立審查。 |
-| 實體螢幕閱讀器 | NOT RUN | 以瀏覽器 accessibility tree、鍵盤及 axe 檢查語意。 |
+| A API and integrity | PASS | 8 passed in PostgreSQL and Redis for M8 Article and M9 Export. Live REST checked Record ID, Request FK, original Job, Profile, Evidence, and Version. |
+| B Record Ledger | PASS | A live 12-record Request compared UI Oldest and Newest with API Record IDs. Edge covered global, Job, and Request entry, empty pages, mixed fields, invalid scope, and 10 + 1 paging. |
+| C Inspector | PASS | Edge covered opening, closing, Escape, deep links, invalid selection, desktop and narrow layouts. Standalone Record Detail still loaded. |
+| D Evidence | PASS | Live HTML, CSV, Detail Evidence, and Job Capture matched hash, Source, and Profile. A simulated URL with query, credentials, and fragment was redacted in UI. |
+| E Article History | PASS | In isolation, fixture Revision 2 recollection created Content Version 2. Original Request observation still opened Version 1. Mocks covered offsets and reload. Restored Revision 1. |
+| F Task continuity | PASS | Live Request → page 2 → Record → Evidence → original Inspector → original page → next record. Article → Version or Observation → Record → Evidence → Back × 2. Mocks checked exact scroll, fields, second and third items, and Back and Forward. |
+| G Downloads and state | PASS | Controlled live Request and Job CSV and JSON checked field by field against API. Two Partial Jobs retained valid records. A separate Failed Job had none. API and UI checked pending and limit errors. |
+| H Responsive and accessible | PASS | Edge 1440, 900, 768, 390, and 320 px and native Chrome 200%. Representative views had no whole-page horizontal overflow or axe WCAG 2 or 2.1 A or AA violations. Keyboard, focus, mobile touch simulation, Light, Dark, System, and reduced motion were checked. |
+| I Regression and handoff | PASS | `npm.cmd run build` passed TypeScript and Vite. Mocked Edge 119 passed and Windows launcher harness 29/29 passed. Implementation, results, and captures support independent review. |
+| Physical screen reader | NOT RUN | Checked semantics with browser accessibility tree, keyboard, and axe. |
 
-### Normal 與 Synthetic Demo
+### Normal and Synthetic Demo
 
-- Normal 使用新遷移、獨立空 PostgreSQL。初次 Data Explorer 顯示空狀態及 New Collection 連結，導覽全程為讀取及未送出的操作，Normal 畫面沒有 Synthetic Demo 提示。
-- Demo 透過現有 `backend.experiments.demo_provision` 在另一 Compose project 產生三個受控基準。Fixture Listings 2 筆、Influencer Advertising and Sponsorship 8 筆、Market News and Economic Updates 8 筆，分別核對 Job／Request、Observation、Evidence 和兩種下載。市場資料有模擬價格提示。另以 M12 的介面建立新 collection，包含受控 Partial Request。實際驗證未使用整庫筆數作基準。
-- Real Edge 瀏覽組合包含既有 Demo／M12、Topic、HTML、CSV、失敗 Capture 和獨立 Normal，另有兩個 M13 專項。Core HTML／CSV 端到端及 M6/M7 的分頁、Search／Detail capture 回歸也通過。POST 或 fixture revision 都在獨立測試環境。使用者的 Demo 保持原有資料。
-- Mocked Edge 與 live 分開執行。合約資料由受控 PostgreSQL 和 fixture 提供。Mock 覆蓋空及錯誤頁面、503／network retry、混合型別、返回、重排、匯出錯誤和頁面狀態，並保留 M11 Shell 和 M12 新收集回歸。
-- 初次 live 檢查發現 Python 路徑及沿用的舊 UI selectors，修正測試設定與 selectors 後重跑通過。第一次 M8/M9 smoke 有兩項缺 Redis 而跳過，遷入同一隔離環境的 Redis 後全八項通過。
+- Normal used a fresh migrated isolated PostgreSQL. Data Explorer showed empty state and New Collection. Navigation used reads and unsent actions. Normal showed no Synthetic Demo notice.
+- Demo used existing `backend.experiments.demo_provision` in a separate Compose project. Fixture Listings had 2 records, Influencer Advertising and Sponsorship 8, and Market News and Economic Updates 8. Checked Job and Request, Observation, Evidence, and both downloads for each. Market records carried the simulated price notice. Also used M12 UI for a new collection and a controlled Partial Request. Verification used run-specific counts.
+- Live Edge included existing Demo and M12, Topic, HTML, CSV, failed Capture, isolated Normal, and two M13-specific scenarios. Core HTML and CSV and M6 and M7 pagination and Search and Detail captures passed. POST and fixture revision used only isolated environments. The user's Demo data remained as before.
+- Mocked and live Edge ran separately. Controlled PostgreSQL and fixtures supplied contract data. Mocks covered empty and error, 503 and network retry, mixed types, return, reflow, export failures, and page states, retaining M11 Shell and M12 regression.
+- Initial live verification exposed Python path and stale UI selectors and passed after correction. First M8 and M9 smoke skipped two tests without Redis. All eight passed after adding Redis to the isolated environment.
 
-### 瀏覽器與 UI Slop v1.7
+### Browser review and UI Slop v1.7
 
-Pass A 檢視寬窄版、巢狀操作和實際 payload。在 320 px 看到首筆資料被控制項推離首屏，另發現操作標籤未包含可見措辭及原生 Chrome 縮放截圖裁切。Fix Batch 收緊 Request 範圍及排序控制，放置實際價格／摘要，將長識別碼收合，對齊可見名稱和可及名稱，修正 Article breadcrumb 間距及窄版 Inspector 的焦點／捲動。延遲 503 harness 在 StrictMode 重複掛載後保持模擬直到 Retry，再轉真實 API。Pass B 以 Edge 157.0.4341.60 驗證 18 組代表狀態、焦點、返回與 Retry，未記錄非預期瀏覽器錯誤。Chrome 157.0.8103.51 使用瀏覽器設定 200%，DPR 2、712 CSS px，以原生 viewport 重新擷取。
+Pass A checked wide and narrow layouts, nested paths, and actual payloads. At 320 px controls pushed the first record below the fold. Some accessible labels omitted visible words and Chrome zoom screenshots clipped. The fix tightened scope and sort controls, showed price and summary, collapsed long IDs, aligned visible and accessible names, and improved Article breadcrumb spacing and narrow Inspector focus and scroll. The delayed 503 harness retained the mock through StrictMode remount until Retry returned to live API. Pass B used Edge 157.0.4341.60 for 18 representative states, focus, return, and Retry, with no unexpected browser errors. Chrome 157.0.8103.51 used native 200% at DPR 2 and 712 CSS px for a recapture.
 
-- **AI Fingerprint Gate PASS**。Record 和 Evidence 關聯構成版面，樣式分別呈現清冊列、定位提示、實際狀態和擷取 metadata。
-- **Evidence Gate PASS**。鍵盤流程、scope 和 Record identity、資料來源、空／載入／錯誤、返回及必要重排均有實際檢查證據。
-- **Taste Gate PASS**。固定 Cobalt／Slate 與 M11 Shell，內容預覽和查證入口在同一個選取情境，窄版直接定位到可操作的 Inspector。
+- **AI Fingerprint Gate PASS**. Record and Evidence relationships shape the layout. Styling distinguishes ledger rows, position cues, actual state, and capture metadata.
+- **Evidence Gate PASS**. Live evidence covers keyboard, scope and Record identity, data sources, empty, loading and error, return, and required reflow.
+- **Taste Gate PASS**. Retains Cobalt and Slate and M11 Shell. Preview and verification actions stay with the selected Record, and narrow layout moves to the actionable Inspector.
 
-### 重現重點
+### Reproduce
 
-在 `frontend/` 執行 `npm.cmd run build` 與 `npm.cmd test`。本次 Playwright 以 `PLAYWRIGHT_CHANNEL=msedge` 執行。Real suite 需 `M4_REAL_API=1`、`LOCAL_PROFILE_APPROVAL=1` 和隔離的 `API_PROXY_TARGET`。既有 Demo entry 使用 `M10_SYNTHETIC_URL`，CSV 解析可指定 `M9_TEST_PYTHON`。Normal 新資料庫測試須 `M12_EMPTY_NORMAL=1`。M13 專項以 `tests/m13-continuity.integration.ts` 執行，使用 `M13_QA_DEMO_URL` 和隔離的 `M13_QA_FIXTURE`，請參閱測試內的 loopback 及 Compose 名稱限制。
+Run `npm.cmd run build` and `npm.cmd test` in `frontend/`. Used `PLAYWRIGHT_CHANNEL=msedge`. Live uses `M4_REAL_API=1`, `LOCAL_PROFILE_APPROVAL=1`, and isolated `API_PROXY_TARGET`. Demo entry uses `M10_SYNTHETIC_URL`. CSV can use `M9_TEST_PYTHON`. Fresh Normal sets `M12_EMPTY_NORMAL=1`. M13 runs `tests/m13-continuity.integration.ts` with `M13_QA_DEMO_URL` and isolated `M13_QA_FIXTURE`, subject to the test's loopback and Compose naming limits.
 
-## 變更檔案
+## Changed files
 
-| 路徑 | 變更 |
+| Path | Change |
 | --- | --- |
-| `frontend/src/features/results/RecordsExplorer.tsx`、`displayFields.ts` | 清冊、支援的 scope／sort／分頁、混合欄位、獨立範圍偏好及品質入口。 |
-| `frontend/src/features/results/RecordInspector.tsx`、`RecordDetail.tsx`、`resultNavigation.tsx` | 共用檢查內容、URL lineage context、canonical Detail、焦點、捲動及可返回選取。 |
-| `frontend/src/features/results/EvidenceDetail.tsx`、`api.ts`、`presentation.tsx` | 證據 metadata、capture 種類與安全位置、可用 scope 路徑及值呈現。 |
-| `frontend/src/features/results/RecordExport.tsx`、`results.css` | 完整範圍下載說明及響應式清冊、Inspector、證據版面。 |
-| `frontend/src/features/collection-jobs/JobDetail.tsx` | Job capture 種類、Request context 與 Evidence 返回。 |
-| `frontend/src/features/topic-collections/Articles.tsx`、`support.tsx`、`topic-collections.css` | Latest、版本及觀測檢查，兩組可分享的分頁及連結。 |
-| `frontend/tests/m13-continuity.spec.ts`、`results.spec.ts`、`dashboard.spec.ts` | 互動、焦點、窄版、混合欄位和舊入口回歸。 |
-| `frontend/tests/m13-continuity.integration.ts`、`topic-collections.integration.ts`、`results.integration.ts`、`core-workflow.integration.ts`、`closure.integration.ts` | 真實持久資料、版本／證據／匯出關聯、失敗和 Partial 狀態。 |
-| `docs/evaluation/M13-Data-Explorer-Design-Decisions.md`、`docs/evaluation/M13-screenshots/`、`M13-Implementation-Handoff.md` | 審核、設計決策、瀏覽證據及交接。 |
+| `frontend/src/features/results/RecordsExplorer.tsx` and `displayFields.ts` | Ledger, supported scopes, sort and pagination, mixed fields, scoped preferences, and quality links. |
+| `frontend/src/features/results/RecordInspector.tsx`, `RecordDetail.tsx`, and `resultNavigation.tsx` | Shared inspector, URL lineage, canonical detail, focus, scroll, and selection return. |
+| `frontend/src/features/results/EvidenceDetail.tsx`, `api.ts`, and `presentation.tsx` | Evidence metadata, capture kind and safe location, scope links, and values. |
+| `frontend/src/features/results/RecordExport.tsx` and `results.css` | Whole-scope export explanation and responsive ledger, Inspector, and Evidence layout. |
+| `frontend/src/features/collection-jobs/JobDetail.tsx` | Job capture kinds, Request context, and Evidence return. |
+| `frontend/src/features/topic-collections/Articles.tsx`, `support.tsx`, and `topic-collections.css` | Latest, versions, and observations with two shareable paginated lists and links. |
+| `frontend/tests/m13-continuity.spec.ts`, `results.spec.ts`, and `dashboard.spec.ts` | Interaction, focus, narrow layouts, mixed fields, and existing navigation regression. |
+| `frontend/tests/m13-continuity.integration.ts`, `topic-collections.integration.ts`, `results.integration.ts`, `core-workflow.integration.ts`, and `closure.integration.ts` | Persisted data, version, Evidence and export links, failure, and Partial. |
+| `docs/evaluation/M13-Data-Explorer-Design-Decisions.md`, `docs/evaluation/M13-screenshots/`, and `M13-Implementation-Handoff.md` | Review, design decisions, browser evidence, and handoff. |
 
-## 限制與下一里程碑
+## Limits and next milestone
 
-當新紀錄同時發布，REST offset page 成員可能移動，Inspector 會再次核對目前頁面。API 提供已保存的 Evidence metadata，原檔位元組驗證仍由既有 Core 機制負責。全資料集搜尋、任意欄位排序、全域 Export、原始 Evidence 瀏覽及 Version Diff 缺少現行產品契約。Operator Job 診斷重設為 M14 範圍，M15 依後續里程碑處理。
+Concurrent inserts can shift REST offset membership. Inspector rechecks the current page. The API returns persisted Evidence metadata and the Core retains raw-byte verification. Full-dataset search, arbitrary field sorting, global Export, raw Evidence browsing, and Version Diff lack product contracts. Operator Job diagnostics were scoped to M14 at this point, with M15 for later milestones.
 
-**GO 進入 M13 獨立審查。**
+**GO for independent M13 review.**

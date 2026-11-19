@@ -1,8 +1,8 @@
 # M3 Worker Architecture
 
-FastAPI 建立 Collection Job 時，在同一 PostgreSQL transaction 寫入輸入、固定 Profile Version／hash、派送時間及建立事件。API 201 表示 Job 已持久化。Dispatcher 是唯一的輪詢程序，從已提交的 Job 發布 JSON task。每個訊息只包含 Job UUID，Celery 另帶 task ID 和有效期限。Redis 提供 broker transport，PostgreSQL 保存 Job、派送、重試與結果。
+FastAPI creates a Collection Job and writes input, pinned Profile Version and hash, dispatch time, and creation event in one PostgreSQL transaction. API 201 confirms persistence. The Dispatcher is the only polling process and publishes JSON tasks from committed Jobs. Each payload carries only the Job UUID. Celery supplies a task ID and expiration. Redis provides broker transport, and PostgreSQL stores Jobs, dispatch, retries, and results.
 
-M5 的全系統視圖、封存合約及已核對的容量／安全界限見 [M5 Core Architecture Review](M5-core-architecture-review.md)。
+The M5 review covers the full system, archived contracts, and verified capacity and access boundaries. [M5 Core Architecture Review](M5-core-architecture-review.md)
 
 ```mermaid
 flowchart LR
@@ -17,26 +17,26 @@ flowchart LR
     V --> E
 ```
 
-## Dispatch 與 recovery
+## Dispatch and recovery
 
-- Dispatcher 每秒掃描，先處理 expired leases，再處理 due pending Jobs，每類每輪最多 20 筆。每筆使用短 transaction 與 `FOR UPDATE SKIP LOCKED`，同一 Job 同時只有一個 Dispatcher 持有派送鎖。
-- Publisher 禁用 transport publish retry，Redis connect／socket timeout 各 2 秒。失敗記錄 `DISPATCH_FAILED` 並延後 5 秒，該 Dispatcher 亦暫停發送 5 秒。已發布且仍未 claim 的 Job 在 120 秒後可重派，派送訊息的有效期同為 120 秒。每次派送使用新的 Celery task ID。Redis 不可用或訊息遺失時，pending Job 仍然留在 PostgreSQL，派送嘗試可持續至服務復原。
-- Worker 透過原有 row lock claim，遞增 `execution_attempt`，以 PostgreSQL 時間建立固定 90 秒 lease。Dispatcher 對過期 running Job 記錄 `WORKER_LOST`。若尚有額度，5 秒後可再執行，達上限則失敗。Worker、CLI 都會拒絕尚未到期的 retry。
-- 結果與失敗處理都重鎖 Job row，在 transaction 內以 PostgreSQL 時間核對狀態、attempt generation 和 lease。持鎖期間無法被另一次 recovery 或 claim 取代。若已失去 ownership，會記錄含 Job UUID 和舊 attempt 的 log。已提交的 Evidence metadata、Records、quarantine、counts 和終態事件屬同一 transaction。
-- 檔案與 PostgreSQL 有各自的寫入邊界。暫時性 HTTP 錯誤、stale completion、程序終止或 transaction rollback 均可能留下未被 DB 引用的檔案。保留這些資料供調查。停下 Worker 和 CLI 後，以 evidence root 下的 UUID 目錄對照 `raw_evidence.id`，另檢查 `.capture-*` staging 目錄。確認資料庫可用並核實沒有引用後才處理。
+- The Dispatcher polls every second, handling expired leases before due pending Jobs, up to 20 of each per pass. Each uses a short transaction with `FOR UPDATE SKIP LOCKED`, letting only one Dispatcher hold the Job's dispatch lock at a time.
+- The publisher disables transport-level publish retry and sets Redis connect and socket timeouts to 2 seconds each. Failure records `DISPATCH_FAILED` and delays the Job by 5 seconds. That Dispatcher also pauses publication for 5 seconds. Published, unclaimed Jobs may be redispatched after 120 seconds. Messages expire after 120 seconds. Each dispatch has a new Celery task ID. While Redis is unavailable or messages are lost, pending Jobs remain in PostgreSQL and dispatch can continue when service recovers.
+- The worker claims with the existing row lock, increments `execution_attempt`, and creates a fixed 90-second lease using PostgreSQL time. For expired running Jobs the Dispatcher records `WORKER_LOST`. With attempts remaining it retries after 5 seconds, otherwise it fails the Job. The worker and CLI reject retries that are not due.
+- Result and failure handlers relock the Job and check state, attempt generation, and lease against PostgreSQL time inside the transaction. Another recovery or claim cannot replace the lock holder. If ownership has been lost, the log records the Job UUID and previous attempt. Committed Evidence metadata, Records, Quarantine, counts, and terminal event share one transaction.
+- Files and PostgreSQL have separate write boundaries. Transient HTTP errors, stale completions, termination, and transaction rollback can leave unreferenced captures. Preserve them for investigation. With workers and CLI stopped, compare UUID directories under the Evidence root against `raw_evidence.id` and check `.capture-*` staging directories. Confirm database access and absence of references before acting.
 
 ## Celery
 
-使用 Celery 5.6.3、Kombu 5.6.2、redis-py 5.2.1。Compose broker 為 Redis 7.4.8，獨立的 private service，使用 AOF、64 MiB Redis maxmemory 和 noeviction。Celery 以 `CELERY_BROKER_URL` 指定 Redis URL，JSON-only，queue 為 `collection`，註冊 `collection.execute_job`，停用 result backend。Linux 預設 prefork concurrency 1、prefetch 1、hard task limit 60 秒、Redis visibility 180 秒。
+The stack uses Celery 5.6.3, Kombu 5.6.2, and redis-py 5.2.1. Compose uses private Redis 7.4.8 with AOF, 64 MiB maxmemory, and noeviction. Celery uses `CELERY_BROKER_URL`, JSON only, the `collection` queue, and `collection.execute_job`, with result backend disabled. Linux defaults are prefork concurrency 1, prefetch 1, a 60-second hard limit, and 180-second Redis visibility.
 
-Late ack 用於正常結果。Celery 可在 task failure、hard timeout 或 prefork child loss 後 ack，因此復原由 PostgreSQL lease 及 Dispatcher 主導。Broker connection loss 時，Worker 設定取消長時間執行的未 ack task。整個 Worker 崩潰時，Redis transport 也可能在 visibility 到期後恢復訊息。過期、未到期的 retry、running 及 terminal 狀態均由 PostgreSQL 判定。Windows 的 solo process 只供本機測試，hard task limit 與 signal 行為以 Linux prefork 為準。
+Normal results use late acknowledgement. Celery may acknowledge after failure, hard timeout, or prefork child loss, so PostgreSQL leases and the Dispatcher drive recovery. On broker connection loss, worker settings cancel long-running unacknowledged work. After a full worker crash, Redis can restore the message when visibility expires. PostgreSQL decides expired, not-yet-due, running, and terminal states. Windows solo is for local testing. Linux prefork defines hard-limit and signal behaviour.
 
 ## Compose trust boundary
 
-基礎設定保留原有 PostgreSQL volume path。API 和 PostgreSQL port 只映射到 host loopback，Redis 無 host port。API 和 Worker 以相同非 root UID 共用 `evidence_data` 的 `/data/evidence`。
+The base configuration retains the existing PostgreSQL volume path. API and PostgreSQL publish to host loopback only, and Redis has no host port. API and worker share `/data/evidence` in `evidence_data` under the same non-root UID.
 
-`compose.fixture.yaml` 建立 internal network 並只為 API、Worker 啟用 `M3_COMPOSE_FIXTURE=1`。這個模式額外接受固定字面 origin `http://collection-fixture:8001`，依賴專用 Compose network 的 service DNS，仍需批准的 Source policy 並維持 robots、redirect、timeout 及 request bounds。測試網站只提供指定的 robots.txt 和 table.html。此模式應使用專用測試 project，避免在開發資料保存需要 fixture 模式才可讀取的 Source。
+`compose.fixture.yaml` creates an internal network and sets `M3_COMPOSE_FIXTURE=1` only for API and worker. It permits the fixed literal origin `http://collection-fixture:8001` through private Compose DNS, with approved Source policy and existing robots, redirect, timeout, and request limits. The fixture serves its prescribed robots.txt and table.html. Use a dedicated test project to keep fixture-mode Sources out of development data.
 
-## 界限
+## Limits
 
-保證為 at-least-once execution attempts 與 idempotent committed results。兩次 attempt 可能各自發送 HTTP；M1 的單次 request timeout、robots 和 redirect 上限仍生效。M3 控制每個 Job 的重試和請求數，目前各獨立 Job 沿用既有 M1 policy。跨 Job 的共享 public-source quota、Worker fleet heartbeat、evidence retention 和備份仍待其他里程碑驗證。
+The guarantee covers at-least-once execution attempts and idempotent committed results. Two attempts may each send HTTP requests, subject to M1 per-request timeouts and robots and redirect limits. M3 controls retries and request counts for each Job using the existing M1 policy. Shared public-source quotas across Jobs, fleet heartbeats, Evidence retention, and backups remained for later verification.

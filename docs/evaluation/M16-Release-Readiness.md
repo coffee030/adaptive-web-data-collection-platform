@@ -29,7 +29,7 @@ Local deployment assumes a trusted operator and loopback. Host and Origin checks
 
 After GitHub confirms the merge, use a fresh main checkout to verify SQL migrations, BAT startup, presets, document links, and checkout content. Check M6–M16 ancestry and the final main SHA. Mark #1–#4 as superseded only after confirming their integration. Retain the branches and discussion history for reference.
 
-## Backup、rollback、troubleshooting
+## Backup, rollback, and troubleshooting
 
 - Before updating, stop the owned services using Stop for the correct mode. Back up ACL-protected launcher settings, PostgreSQL dumps, the Evidence volume, and the Demo manifest. If queued Jobs need to survive, back up Redis as well. Record the Compose project identity and volume names. Rehearse restoration in a separate project and compare the API, approved configurations, and capture hashes.
 - To restore the behaviour of merged code, submit a normal corrective or revert PR. Check expected schema compatibility and restore the backup into a new project. Retain existing volumes and settings for investigation. The M16 candidate uses the same migration.

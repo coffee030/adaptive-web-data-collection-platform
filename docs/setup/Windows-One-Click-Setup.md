@@ -56,7 +56,7 @@ The first Setup or Start generates `.local/launcher.env`. A restricted Windows A
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `FRONTEND_PORT` | `5197` | Vite HTTP port。 |
+| `FRONTEND_PORT` | `5197` | Vite HTTP port. |
 | `API_PORT` | `58097` | FastAPI host port. The same-origin Vite proxy follows this setting. |
 | `POSTGRES_PORT` | `55497` | PostgreSQL host port. The container uses 5432. |
 | `LAUNCHER_FIXTURE` | `0` | Set to `1` to start the existing controlled HTML fixture on an internal Docker network. |
