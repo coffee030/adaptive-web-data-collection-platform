@@ -1,0 +1,8 @@
+# Copy the table to the checkout's .codex/config.toml and replace the placeholders.
+[mcp_servers.fyp]
+command = '<ABSOLUTE_CHECKOUT_PATH>\mcp_access\.venv\Scripts\python.exe'
+args = ["-m", "mcp_access.server"]
+cwd = '<ABSOLUTE_CHECKOUT_PATH>'
+
+[mcp_servers.fyp.env]
+FYP_MCP_API_BASE = "http://127.0.0.1:<DEMO_API_PORT>/api/v1"
