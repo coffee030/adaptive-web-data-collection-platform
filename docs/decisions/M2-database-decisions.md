@@ -1,24 +1,24 @@
 # M2 Database Decisions
 
-2026-11-14（香港時間）。決定依 M2 brief 落實，待同儕審查。
+2026-11-14 Hong Kong time. Implemented according to the M2 brief, with peer review pending.
 
-## ADR M2-01 PostgreSQL 與 Core 邊界
+## ADR M2-01 PostgreSQL and Core boundaries
 
-**背景** M1 以記憶體管理 Source 和 Profile。M2 需要 durable state 及一致的審批。
-**決定** 以 PostgreSQL 17、SQLAlchemy 2、psycopg 和 Alembic 實作。Application services 以 row locks 管理交易，透過 M1 snapshot 呼叫 lifecycle，ORM 和 migration 採獨立資料模型。
-**替代方案** 將 ORM model 納入 Core，或採用 SQLite。
-**後果** 可保留既有 M1 library 呼叫方式，需實測 PostgreSQL JSONB、鎖及 FK。Native Windows 可供本機驗證，Compose 以 Linux PostgreSQL 為標準開發配置，未來 API／CLI Linux 容器須共享 evidence volume 並重新驗證。
+**Context.** M1 managed Source and Profile in memory. M2 needs durable state and consistent approval.
+**Decision.** Use PostgreSQL 17, SQLAlchemy 2, psycopg, and Alembic. Application services manage transactions with row locks and invoke lifecycle rules through M1 snapshots. ORM and migrations use separate models.
+**Alternatives.** Place ORM models in the Core or use SQLite.
+**Consequences.** Existing M1 library calls can be retained. Test PostgreSQL JSONB, locks, and foreign keys. Native Windows supports local verification. Linux PostgreSQL in Compose is the standard development setup. Future Linux API and CLI containers must share the Evidence volume and be reverified.
 
-## ADR M2-02 Job 固定輸入與重送
+## ADR M2-02 Pinned Job input and replay
 
-**背景** M0 Task contract 需支援 queue redelivery，M2 僅執行一份受控輸入。
-**決定** 以 Job row 作 durable claim，固定 profile version/hash，允許 client 為同一來源提供 request key。M1 first valid wins 維持每 Job；全資料庫可保存不同 Job 的歷史快照。
-**替代方案** 採用 Job/Task/attempt 三層或全域 dedup。
-**後果** CLI 可取代 transport trigger，同一 Job 只進入 running 一次。硬中止可留下 running Job；lease、recovery、retry 及可靠 queue dispatch 需在 M3 設計。
+**Context.** The M0 Task contract must support queue redelivery. M2 executes one controlled input.
+**Decision.** Use the Job row for a durable claim, pin Profile Version and hash, and accept a client request key per Source. M1 keeps the first valid result within each Job. The database can retain snapshots from different Jobs.
+**Alternatives.** Use separate Job, Task, and attempt layers or global deduplication.
+**Consequences.** CLI can replace a transport trigger. A Job enters running once. Hard termination can leave it running. Design lease, recovery, retry, and reliable dispatch in M3.
 
-## ADR M2-03 Evidence 及結果發布
+## ADR M2-03 Evidence and results publication
 
-**背景** 原始 bytes 要保存於可核對的本機檔案，DB 必須追蹤 results 和 lineage。
-**決定** 沿用 M1 staged evidence，重新核對 bytes/hash，之後以一個 DB transaction 發布 metadata、結果及終態。藉 composite FK 防止跨 Job evidence 引用。
-**替代方案** 把 raw bytes 和 metadata 一併寫入 PostgreSQL，或以複雜補償交易刪檔。
-**後果** DB 失敗可能留下孤兒檔；由操作者在停機時比對，避免自動清理與 in-flight publication 競爭。長期 retention 和 DB／filesystem 一致備份留待後續驗證。
+**Context.** Preserve raw bytes in verifiable local files and track results and lineage in the database.
+**Decision.** Reuse M1 staged Evidence and verify bytes and hash again. Publish metadata, results, and terminal state in one database transaction. A composite FK prevents cross-Job Evidence references.
+**Alternatives.** Store raw bytes alongside metadata in PostgreSQL or use a compensating transaction to remove files.
+**Consequences.** DB failure may leave orphans. Operators compare data during downtime so cleanup cannot race publication. Long-term retention and consistent database and filesystem backup remained for later verification.

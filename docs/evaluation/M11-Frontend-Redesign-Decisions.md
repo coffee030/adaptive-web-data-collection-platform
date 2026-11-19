@@ -1,30 +1,30 @@
-# M11 前端重設決策
+# M11 frontend redesign decisions
 
-## 審核基準
+## Review baseline
 
-GitHub 的 M10 branch 與 open Draft PR #4 同指向 `1572fc8a8aab05f0d81a81c9b0a7ffc994218974`。GitHub 帳戶可讀寫專案，open PR 為 #1–#4。M11 從驗證過的遠端 commit 獨立 checkout。原本兩個 M10 checkout 各有不同的本機歷史。審閱 `AGENTS.md`、`skills/AGENTS.md`、`PRODUCT.md`、`DESIGN.md`、FYP frontend skill 及 Impeccable 4.9.0 的 Operate 與 Audit 參考。
+GitHub's M10 branch and open Draft PR #4 both pointed to `1572fc8a8aab05f0d81a81c9b0a7ffc994218974`. The GitHub account could read and write the repository, and PRs #1–#4 were open. M11 used a separate checkout of the verified remote commit. The two existing M10 checkouts each had different local histories. The review covered `AGENTS.md`, `skills/AGENTS.md`, `PRODUCT.md`, `DESIGN.md`, the FYP frontend skill, and the Operate and Audit references for Impeccable 4.9.0.
 
-React Router 的 `App` 統管路由及頁面焦點。Scope 以現有 path 與 query 參數為準。Vite 使用 loopback API proxy 和編譯期 Demo 旗標。M10 launcher 由同一 Vite 入口啟動 Normal／Synthetic Demo。現有測試使用 Playwright、axe、mocked REST 和獨立 live suites。舊 Overview 將最新工作和有效紀錄放在介紹下方，390 px 實際畫面要往下捲才看見結果。共享的 button、table、狀態、焦點和 CSS token 影響各功能頁。
+React Router's `App` controlled routing and page focus. Existing paths and query parameters defined scope. Vite used a loopback API proxy and a compile-time Demo flag. M10's launcher started Normal and Synthetic Demo through the same Vite entry point. Existing tests used Playwright, axe, mocked REST, and separate live suites. The old Overview placed recent Jobs and validated records below its introduction. At 390 px, users had to scroll to see them. Shared buttons, tables, status labels, focus, and CSS tokens affected each feature view.
 
-## 低保真比較
+## Low-fidelity comparison
 
-| 結構 | 桌面／手機 | 可見性、密度、導覽及延續性 |
+| Structure | Desktop and mobile | Visibility, density, navigation, and continuity |
 | --- | --- | --- |
-| A. 工作台與請求清冊 | `側欄 ｜主題目錄 → 請求清冊 → 工作／紀錄`／主流程 2×2 導覽，請求列換行 | 主題可直接開始，請求、工作狀態及紀錄入口同列。來源及維運清楚分組。窄版保持關聯及語意順序。 |
-| B. 依階段排列的引導畫布 | `頂部路徑｜選主題 → 來源 → 執行 → 成果`／順序捲動 | 初次流程明確，空資料庫容易理解。執行程序同時跨主題時，階段容易把同一請求拆開。回看已完成的工作也更深。 |
-| C. 以事件為中心的時間線 | `頂部導覽｜時間線（主）｜當前事件（次）`／時間線轉詳情 | 排查單一事件迅速，翻閱相關事件自然。新收集容易被歷史活動掩蓋，空庫資訊稀少，手機需反覆返回時間線。 |
+| A. Workspace with Request ledger | `Sidebar → topic directory → Request ledger → Jobs and Records`. Mobile used 2×2 primary navigation and wrapped Request rows. | Topics can be started directly. Each row groups a Request, Job status, and the records link. Sources and Operations are clearly grouped. Narrow screens preserve relationships and semantic order. |
+| B. Guided workspace ordered by stage | `Top path → topic → sources → execution → results`. On mobile, scroll through the stages. | Clear for first use and an empty database. Concurrent work across Topics can split a single Request across stages. Completed work takes more steps to revisit. |
+| C. Event-centred timeline | `Top navigation → Timeline (primary) → current event (secondary)`. On mobile, open details from the timeline. | Quick for investigating a single event and browsing related events. Recent history can obscure new collection. An empty database shows little information. Mobile users repeatedly return to the timeline. |
 
-**採用 A。** 工作台先提供可收集主題，再以 Request 為同一筆工作的主體，直接連到其保存的紀錄與子 Jobs。無法進行主題收集時，在原位置引導來源與綁定設定。採用既有 Cobalt／Slate、較低的分隔線與清楚的數字層級，維持安靜、精確的操作介面。主題名稱使用目錄與可操作連結，狀態以狀態文字和顏色表示，工作摘要使用數量與事件時間。這是日常資料工作台的介面，內容以實際來源、請求與紀錄構成。
+**The team selected A.** The workspace first offers available Topics. The Request represents the whole collection and links directly to its persisted records and child Jobs. When Topic collection is unavailable, the same area points to Source and binding setup. Existing Cobalt and Slate colours, subtle separators, and clear numeric hierarchy support routine operation. Topics use a directory with actionable links. Status uses text and colour. Job summaries use counts and event times. Actual Sources, Requests, and Records fill the workspace.
 
 ## UI Slop
 
-Codex 專案技能置於 `.agents/skills/ui-slop/`，固定在 [v1.7.0 upstream commit](https://github.com/suna-kabo/ui-slop/tree/6f8a7d22aff293e0e92183df93cf5d53e886ba1a)。上游透過 `release/v1.7-task-continuity` 提供版本，commit 內 changelog 標示 1.7.0。主檔、參考、佐證及授權以同一 commit 版本保存在 Git。Windows checkout 後即可讀取，無全域安裝、額外套件或 hook。Impeccable 的進入檔改名，指令、參考、sidecar 與歷史評估保留供重現。
+The Codex project skill lives in `.agents/skills/ui-slop/` and is pinned to the upstream commit below. Upstream published it through `release/v1.7-task-continuity`, and the commit's changelog identifies 1.7.0. The main file, references, evidence, and licence are recorded in Git from the same commit. They are readable after a Windows checkout without a global install, extra packages, or hooks. The Impeccable entry file was renamed. The instructions, references, sidecars, and historical evaluations remain available for reproduction. [v1.7.0 upstream commit](https://github.com/suna-kabo/ui-slop/tree/6f8a7d22aff293e0e92183df93cf5d53e886ba1a)
 
-## 導覽及狀態生命週期
+## Navigation and state lifecycle
 
-- 路徑標識頁面，收集歷史與結果深層連結保留 URL 所表達的範圍。初始網址及上一頁／下一頁行為交給瀏覽器與路由器。
-- 主動跨頁聚焦 main，頁面標題隨路徑設置。Skip link 只移動焦點。窄版維運導覽的展開是暫時狀態，Escape 回到開關。主題連結攜帶候選 topic ID，表單仍重新檢查有效的 Category／Topic 和批准綁定。
-- Theme 是本機持久偏好。Overview 資料與 API 讀取錯誤屬當次檢視。後端已提交工作與成果獨立於 UI 檢視繼續存在。
-- **M12** 將合法 Topic、Category 與來源選擇的 Back／恢復納入 New Collection 合約。僅保存可安全恢復的草稿內容，回來時再次驗證來源及版本資格。從 Request 到子 Job、工作錯誤及 Evidence 保留原請求 ID 和合理的直接連結後備目的地。
-- **M13** 為 Data Explorer 的 filter、sort、selected record 和 scroll 定義 URL 與 history entry 的分工。Record ↔ Evidence ↔ 原 Request 應可返回有相同條件的清冊與鍵盤觸發點。Article History 返回原 Article／Request，保留選中的版本及列表位置。驗證查看第二筆與第三筆資料的流程。
-- **M14** 整合維運表單與診斷一致性，並重驗前端跨頁流程和可及性。
+- Paths identify pages. Deep links in collection history and results retain the URL scope. The browser and router manage initial URLs and Back and Forward.
+- Explicit navigation focuses main and sets the page title by path. The skip link only moves focus. Opening narrow Operations navigation is temporary, and Escape returns focus to the toggle. Topic links carry a candidate topic ID. The form revalidates the active Category and Topic and the approved bindings.
+- Theme is persisted locally. Overview data and API read errors belong to the current view. Submitted Jobs and their results persist independently in the backend.
+- **M12** brings Back and draft restoration for eligible Topic, Category, and Source choices into the New Collection contract. Keep draft fields that can be restored safely and recheck Source and Profile Version eligibility upon return. Paths from a Request to a child Job, its error, and Evidence retain the original Request ID and useful fallback destinations for direct links.
+- **M13** defines which Data Explorer filter, sort, selected-record, and scroll state belongs in the URL or a history entry. Returning from Record, Evidence, or the original Request should restore the same ledger scope and keyboard trigger. Article History returns to the original Article or Request with the selected version and list position. Verify the second and third record visits.
+- **M14** aligns Operations forms and diagnostics and rechecks cross-page frontend workflows and accessibility.

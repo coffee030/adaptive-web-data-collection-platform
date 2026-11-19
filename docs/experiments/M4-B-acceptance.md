@@ -1,10 +1,10 @@
 # M4-B Acceptance Report
 
-驗證日期為 2026-11-14（香港時間）。基線是 `98b57d3`。在修改前，M4-A 15 項 Playwright tests 均通過。
+Verification ran on 2026-11-14 Hong Kong time. Baseline was `98b57d3`. All 15 M4-A Playwright tests passed before the changes.
 
 ## Commands and results
 
-從 `frontend/` 執行，Node 22.18.0、npm 10.9.3 和已安裝的 Chrome。
+Run from `frontend/` with Node 22.18.0, npm 10.9.3, and installed Chrome.
 
 ```powershell
 npm.cmd run typecheck
@@ -17,23 +17,23 @@ $env:API_PROXY_TARGET = 'http://127.0.0.1:58004'
 npm.cmd test
 ```
 
-- TypeScript 與 Vite production build 通過。
-- Controlled Playwright 27 passed，包含原有 M4-A 15 項與 M4-B 12 項。
-- Live API Playwright 3 passed，包含原有 Jobs 2 項與 Sources 1 項。
-- 從 repository root 設定 `M2_TEST_DATABASE_URL` 指向隔離的 PostgreSQL（port 55436），執行 `& .venv/Scripts/python.exe -m pytest -q -rs backend/tests/m2/test_profiles_api.py backend/tests/m2/test_vertical_slice.py`。5 passed，0 skipped，7.22s。完整 172 項 backend tests 本輪 NOT RUN。
-- `git diff --check 98b57d3 HEAD` 通過。Backend、Compose、PRODUCT.md 和 DESIGN.md 在兩個 commit tips 間無差異。
+- TypeScript and the Vite production build passed.
+- Controlled Playwright passed 27, including 15 M4-A and 12 M4-B tests.
+- Live API Playwright passed 3, including two Jobs tests and one Sources test.
+- From the repository root, set `M2_TEST_DATABASE_URL` to isolated PostgreSQL on port 55436 and run `& .venv/Scripts/python.exe -m pytest -q -rs backend/tests/m2/test_profiles_api.py backend/tests/m2/test_vertical_slice.py`. Five passed, 0 skipped, in 7.22s. The full 172-test backend suite was NOT RUN in this round.
+- `git diff --check 98b57d3 HEAD` passed. Backend, Compose, PRODUCT.md, and DESIGN.md matched at both tips.
 
 ## Live acceptance
 
-使用既有隔離的 Linux Docker Compose project `collection-m4a-local`，FastAPI port 58004。OpenAPI 確認 Sources / Versions 回傳陣列，沒有分頁參數。Source list、detail 和 POST 都透過同一 Vite proxy。首次成功註冊的測試資料 ID 為 `718e6edb1c714987817778317944d66e`。Browser 收到 HTTP 201，並在詳細頁顯示 Pending 和空版本狀態。獨立 GET 與 POST 回應一致。整合測試亦讀取已核准 CSV fixture `3b70bfdd286a4e39b86b33607a0362a6` 持有的既有版本及 hash。暫停該測試 project 的 PostgreSQL 時，Sources list 收到真實 HTTP 503。以 `docker compose ... up -d --wait postgres` 恢復後，Retry 載入表格。未使用開發資料庫。
+The existing isolated Linux Compose project `collection-m4a-local` used FastAPI port 58004. OpenAPI confirmed Sources and Versions return arrays without pagination. Source list, detail, and POST used the same Vite proxy. The first registered test Source was `718e6edb1c714987817778317944d66e`. The browser received HTTP 201 and showed Pending and an empty version list. Independent GET matched the POST reply. Integration also read existing versions and hashes for approved CSV fixture `3b70bfdd286a4e39b86b33607a0362a6`. Stopping PostgreSQL for that test project produced a real HTTP 503 in Sources. After `docker compose ... up -d --wait postgres`, Retry loaded the table. The development database was unused.
 
 ## Accessibility and design review
 
-依 Impeccable Operate、critique 和 audit 的準則，在 Chromium 檢查清單、表單及詳情。桌面保留 sidebar，平板與手機改用橫向導航。Source 名稱與 access authorization 排在前面，詳情從 access policy 進入獨立的唯讀版本表。手機初版欄寬擠壓 authorization，已調整欄寬並以實際視窗的表格座標複核。表單 error summary 取得焦點，鍵盤可用摘要連結跳至對應欄位，錯誤文字與欄位以 aria-describedby 關聯。長字串尤其是 ID、hash 和 policy 值可換行或在有名稱的表格區域橫向捲動。
+Using Impeccable Operate, critique, and audit, Chromium reviewed list, form, and detail. Desktop retained its sidebar. Tablet and mobile used horizontal navigation. Source name and access authorisation appear first, and details go from policy to a separate read-only version table. The first mobile layout squeezed authorisation. Column widths were adjusted and checked against rendered table coordinates. The form focuses the error summary, keyboard links move to fields, and `aria-describedby` associates error text. Long IDs, hashes, and policy values wrap or scroll inside named table regions.
 
-- 1440、1280、768、390px 各檢查三頁。12 組無 document-level overflow，指定 WCAG A/AA axe rules 回傳零 violations。
-- 390px 另檢查鍵盤提交、error summary、必填及無效 origin 錯誤、長 origin 及三種 profile statuses。桌面與手機表單使用既有設計 tokens。螢幕閱讀器、Safari 及實體手機為 NOT RUN。
-- 初次 mobile detector 有兩項 `straggler` advisory，位於 Permission reference 和 Allowed dataset IDs 說明。縮短文字後，source、桌面及手機的最終掃描都回傳 `[]` 和 exit 0。未加入 detector ignores，Hooks 和 Live Mode 維持停用。
+- Checked all three pages at 1440, 1280, 768, and 390px. Twelve combinations had no document-level overflow and zero violations under the specified WCAG A/AA axe rules.
+- At 390px, checked keyboard submission, error summary, required and invalid-origin errors, long origins, and three Profile statuses. Desktop and mobile used existing tokens. Screen reader, Safari, and physical mobile were NOT RUN.
+- The first mobile scan raised two `straggler` advisories in Permission reference and Allowed dataset IDs help. After shortening, final source, desktop, and mobile scans returned `[]` and exit 0. No detector ignores were added. Hooks and Live Mode stayed disabled.
 
 ```powershell
 & .agents/skills/impeccable/scripts/impeccable.cmd detect --json frontend/src
@@ -43,4 +43,4 @@ foreach ($view in @('1280x900','390x844')) {
 }
 ```
 
-截圖位於本機 Codex visualization directory `m4b/`，檔名為 `list-*.png`、`form-*.png`、`detail-*.png` 和 `validation-390.png`。
+Screenshots were saved in the local Codex visualisation directory `m4b/` as `list-*.png`, `form-*.png`, `detail-*.png`, and `validation-390.png`.

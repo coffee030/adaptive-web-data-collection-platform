@@ -1,6 +1,6 @@
 # M4-D Local Issue Manifest
 
-此 checkout 沒有 Git remote。待組員覆核。
+This checkout had no Git remote configured. Teammate review was pending.
 
 | ID | Scope | Status |
 | --- | --- | --- |

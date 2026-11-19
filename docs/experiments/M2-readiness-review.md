@@ -1,25 +1,25 @@
 # M2 Readiness Review
 
-驗證日期為 2026-11-14（香港時間）。開發分支以 M1 commit `cd7c681` 為基線。
+Verification ran on 2026-11-14 Hong Kong time. The development branch started from M1 commit `cd7c681`.
 
-| Definition of Done | 狀態與證據 |
+| Definition of Done | Status and evidence |
 | --- | --- |
-| M0／M1 regression | PASS。保留原有 112 項測試。 |
-| 本機 PostgreSQL、空 schema、migrations 與 FK／UNIQUE | PASS。Windows 原生 PostgreSQL 17.7。測試為每個 case 建立空 schema 並遷移；獨立空資料庫亦完成升級。 |
-| Source 及 Profile 重啟後保存 | PASS。兩個 Uvicorn 程序及 PostgreSQL 正常重啟後回讀並比對。 |
-| Immutable approved Profile、stale Validation、並行審批 | PASS。Application rules、row lock、revision fence、rollback 及 SQL trigger 均有測試。 |
-| FastAPI Source／Profile | PASS。驗證、審批、retire、錯誤 envelope 和 OpenAPI。 |
-| Job 固定 Profile Version、持久化與狀態轉移 | PASS。可獨立執行，claim 只成功一次，拒絕未批准／retired profile，正常保存終態和 events。 |
-| HTML／CSV 共用 M1 ingestion | PASS。兩條真實 DB vertical slices，Web 使用實際 loopback HTTP 與 Scrapling。 |
-| Records、quarantine、evidence lineage、重複提交 | PASS。可從 REST 回讀，驗證 hash、缺檔、結果 rollback、資料庫關聯及跨 Source identity。 |
-| API 停止並重啟／PostgreSQL 原生重啟 | PASS。實際 CLI 與不同 API PID；所有 metadata 和原始檔 hash 一致。 |
-| Compose PostgreSQL named-volume restart | **待驗證**。已提供 Compose 及獨立 restart 測試入口。本機缺少 Docker CLI 和 WSL runtime。 |
-| Ruff／migration schema check、M2 範圍與風險 | PASS。命令與結果記於測試報告。 |
+| M0 and M1 regression | PASS. Retained the original 112 tests. |
+| Local PostgreSQL, empty schema, migrations, FK and UNIQUE | PASS. Used native Windows PostgreSQL 17.7. Each test migrated an empty schema and a separate empty database also upgraded successfully. |
+| Source and Profile retained after restart | PASS. Reread and compared after restarting two Uvicorn processes and PostgreSQL normally. |
+| Approved Profile immutability, stale Validation, concurrent approval | PASS. Tested application rules, row locks, revision fencing, rollback, and SQL trigger. |
+| FastAPI Source and Profile | PASS. Validation, approval, retirement, error envelope, and OpenAPI. |
+| Pinned Profile Version, durable Job, and states | PASS. Independent execution, exactly one successful claim, rejection of unapproved or retired Profiles, persisted terminal states and events. |
+| Shared M1 ingestion for HTML and CSV | PASS. Two real DB vertical slices, with live loopback HTTP and Scrapling for web. |
+| Records, Quarantine, Evidence lineage, and duplicate submissions | PASS. Read back over REST and verified hashes, missing files, result rollback, DB relationships, and cross-Source identity. |
+| API stop and restart and native PostgreSQL restart | PASS. Real CLI and different API PIDs. Metadata and original file hashes matched. |
+| Compose PostgreSQL named-volume restart | **Pending verification**. Compose and a dedicated restart test were provided. Docker CLI and WSL runtime were unavailable locally. |
+| Ruff, migration schema check, M2 scope and risk | PASS. The test report records commands and results. |
 
-## M3 判斷
+## M3 decision
 
-**本機受控 M3 service 設計 GO。完整 M2 驗收及 M3 容器整合暫為 NO-GO。** 在 Docker 可用的 Linux／WSL2 環境重跑 dedicated volume restart，可關閉 M2 的剩餘驗收項目。
+**GO for controlled local M3 design. NO-GO at the time for full M2 acceptance and M3 container integration.** Rerunning the dedicated volume restart in a Docker-enabled Linux or WSL2 environment could close the remaining M2 gate.
 
-Job claim commit 後如遇程序崩潰或資料庫長時間離線，Job 可能停留在 `running`。M3 下一項 Codex 工作可先在 Docker 環境補足 M2 驗收，再以 ADR 定義 dispatch 一致性、可恢復的 lease／attempt、重複交付及 commit-before-ack 測試。M2 的 CLI 和 application services 已建立可重用執行入口。公開網站的 DNS／TLS／egress、production authentication、retention 與備份仍須分別驗證。審批的本機 operator 只供 audit。
+A crash or prolonged database outage after Job claim commit can leave a Job `running`. Next, finish the M2 Docker acceptance and use an ADR to define dispatch consistency, recoverable leases and attempts, duplicate delivery, and commit-before-ack tests. The M2 CLI and application services provide reusable execution entry points. Public-site DNS, TLS, egress, production authentication, retention, and backups require separate verification. The local approval operator is audit data.
 
-本機 Issue Manifest 追蹤 M2-01 至 M2-08。Git 無 remote，GitHub Issues、Project 與 PR 尚未建立或更新，同儕 review 待安排。
+The local issue manifest tracks M2-01 to M2-08. Git had no remote. GitHub Issues, Project, and PR were pending, and peer review still needed scheduling.

@@ -1,45 +1,45 @@
 # M0 Architecture Decisions
 
-2026-11-14（香港時間）。決策記錄以本次已確認的 MVP 方向為準。後續同儕審查待進行，涉及正式 Proposal 的更改須按學校和組內流程確認。
+2026-11-14 Hong Kong time. Decisions reflect the confirmed MVP direction at this milestone. Peer review was pending. Changes to the formal Proposal require the school and team processes.
 
-## ADR M0-01 Modular Monolith 與單一排程權責
+## ADR M0-01 Modular monolith and single scheduling authority
 
-- **背景** Core 初期由一人開發，需保留可獨立擴充的 workers 和可重現測試。
-- **決定** 保留 Modular Monolith 加獨立 Celery workers。FastAPI 和 Celery 共用 domain 與 application services，各自持有自己的 DB session／transaction。Celery／Redis 派送，PostgreSQL 保存 durable state。Scrapling 只做 HTTP 和 HTML。
-- **替代方案** 同步 FastAPI 執行、獨立 microservices 或另外加入 Scrapling Spider 排程。
-- **理據** 同一 Python 專案降低部署和共享 contract 的成本。單一派送機制使 attempt、quota 和狀態的責任清晰。
-- **取捨** 需處理 DB commit 與 queue publish 的失敗窗口，且獨立 worker 仍要實測序列化和重複派送。
-- **後果** M2／M3 須驗證 durable dispatch、idempotent writes、commit-before-ack 和 terminal state 保護。初期以簡單 DB-backed dispatch recovery 為候選方案。
-- **狀態** MVP 架構已確認。派送一致性設計待驗證。
+- **Context.** One person initially develops the Core, with independently scalable workers and reproducible tests.
+- **Decision.** Keep a modular monolith and separate Celery workers. FastAPI and Celery share domain and application services, each with its own DB session and transaction. Celery and Redis dispatch, PostgreSQL stores durable state, and Scrapling handles HTTP and HTML.
+- **Alternatives.** Synchronous FastAPI, independent microservices, or an additional Scrapling Spider scheduler.
+- **Rationale.** One Python project reduces deployment and contract-sharing costs. One dispatch mechanism gives clear ownership of attempts, quotas, and state.
+- **Trade-off.** Handle failures between database commit and queue publication. Separate workers still need serialisation and duplicate dispatch tests.
+- **Consequences.** M2 and M3 must verify durable dispatch, idempotent writes, commit before acknowledgement, and terminal state protection. Simple database-backed dispatch recovery was an initial candidate.
+- **Status.** MVP architecture confirmed. Dispatch consistency still needed verification.
 
-## ADR M0-02 Scrapling HTTP 與平台 Source Access Policy
+## ADR M0-02 Scrapling HTTP and platform Source Access Policy
 
-- **背景** Formal Proposal 列 HTTPX／Beautiful Soup 和有限 Playwright。Spike 證實 Scrapling 能處理本次的兩種靜態 HTML、HTTP status 和 metadata，並測得預設 browser-like headers、redirect 及 retry 行為。
-- **決定** MVP 採 Scrapling HTTP／Parser。Platform wrapper 管理來源授權、初始及每跳 URL、robots、request budgets、固定 project UA、timeouts、錯誤分類及重試。對正式流量關閉自動 redirect 及 browser impersonation。
-- **替代方案** 沿用早期 HTTPX／Beautiful Soup，或直接依賴 Scrapling 的預設安全與重試行為。
-- **理據** Fixture 結果支持已確認的技術選型。預設會加 Chrome headers 和 Google Referer，並在 timeout 時自行重送，需明確控制。
-- **取捨** 0.5.1 HTTP import 需要 Patchright package。Production DNS pinning、TLS、環境 proxy 和 response size enforcement 仍有技術風險。
-- **後果** M1 先走受控站。公開來源需驗證 egress 可維持核准 IP、Host／SNI 及 TLS，並具備安全策略測試後才啟用。
-- **狀態** MVP 技術方向已確認。正式 Proposal 的技術差異待 Supervisor 確認。
+- **Context.** The formal Proposal listed HTTPX and Beautiful Soup with limited Playwright. The spike showed Scrapling could handle both static HTML fixtures, HTTP statuses, and metadata, and observed default browser-like headers, redirects, and retries.
+- **Decision.** Use Scrapling HTTP and Parser for the MVP. The platform wrapper handles Source authorisation, initial and hop URLs, robots, request budgets, a fixed project User-Agent, timeouts, error classification, and retries. Disable automatic redirects and browser impersonation for real traffic.
+- **Alternatives.** Retain HTTPX and Beautiful Soup, or rely on Scrapling defaults for security and retries.
+- **Rationale.** Fixture results supported the confirmed choice. The defaults add Chrome headers and Google Referer and retry timeouts, so explicit control was needed.
+- **Trade-off.** HTTP imports in 0.5.1 require Patchright. Production DNS pinning, TLS, environment proxies, and response size enforcement still posed technical risks.
+- **Consequences.** Start M1 with controlled sites. Enable public Sources only after confirming egress preserves approved IP, Host and SNI, and TLS, with access policy tests.
+- **Status.** MVP direction confirmed. Changes from the formal Proposal awaited supervisor confirmation.
 
-## ADR M0-03 已批准版本與可追溯 ingestion
+## ADR M0-03 Approved versions and traceable ingestion
 
-- **背景** 通用 Core 同時收 web 和 CSV，需要可重現、可審查的資料 lineage。
-- **決定** 分開 Source 存取授權及 extraction profile approval。Job 固定參照已驗證並人手批准的 immutable Profile Version。Web 和 CSV 產生同形 candidates，經共用 validation、dedup、evidence persistence 後提供 versioned Generic Records。
-- **替代方案** 每次 Job 讀取當前可變設定，或為 CSV 和 Web 各自維護持久化流程。
-- **理據** 版本、config hash 和原始 bytes 支持重現與稽核。下游 ML／IA 可依各自的 payload schema 使用相同 Core 介面。
-- **取捨** 加入 approval 狀態、驗證報告及 evidence 容量管理。來源撤銷和跨來源 dedup 需要具體規則。
-- **後果** M1 應驗證 draft 修改失效、批准後不可改、未批准版本不能開 Job、CSV／Web lineage 及 invalid candidate handling。正式 storage、retention 和交易邊界留待 M2。
-- **狀態** 概念規則已確認。Schema、retention 和權限設計待定。
+- **Context.** The general Core collects Web and CSV and needs reproducible, auditable lineage.
+- **Decision.** Separate Source access authorisation from extraction Profile approval. A Job pins an immutable, validated, operator-approved Profile Version. Web and CSV produce common candidates, then share validation, deduplication, and Evidence persistence before returning versioned Generic Records.
+- **Alternatives.** Let each Job read mutable current settings, or maintain separate CSV and Web persistence.
+- **Rationale.** Versions, hashes, and raw bytes support reproduction and audit. Downstream ML and IA can use the same Core interface with their own payload schemas.
+- **Trade-off.** Add approval state, validation reports, and Evidence capacity management. Revocation and cross-source deduplication need explicit rules.
+- **Consequences.** M1 should test Draft invalidation, approved immutability, Job rejection for unapproved versions, CSV and Web lineage, and invalid candidates. Formal storage, retention, and transactions were deferred to M2.
+- **Status.** Conceptual rules confirmed. Schema, retention, and permission design were pending.
 
-## 與正式 Proposal 的差異和交付追蹤
+## Differences from the formal Proposal and delivery tracking
 
-| Proposal 條目 | M0／初期 Core 的處理 |
+| Proposal item | Treatment in M0 and early Core |
 | --- | --- |
-| §4.4、§5.4 和 FR06 的 HTTPX／Beautiful Soup／Playwright | M0 實測 Scrapling 靜態 HTTP 和 CSS／XPath。動態瀏覽器渲染屬後續正式交付範圍，技術差異待確認。 |
-| FR01–FR05 | Source 及 Profile rules 先以概念 contract 表達。正式角色、視覺 selector、排程、pause/resume、cancel 和 discovery 實作分階段交付。 |
-| FR07–FR08 | M0 取得 headers、429、timeout 和 redirect 證據。正式 robots、跨 worker rate control、cache、adaptive backoff、授權 proxy health／failover 仍待驗收。 |
-| FR09–FR15 | M0 只有 extraction 候選紀錄及契約。Durable workers、validation／dedup、dashboard、資料搜尋／匯出、REST API、heartbeat／lease recovery 和 audit 屬後續工作。 |
-| §5.3 NFR、§7 Evaluation、§8 Schedule、D1–D9 | 保留正式交付及評核項。包括 1／2／4 workers 對照、2 workers ≥1.5 倍吞吐、field precision／recall ≥95%、duplicate product URL <1%、10 分鐘配置目標、3 秒 dashboard 更新、worker recovery、proxy failover、8 GB Windows 11／WSL2 Compose。M0 的 fixture suite 只支持本機技術選型。 |
+| HTTPX, Beautiful Soup, and Playwright in §4.4, §5.4, and FR06 | M0 verified Scrapling static HTTP and CSS and XPath. Dynamic browser rendering was later delivery scope. The technical difference awaited confirmation. |
+| FR01–FR05 | Source and Profile rules begin with conceptual contracts. Roles, visual selectors, scheduling, pause and resume, cancellation, and discovery are phased deliverables. |
+| FR07–FR08 | M0 recorded headers, 429, timeout, and redirects. Formal robots, cross-worker rate control, caching, adaptive backoff, and authorised proxy health and failover awaited verification. |
+| FR09–FR15 | M0 provided extraction candidates and contracts. Durable workers, validation and deduplication, Dashboard, search and export, REST, heartbeats and lease recovery, and audit were later work. |
+| §5.3 NFRs, §7 Evaluation, §8 Schedule, D1–D9 | Retain formal deliveries and criteria, including 1, 2, and 4 worker comparison, 2 workers at ≥1.5× throughput, field precision and recall ≥95%, duplicate product URLs <1%, 10-minute configuration, 3-second Dashboard refresh, recovery, proxy failover, and 8 GB Windows 11 and WSL2 Compose. M0 fixture tests support only local technology selection. |
 
-ML Section B 要求有權使用的資料集、模型訓練和測試結果、程式與報告。IA 的資料來源、平台、matching criteria 和 acceptance criteria 待確認。這兩個 downstream workstreams 將透過帶 schema version 及 provenance 的 Generic Records 連接 Core。
+ML Section B requires a permitted dataset, model training and test results, code, and a report. IA sources, platforms, matching criteria, and acceptance were pending. Both downstream workstreams would connect through Generic Records with schema version and provenance.

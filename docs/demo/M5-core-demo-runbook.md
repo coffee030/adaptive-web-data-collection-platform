@@ -1,8 +1,8 @@
 # M5 Core RC Demo Runbook
 
-以 PowerShell 7 自 repository root 操作。需要 Python 3.12、Docker Desktop Linux Engine（WSL2）、Docker Compose、Node.js 22 和 npm。使用 [安裝說明](../../README.md) 及現有 dependencies；首次 npm 安裝用 `npm.cmd ci`，瀏覽器用 Playwright 的 locked package 安裝。
+Run PowerShell 7 from the repository root. You need Python 3.12, Docker Desktop in Linux container mode with WSL2, Docker Compose, Node.js 22, and npm. Use the project dependencies and run `npm.cmd ci` for the first npm installation. Install browsers through the locked Playwright package. [Setup instructions](../../README.md)
 
-## 啟動隔離 Compose 及前端
+## Start isolated Compose and the frontend
 
 ```powershell
 $env:POSTGRES_USER = 'collection_test'
@@ -22,9 +22,9 @@ docker compose @composeArgs exec -T api python -m alembic check
 docker compose @composeArgs logs --tail 50 dispatcher worker
 ```
 
-Health 回 `{"status":"ok"}`、migration 為 `0006 (head)` 且沒有 drift，Worker log 應有 `collection.execute_job` 及 `ready`。首次啟動時如 port 暫未就緒，短候後重試 health。保留 terminal 環境、project 名稱與 DB 密碼供停止／重啟。測試使用 Compose 自己的 PostgreSQL、Redis 與 Evidence volumes。
+Health should return `{"status":"ok"}`, migration should show `0006 (head)` with no drift, and worker logs should show `collection.execute_job` and `ready`. If a port is not ready on first launch, wait briefly and retry health. Keep the terminal settings, project name, and database password for stop and restart. The tests use the Compose project's PostgreSQL, Redis, and Evidence volumes.
 
-另開 PowerShell，從 repository root 執行下列命令。在可信本機 console 使用 [Collection Jobs](http://127.0.0.1:5197/collection-jobs)。
+Open another PowerShell window at the repository root, run the commands below, and use Collection Jobs in the trusted local console. [Collection Jobs](http://127.0.0.1:5197/collection-jobs)
 
 ```powershell
 Set-Location frontend
@@ -35,24 +35,24 @@ $env:LOCAL_PROFILE_APPROVAL = '1'
 npm.cmd run dev -- --port 5197 --strictPort
 ```
 
-Vite 是 Windows host 上的 React frontend 服務；其同源 `/api/v1` 轉發至 API。Compose fixture 無 host port。Vite production build／preview 停用 UI Approval opt-in。 `LOCAL_PROFILE_APPROVAL=1` 限 local development proxy。Operator label 由操作者填報。
+Vite runs the React frontend on Windows and proxies same-origin `/api/v1` to the API. The Compose fixture has no host port. Vite production build and preview disable UI approval opt-in. `LOCAL_PROFILE_APPROVAL=1` applies to the local development proxy. The operator supplies the label.
 
-## 走通兩種輸入與追溯
+## Run both inputs and trace results
 
-依 M4 runbook 第 2–4 節建立兩個 Pending Sources，從 terminal 各自核准 Source access，另建立版本並完成 Preview、Validation 和 Approval。將該文件的 API port 替換為當次 `API_PORT`。HTML 使用 `#entries tr`／`a`／`data-code`；CSV 以 `Key`、`Name`、`Count` 欄位映射並從 clean sample 驗證。 [Console 操作步驟](M4-core-demo-runbook.md)
+Follow sections 2–4 of the M4 runbook to create two Pending Sources, approve each Source's access from the terminal, then create versions and complete Preview, Validation, and Approval. Replace the other guide's API port with this run's `API_PORT`. HTML uses `#entries tr`, `a`, and `data-code`. CSV maps `Key`, `Name`, and `Count` and is validated with the clean sample. [Console procedure](M4-core-demo-runbook.md)
 
-- HTML 完成後核對 **Succeeded**，Valid／Invalid／Duplicates 為 2／0／0。CSV 貼上 `backend/tests/fixtures/m1/listings.csv`，核對 **Partial** 和 2／3／1。
-- 從 Job Details 核對按序的 events、Source、pinned Profile；開啟 Record 和 Quarantine。CSV errors 對應起始實體行 5／6／7。
-- 開啟 Evidence Metadata 並核對 SHA-256。後端操作員可在隔離容器以 UUID hex 讀取 raw bytes。 `$evidenceId` 由 UI 或 API 取得。
+- Verify HTML finishes **Succeeded** with Valid, Invalid, and Duplicates at 2/0/0. Paste `backend/tests/fixtures/m1/listings.csv` and verify CSV finishes **Partial** at 2/3/1.
+- In Job Details, verify event order, Source, and pinned Profile. Open Record and Quarantine. CSV errors refer to physical start lines 5, 6, and 7.
+- Open Evidence Metadata and verify SHA-256. A backend operator can read raw bytes by UUID hex in the isolated container. Obtain `$evidenceId` from the UI or API.
 
 ```powershell
 $evidenceHex = ([Guid]$evidenceId).ToString('N')
 docker compose @composeArgs exec -T api sha256sum "/data/evidence/$evidenceHex/input.bin"
 ```
 
-## 可重跑的全量驗收
+## Repeat the full acceptance suite
 
-以啟動 Compose 的 terminal 設定下列變數。要跑完整 broker integration，須在獨立 Redis DB 或專用 instance 跑 host Celery tests，和 Compose 的 broker DB `0` 分隔。僅在驗收 overlay 加 `127.0.0.1:56395:6379`，把 `M3_TEST_BROKER_URL` 指向 `redis://127.0.0.1:56395/1`。啟動前把 overlay 加入 `$composeArgs`。如使用 Compose overlays，也將同一組額外檔案依次傳給 test subprocesses。
+Set the variables below in the Compose terminal. Full broker integration requires a host Celery test Redis DB or instance isolated from Compose broker DB `0`. In the acceptance overlay only, add `127.0.0.1:56395:6379` and set `M3_TEST_BROKER_URL` to `redis://127.0.0.1:56395/1`. Add the overlay to `$composeArgs` before startup. Pass the same extra Compose files in order to test subprocesses.
 
 ```powershell
 New-Item -ItemType Directory -Force var/m5-local | Out-Null
@@ -78,7 +78,7 @@ services:
       - "127.0.0.1:56395:6379"
 '@ | Set-Content -Encoding utf8 var/m5-local/compose.acceptance.yaml
 $composeArgs += @('-f','var/m5-local/compose.acceptance.yaml')
-# 從啟動一節執行相同的 build、up、upgrade、up 和 health 檢查。
+# Run the same build, up, upgrade, up, and health checks from the startup section.
 ```
 
 ```powershell
@@ -91,7 +91,7 @@ $env:M2_TEST_COMPOSE_PROJECT = $demoProject
 $env:M3_TEST_COMPOSE_PROJECT = $demoProject
 $env:M3_TEST_COMPOSE_API_URL = "http://127.0.0.1:${env:API_PORT}"
 $env:M3_TEST_BROKER_URL = 'redis://127.0.0.1:56395/1'
-# 用於實際驗收的 overlay 範例。未使用該檔時，請按實際檔案更改。
+# Example overlay used for acceptance. Change the filename to match the actual overlay.
 $env:M3_TEST_COMPOSE_EXTRA_ARGS = '-f var/m5-local/compose.acceptance.yaml'
 $env:M4_COMPOSE_OVERLAYS = 'var/m5-local/compose.acceptance.yaml'
 & $python -m ruff check backend
@@ -100,7 +100,7 @@ $env:M4_COMPOSE_OVERLAYS = 'var/m5-local/compose.acceptance.yaml'
 & $python -m backend.experiments.m5_evaluation --workers 1
 ```
 
-可設 `M3_TEST_REDIS_SERVER` 為本機既有 Redis executable；這會使 native outage case 在同一個專用 port 啟停真實 Redis。另有獨立 Compose outage case 會真實停止並恢復 Redis。Browser suites 依序執行，並先停止同 port 的 Vite。Jobs live test 讀取其中一個已完成 Partial Job，前面的 backend tests／evaluation 或手動示範會建立該資料。
+Set `M3_TEST_REDIS_SERVER` to the existing local Redis executable so the native outage case can stop and start actual Redis on the dedicated port. A separate Compose outage case also stops and restores Redis. Run browser suites in sequence and close any Vite process on the same port first. The live Jobs test reads a completed Partial Job, created by the earlier backend tests, evaluation, or manual demo.
 
 ```powershell
 Push-Location frontend
@@ -127,19 +127,19 @@ foreach ($browser in @('firefox','webkit')) {
 Pop-Location
 ```
 
-已有指定版本的 project-local browser cache 時可設定 `PLAYWRIGHT_BROWSERS_PATH` 後直接跑測試。缺失時先確認 Node、lockfile 和 packages，再使用官方 Playwright download。用 `M4E_CAPTURE_DIR`／`M4D_CAPTURE_DIR` 指定忽略的資料夾，可以額外保存 axe 驗證的 viewport captures。
+If a project-local cache already contains the required browser version, set `PLAYWRIGHT_BROWSERS_PATH` and run tests directly. Otherwise confirm Node, lockfile, and packages before using the official Playwright download. Set `M4E_CAPTURE_DIR` or `M4D_CAPTURE_DIR` to ignored folders to retain viewport captures from axe verification.
 
-## 安全停止與重啟
+## Stop and restart safely
 
 ```powershell
 docker compose @composeArgs ps
 docker compose @composeArgs logs --tail 50 api dispatcher worker
-# 於 frontend terminal 用 Ctrl+C 結束 Vite。
+# Stop Vite with Ctrl+C in the frontend terminal.
 docker compose @composeArgs stop
 docker compose @composeArgs up -d --wait
 Invoke-RestMethod "http://127.0.0.1:${env:API_PORT}/api/v1/health"
-# 比對原 Job、Events、Records、Quarantine、Evidence 與 checksum 後結束。
+# Compare the original Job, Events, Records, Quarantine, Evidence, and checksum before finishing.
 docker compose @composeArgs stop
 ```
 
-若看到 `all predefined address pools have been fully subnetted`，以 `docker network ls` 和 `docker network inspect` 核對已用網段及 host/VPN 路由，再在隔離驗收 overlay 的 `networks.default.ipam.config` 和 `networks.fixtures.ipam.config` 設兩個未重疊 subnet。保留現有 projects、network 和 named volumes。API 503 時查 PostgreSQL health、同一個 project 的 login，及 Vite proxy 設定。詳細 UI recovery 例子在 M4 runbook 第 5 節。 [操作排查](M4-core-demo-runbook.md#5-排查與安全停止)
+If Docker reports `all predefined address pools have been fully subnetted`, inspect used Docker subnets with `docker network ls` and `docker network inspect` and check host or VPN routes. In the isolated acceptance overlay, set two non-overlapping subnets in `networks.default.ipam.config` and `networks.fixtures.ipam.config`. Retain existing projects, networks, and named volumes. For API 503, check PostgreSQL health, the login for that project, and Vite proxy settings. [M4 UI troubleshooting](M4-core-demo-runbook.md#5-troubleshooting-and-safe-shutdown)

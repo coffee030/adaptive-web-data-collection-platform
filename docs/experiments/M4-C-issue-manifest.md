@@ -1,6 +1,6 @@
 # M4-C Local Issue Manifest
 
-此 checkout 沒有 Git remote。組員覆核待完成。
+This checkout had no Git remote configured. Teammate review was pending.
 
 | ID | Scope | Status |
 | --- | --- | --- |
@@ -13,4 +13,4 @@
 | M4-C-07 | Immutable Version Detail | PASS |
 | M4-C-08 | Testing and Impeccable Acceptance | PASS |
 
-見 [M4-C Acceptance Report](M4-C-acceptance.md)。
+See the acceptance report. [M4-C Acceptance Report](M4-C-acceptance.md)

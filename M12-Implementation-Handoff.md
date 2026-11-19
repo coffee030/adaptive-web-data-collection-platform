@@ -1,85 +1,85 @@
-# M12 新收集工作區實作交接
+# M12 New Collection workspace implementation handoff
 
-- **交付分支** `feature/M12-new-collection-workflow`
-- **M11 基準** `875c94c8f0c358904813fe1c41e1018034713049`
-- **M12 實作驗證 commit** `3461d14922e1a25196ba729de47d3ea65f750090`
+- **Delivery branch** `feature/M12-new-collection-workflow`
+- **M11 baseline** `875c94c8f0c358904813fe1c41e1018034713049`
+- **M12 tested implementation commit** `3461d14922e1a25196ba729de47d3ea65f750090`
 
-## 1. 版本庫與變更清單
+## 1. Repository and changes
 
-Repository 為 `coffee030/adaptive-web-data-collection-platform`。以 `git ls-remote origin` 確認 M11 最新遠端 SHA 與已審閱 SHA 相符。M11 工作樹乾淨，遠端無同名 M12 分支。M12 在既有乾淨 checkout 從該 SHA 建立。上方 SHA 鎖定實作與測試，交接與截圖另由分支最新文件 commit 保存。分支交付範圍為 M12，M10 Draft PR #4 保持獨立。 [GitHub 分支](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M12-new-collection-workflow)
+Repository `coffee030/adaptive-web-data-collection-platform`. `git ls-remote origin` confirmed the latest M11 remote matched the reviewed SHA. M11 was clean and no remote M12 branch existed. M12 branched from that SHA in the existing clean checkout. The SHA above identifies implementation and tests. The latest documentation commit preserves the handoff and screenshots. The delivery branch covers M12, and M10 Draft PR #4 was separate. [GitHub branch](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M12-new-collection-workflow)
 
-| 檔案 | 變更 |
+| File | Change |
 | --- | --- |
-| `frontend/src/app/App.tsx` | 既有 New Collection route 使用新的工作區入口。 |
-| `frontend/src/features/topic-collections/{NewTopicRequest,TopicBrowser,CollectionSelection,CollectionReturn}.tsx` | 漸進式工作區、分頁目錄、核准來源及檢閱、詳情返回。 |
-| `frontend/src/features/topic-collections/{collectionDraft.ts,api.ts,support.tsx}` | 草稿生命週期、資格核對、既有回應型別、分頁與進行中操作的取消範圍。 |
-| `frontend/src/features/topic-collections/{Requests.tsx,TopicCatalog.tsx,topic-collections.css}` | Request 查閱、結果入口、管理頁返回連結與 M11 token 樣式。 |
-| `frontend/src/features/sources/SourceDetail.tsx`、`frontend/src/features/profiles/ProfilePage.tsx` | 從原草稿進入時提供返回動作。 |
-| `frontend/tests/{topic-collections.spec.ts,topic-collections.integration.ts,dashboard.spec.ts,core-workflow.integration.ts}` | 擴充行為、競態、狀態、可及性和真實收集測試，更新方式及可見名稱已改動的選擇器。 |
-| `docs/evaluation/M12-New-Collection-Design-Decisions.md`、`docs/evaluation/M12-screenshots/`、`M12-Implementation-Handoff.md` | 低保真比較、生命週期、驗證、截圖及審閱資料。 |
+| `frontend/src/app/App.tsx` | Existing New Collection route opens the new workspace. |
+| `frontend/src/features/topic-collections/{NewTopicRequest,TopicBrowser,CollectionSelection,CollectionReturn}.tsx` | Progressive workspace, paginated directory, approved Sources, review, and return from detail. |
+| `frontend/src/features/topic-collections/{collectionDraft.ts,api.ts,support.tsx}` | Draft lifecycle, eligibility checks, existing response types, pagination, and cancellation scope for active operations. |
+| `frontend/src/features/topic-collections/{Requests.tsx,TopicCatalog.tsx,topic-collections.css}` | Request inspection, result links, management return links, and M11 token styling. |
+| `frontend/src/features/sources/SourceDetail.tsx` and `frontend/src/features/profiles/ProfilePage.tsx` | Return action when reached from a draft. |
+| `frontend/tests/{topic-collections.spec.ts,topic-collections.integration.ts,dashboard.spec.ts,core-workflow.integration.ts}` | Behaviour, races, states, accessibility, and live collection tests. Updated selectors for changed methods and visible names. |
+| `docs/evaluation/M12-New-Collection-Design-Decisions.md`, `docs/evaluation/M12-screenshots/`, and `M12-Implementation-Handoff.md` | Low-fidelity comparison, lifecycle, verification, screenshots, and review material. |
 
-## 2. 結構與操作
+## 2. Structure and operation
 
-採用漸進式縱向工作區。桌面 Category 與 Topic 併排，同一頁按資料相依性呈現來源、Keyword 與檢閱。窄版選好 Category 後縮為摘要，可展開重新選擇。已選 Topic 在瀏覽器收合後仍顯示 Category。沿用 M11 Cobalt／Slate、Light／Dark／System、全域導覽及既有路由。UI Slop v1.7 的 Structural Direction 記錄三個方案，Information Relationships 與 Reactive Surfaces 以 Category → Topic → Binding → Job 決定呈現，Semantic Diversity 以目錄按鈕、核取方塊、狀態及摘要各自承載不同資料。 [設計決策](docs/evaluation/M12-New-Collection-Design-Decisions.md)
+The progressive vertical workspace uses side-by-side Category and Topic on desktop, followed by Sources, Keyword, and review on one page in dependency order. Narrow screens collapse the selected Category into a summary that can be reopened. A selected Topic still shows its Category after the Topic Browser collapses. Retains M11 Cobalt and Slate, Light, Dark and System, global navigation, and existing routes. UI Slop v1.7 Structural Direction records three options. Information Relationships and Reactive Surfaces follow Category → Topic → Binding → Job. Semantic Diversity uses directory buttons, checkboxes, status, and summaries for distinct information. [Design decisions](docs/evaluation/M12-New-Collection-Design-Decisions.md)
 
-- **Topic Browser** 以現有 active-only REST 取得 Category 和 Topic，每次擴展 12 筆並讀取一筆作分頁判斷。已選 Category 決定 Topic 查詢，已選 Topic 才查詢其 bindings。Overview 傳入的 `topic_id` 透過 Topic 詳情及當前 Category 詳情驗證。缺失、格式錯誤及停用均可以回到目錄。目錄、深連結及來源請求各有局部 Retry。
-- **Approved sources** 僅提供 eligible、未停用的實際 bindings。每組勾選一個 child Job，上限四組。版本號直接取自資料，詳情指向所用 Source 及 pinned Profile Version。刷新以 binding ID、Source ID、Profile Version ID 與設定 hash 核對，保留仍可確認的選取並回報被移除的項目。無資格時提供既有 Topic Bindings 入口。
-- **Keyword 與 Review** 使用者可完整輸入及修改。去除前後空白後按 Unicode 字元數檢查 1–128 個可列印字元，並呈現精確的 Category、Topic、實際送出的 Keyword、來源和核准版本及預計 Jobs 數量。修改欄位或已核對的 pin 會失效舊檢閱。
-- **Run and Inspect** 以現有 POST 建立 Request，並進入同一持久 Request 的 Detail。由 GET／既有輪詢顯示實際狀態、各來源 Job 與有效紀錄。成功建立與 Job 執行結果各依自己的狀態顯示。可由此查看 request-scoped Records、Job details、Quarantine、Evidence、Article History、前一輪、Refresh 與 CSV／JSON 下載。Job 入口帶回原 Request，直接 Job／Request 深連結仍可用。
+- **Topic Browser** fetches active-only Categories and Topics via existing REST. Loads 12 more per expansion and one additional row to detect another page. Category scopes Topic queries and binding queries wait for a selected Topic. Validates Overview's `topic_id` against Topic and current Category details. Missing, malformed, and inactive values can return to the directory. Directory, deep link, and Source failures have local Retry.
+- **Approved sources** shows eligible, enabled bindings. Each explicit selection creates one child Job, up to four. Version comes from the actual data, with Source and pinned Profile Version links. Refresh compares binding ID, Source ID, Profile Version ID, and hash. Retains verifiable selections and reports removals. Ineligible Topics link to the existing Topic Bindings view.
+- **Keyword and Review** allow complete editing. Trim and validate 1–128 printable Unicode characters. Review shows exact Category, Topic, submitted keyword, Sources, approved versions, and intended Job count. Field or pin changes invalidate old review.
+- **Run and Inspect** creates a Request through existing POST and opens the same persisted Request Detail. GET and existing polling show actual state, Source Jobs, and valid records. Creation and execution report their own status. Available routes cover scoped Records, Job details, Quarantine, Evidence, Article History, previous run, Refresh, and CSV and JSON downloads. The Job path carries the Request return, and standalone Job and Request links still work.
 
-## 3. 草稿與送出
+## 3. Drafts and submission
 
-URL 僅包含可分享的 Topic ID。路由歷史保留草稿識別碼。每個已載入的頁面在 JavaScript 記憶體保留最近 20 個草稿脈絡，包含已瀏覽來源範圍、所選 pin、Keyword、Review 及未確認的 POST。開始新的 New Collection 建立新草稿。換 Category 或 Topic 時清除不相容選取及 Review，保留 Keyword。Profile／Source 詳情的 Back 或 Back to collection 回到原 history entry 並重查選取。焦點在入口仍可用時回到該連結，被移除時回到來源標題。一般瀏覽器歷史沿用 M11 ScrollRestoration。重新載入頁面會清除記憶體草稿。
+The URL stores only shareable Topic ID. Route history stores a draft ID. JavaScript memory in the loaded page retains the latest 20 draft contexts, including browsed Source pages, selected pins, Keyword, Review, and unconfirmed POST. Opening a new workflow creates a draft. Switching Category or Topic keeps Keyword and clears incompatible selections and Review. Back or Back to collection from Profile or Source restores the original history entry and rechecks selections. Focus returns to the trigger if available, otherwise the Source heading. Browser history uses M11 ScrollRestoration. Reload clears in-memory drafts.
 
-首送前重讀 Topic、當前 Category 與使用者已載入的來源分頁，對照檢閱內容。REST 使用既有 `POST /api/v1/collection-requests` 與排序後的 `binding_ids`、`topic_id`、`keyword`、UUID `request_key`。使用現有 request intent 工具。每個 tab 的 sessionStorage 只存送出指紋與對應 UUID。若儲存不可用，仍以原記憶體意圖重試。這個 storage 項目於已確認成功或確定拒絕時移除。
+Before first submit, reread Topic, current Category, and Source pages already loaded and compare the review. Existing `POST /api/v1/collection-requests` takes sorted `binding_ids`, `topic_id`, `keyword`, and UUID `request_key`. Reuse request-intent logic. Tab sessionStorage only stores the fingerprint and UUID. Retry can still use in-memory intent if storage is unavailable. Clear the stored entry after confirmed success or rejection.
 
-請求執行中阻擋重複動作。若首個 POST 的結果未確認，恢復操作只重送原內容及原 UUID。後端先檢查是否應回傳已建立的相同 Request，再對可能新建的交易檢查當前授權與資格。首次寫入與重播分別以 201、200 確認。成功時清除敏感草稿欄位並用 Request Detail 替換當前 history entry。可回到的同草稿舊項目只顯示原 Request 或開始新收集。刷新、單來源 Job 與其他入口繼續使用各自原有的重試路徑。
+Block duplicate actions during the request. Recover an unconfirmed first POST with only the original UUID and content. Backend checks replay first and eligibility and authorisation for a new transaction. First write 201 and replay 200 confirm outcome. Success clears sensitive draft fields and replaces the history entry with Request Detail. Earlier entries for the draft offer the same Request or a new collection. Refresh, single-source Job, and other entry points retain their retry paths.
 
-## 4. 驗證結果
+## 4. Verification results
 
-PASS 表示已執行且符合預期，FAIL 表示觀察到斷言或流程失敗，PARTIAL 表示只完成部分驗證，BLOCKED 表示有外部依賴阻擋，NOT RUN 表示未執行。
+PASS means run and met expectations. FAIL means an observed assertion or workflow failure. PARTIAL means only part was checked. BLOCKED means an external prerequisite stopped it. NOT RUN means it was not executed.
 
-| 驗證 | 狀態 | 證據 |
+| Check | Status | Evidence |
 | --- | --- | --- |
-| Gate A、Backend API 與持久化 | PASS | M8 Collections 與 M9 Record Export 的既有 PostgreSQL 套件 8 passed。Backend、授權、資料庫、Demo、launcher 和 lockfile 未列入變更。 |
-| Gates B–E、前端 REST 邊界測試 | PASS | Edge mocked suite 114 passed。含 101 Categories、101 Topics、讀取競態、無來源、最多四個、pin 失效後重新檢閱、深連結、Unicode、201／200、重複操作、丟失回應、403／409／422／503、Source／Profile 返回和 Back／Forward。 |
-| Gate F、Request Detail | PASS | Mocked REST 測試涵蓋 Pending、Running、Partial、Failed、Succeeded 及輪詢。真實 Demo 執行 Succeeded 與 Partial、Request → Job → Evidence，驗證 API 查得持久紀錄。 |
-| Normal 空資料庫 | PASS | 獨立新建 PostgreSQL，全新遷移後查詢 7 組空清單。390px Edge 顯示設定入口，無 Demo banner 或可選來源。 |
-| Synthetic Demo 與隔離 | PASS | Launcher 用 checkout 專用設定、volumes 與 loopback ports。初次 preset provisioning 驗證 6 Jobs、18 Records／Observations、28 份 Evidence 和 6 份匯出。再從 M12 UI 實際提交 4 次並核對持久資料，既有 Demo 專案未用作寫入目標。 |
-| 匯出及既有 live browser regressions | PASS | 受控 fixture live suite 17 passed，三個需獨立 Normal／Demo 的案例另跑 3 passed，共 20 項。涵蓋單來源 HTML／CSV、來源及 Profile 核准、Job 與 Evidence、CSV／JSON、Article History、Refresh、資料庫重啟與重播。 |
-| Launcher | PASS | Windows PowerShell regression 29/29。One-click 啟動路徑以 `-NoBrowser -NonInteractive` 執行並從 Edge 進入實際生成的 Demo。 |
-| Gate G、Browser QA 與可及性 | PASS | Edge 157.0.4341.60 測 1440、900、390、320px，Light／Dark／System、320px touch 和 reduced motion。Chrome 157.0.8103.51 實際 Page zoom 200%，DPR 2、clientWidth 和 scrollWidth 都是 712 CSS px，檢閱與送出按鈕可聚焦。 |
-| Gate H、建置與交接 | PASS | `npm --prefix frontend run build` 含 TypeScript，`git diff --check`、測試 commit 參考、截圖及審閱文件。 |
-| 實體 screen reader、cold installer、完整 Backend 全套、公開網站 | NOT RUN | 已執行 axe、鍵盤操作、Launcher startup 及相關 Backend suite。全部資料來自受控本機 fixture。 |
+| Gate A, backend API and persistence | PASS | Existing PostgreSQL suites for M8 Collections and M9 Record Export passed 8. Backend, access rules, database, Demo, launcher, and lockfile were outside changes. |
+| Gates B–E, frontend REST boundaries | PASS | Mocked Edge suite 114 passed. Covered 101 Categories and 101 Topics, read races, no Sources, four maximum, invalid pin re-review, deep links, Unicode, 201 and 200, duplicate actions, lost responses, 403, 409, 422 and 503, Source and Profile return, and Back and Forward. |
+| Gate F, Request Detail | PASS | Mocked REST covered Pending, Running, Partial, Failed, Succeeded, and polling. Live Demo verified Succeeded and Partial, Request → Job → Evidence, and persisted Records through the API. |
+| Empty Normal database | PASS | Seven empty lists after fresh isolated PostgreSQL migration. Edge at 390px showed setup, with no Demo banner or selectable Sources. |
+| Synthetic Demo and isolation | PASS | Checkout-specific settings, volumes, and loopback ports. Initial preset provisioning checked 6 Jobs, 18 Records and Observations, 28 Evidence captures, and 6 exports. Four actual M12 UI submissions verified persistence. Existing Demo was outside the write target. |
+| Exports and existing live browser regression | PASS | Controlled live fixture suite 17 passed. Three isolated Normal and Demo cases passed separately, 20 total. Covered single-source HTML and CSV, Source and Profile approval, Jobs and Evidence, CSV and JSON, Article History, Refresh, restart, and replay. |
+| Launcher | PASS | Windows PowerShell 29/29. One-click route ran with `-NoBrowser -NonInteractive`, and Edge opened the generated Demo. |
+| Gate G, Browser QA and accessibility | PASS | Edge 157.0.4341.60 at 1440, 900, 390, 320px, Light, Dark and System, 320px touch, and reduced motion. Native Chrome 157.0.8103.51 200% with DPR 2 and clientWidth and scrollWidth both 712 CSS px. Review and submit were focusable. |
+| Gate H, build and handoff | PASS | `npm --prefix frontend run build` with TypeScript, `git diff --check`, tested commit, screenshots, and review documents. |
+| Physical screen reader, cold installer, full backend suite, and public sites | NOT RUN | Ran axe, keyboard checks, launcher startup, and related backend suites. All data came from controlled local fixtures. |
 
-### M12 UI 提交的真實 Demo 結果
+### Actual M12 UI Demo submissions
 
-| Topic | Keyword | Request ID | 結果與已驗證紀錄 |
+| Topic | Keyword | Request ID | Outcome and validated records |
 | --- | --- | --- | --- |
-| Fixture Listings | `quick` | `601399d9-f1ea-4d44-9e4e-1949cce3c4f8` | Succeeded，2 Jobs，2 筆。先由真正後端回 201 並丟棄瀏覽器回應，再以相同 UUID 重播取得 200 和同一 ID。 |
-| Influencer Advertising and Sponsorship | `partnership` | `4d9e4081-e095-47ab-9223-a48e73e5d2d8` | Succeeded，2 Jobs，8 筆。 |
-| Market News and Economic Updates | `market` | `d6a89f29-3eb5-4f13-aa6b-047122981fb7` | Succeeded，2 Jobs，8 筆。Records 頁和資料內容標示 `SIMULATED DATA — NOT LIVE MARKET PRICES`。 |
-| Fixture Listings | `detail404` | `d07efc7c-5f67-465d-9882-bd561ebf96e6` | Partial，2 Jobs，2 筆。兩個來源都有可查閱的錯誤與 Evidence。 |
+| Fixture Listings | `quick` | `601399d9-f1ea-4d44-9e4e-1949cce3c4f8` | Succeeded, 2 Jobs and 2 Records. The backend returned 201 and the browser reply was dropped. Replay with the UUID returned 200 and the same ID. |
+| Influencer Advertising and Sponsorship | `partnership` | `4d9e4081-e095-47ab-9223-a48e73e5d2d8` | Succeeded, 2 Jobs and 8 Records. |
+| Market News and Economic Updates | `market` | `d6a89f29-3eb5-4f13-aa6b-047122981fb7` | Succeeded, 2 Jobs and 8 Records. Records page and payload carry `SIMULATED DATA — NOT LIVE MARKET PRICES`. |
+| Fixture Listings | `detail404` | `d07efc7c-5f67-465d-9882-bd561ebf96e6` | Partial, 2 Jobs and 2 Records. Both Sources have inspectable errors and Evidence. |
 
-M12 Normal／Demo 及六份 baseline 匯出的 Edge live 入口是 `tests/topic-collections.integration.ts -g "M12|launcher dashboard"`，3 passed。環境使用 `M4_REAL_API=1`、獨立 Normal API 的 `API_PROXY_TARGET`、`M12_EMPTY_NORMAL=1` 及獨立 Demo dashboard 的 `M10_SYNTHETIC_URL`。第一次全套 live 檢查發現過時 UI 選擇器、CSV 恢復逾時及 cached fixture 的 LF／CRLF 雜湊差異。保留實際行為和雜湊斷言，對齊 M11 介面名稱，從同一 checkout 建置 fixture 後，包含恢復測試的整套重跑通過。一般 fixture 回歸以 `backend/experiments/m10_environment.ps1` 設定獨立 Compose project，fixture image 從同一 checkout 建置。
+The Edge live entry point for M12 Normal and Demo and six baseline exports was `tests/topic-collections.integration.ts -g "M12|launcher dashboard"`, 3 passed. Set `M4_REAL_API=1`, `API_PROXY_TARGET` for isolated Normal API, `M12_EMPTY_NORMAL=1`, and `M10_SYNTHETIC_URL` for isolated Demo. First full live run found stale selectors, a CSV recovery timeout, and a cached fixture LF and CRLF digest mismatch. Existing behaviour and hash assertions were retained. The full run including recovery passed after aligning M11 labels and building fixture from the same checkout. General fixture regression used a separate Compose project configured by `backend/experiments/m10_environment.ps1` with a fixture image built from this checkout.
 
-## 5. 視覺與可及性審閱
+## 5. Visual and accessibility review
 
-Pass A 在 Edge 操作及檢視桌面來源／檢閱、手機檢閱及 Partial、Normal 空庫。發現單一 Topic 選項易看成靜態文字、狹窄畫面的版本號被切開、空庫提示仍要求選分類，以及初始 Request 已在前方突出 Refresh。修正批次讓 Topic 操作可掃描、版本標籤完整、空庫集中設定入口，並優先強調已有紀錄及 child Jobs。Pass B 重拍主要狀態，檢閱完成後確認焦點、返回、窄版、觸控及 200% reflow。AI Fingerprint／Taste 審閱的畫面結構由目錄、來源列及實際檢閱內容形成，工作區沒有重複的步驟卡或統計條。
+Pass A used Edge on desktop Sources and Review, mobile Review and Partial, and empty Normal. A single Topic could appear static, a narrow version label was cut off, empty state still requested Category, and a fresh Request overemphasised Refresh. The fix made Topic actions scannable, kept version labels complete, concentrated empty-state setup, and prioritised existing Records and child Jobs. Pass B recaptured main states and rechecked focus after review, return, narrow layouts, touch, and 200% reflow. For AI Fingerprint and Taste, the workspace used directory, source rows, and actual review data without duplicate step cards or metrics bars.
 
-axe WCAG 2／2.1 A／AA 掃描在測試畫面回報零 violations。另以瀏覽器逐步按 Enter、Tab、Space 選取主題及來源，從 Keyword 進入 Review，開啟 Profile Version 後返回。觀察到相同草稿內容及 Profile 入口焦點恢復。320px 觸控測試檢查返回後的選取，Console 無未處理例外。截圖的 Loading 與 HTTP 503 是瀏覽器攔截重現，其他截圖來自實際隔離環境。
+axe WCAG 2 and 2.1 A and AA reported zero violations on checked views. Used Enter, Tab, and Space to select Topic and Sources, move from Keyword to Review, open a Profile Version, and return. Draft contents and focus on the Profile trigger were restored. The 320px touch test checked restored selection, and the console had no unhandled exceptions. Loading and HTTP 503 screenshots used browser interception. Others came from the live isolated environment.
 
-| 畫面 | 截圖 |
+| View | Screenshot |
 | --- | --- |
-| 1440px Topic 目錄與一個已勾選來源 | [Topic](docs/evaluation/M12-screenshots/topic-browser.png) · [Sources](docs/evaluation/M12-screenshots/approved-sources.png) |
-| 檢閱與縮放 | [桌面](docs/evaluation/M12-screenshots/review-desktop.png) · [390px Dark](docs/evaluation/M12-screenshots/review-mobile-dark.png) · [320px Dark](docs/evaluation/M12-screenshots/review-narrow-dark.png) · [Chrome 200%](docs/evaluation/M12-screenshots/review-chrome-zoom-200.png) |
-| 900px 讀取及錯誤恢復 | [Loading](docs/evaluation/M12-screenshots/simulated-loading-tablet.png) · [HTTP 503](docs/evaluation/M12-screenshots/simulated-api-503-tablet.png) |
-| 真實 Request、結果及 Normal 空庫 | [Succeeded](docs/evaluation/M12-screenshots/request-succeeded.png) · [Partial](docs/evaluation/M12-screenshots/request-partial.png) · [模擬金融紀錄](docs/evaluation/M12-screenshots/demo-financial-records.png) · [Normal](docs/evaluation/M12-screenshots/normal-empty.png) |
+| 1440px Topic directory and one selected Source | [Topic](docs/evaluation/M12-screenshots/topic-browser.png) · [Sources](docs/evaluation/M12-screenshots/approved-sources.png) |
+| Review and zoom | [Desktop](docs/evaluation/M12-screenshots/review-desktop.png) · [390px Dark](docs/evaluation/M12-screenshots/review-mobile-dark.png) · [320px Dark](docs/evaluation/M12-screenshots/review-narrow-dark.png) · [Chrome 200%](docs/evaluation/M12-screenshots/review-chrome-zoom-200.png) |
+| 900px loading and recovery | [Loading](docs/evaluation/M12-screenshots/simulated-loading-tablet.png) · [HTTP 503](docs/evaluation/M12-screenshots/simulated-api-503-tablet.png) |
+| Live Request, results, and empty Normal | [Succeeded](docs/evaluation/M12-screenshots/request-succeeded.png) · [Partial](docs/evaluation/M12-screenshots/request-partial.png) · [Simulated finance records](docs/evaluation/M12-screenshots/demo-financial-records.png) · [Normal](docs/evaluation/M12-screenshots/normal-empty.png) |
 
-## 6. 限制與交接結論
+## 6. Limits and handoff
 
-- Category／Topic 目錄採分頁瀏覽。API 沒有全文搜尋。現有 eligible bindings endpoint 也沒有按 ID 單查。資格刷新只重讀已瀏覽的 24 筆分頁範圍。如果清冊順序移動至此範圍外，會移除無法驗證的選取，可繼續 Load more 找回該項再選取。
-- 重載或關閉頁面會失去尚未送出的草稿及未確認 POST 畫面。sessionStorage 可用時，重新輸入完全相同的合格意圖會沿用既有 UUID。送出結果也可從 Collection requests 追查。
-- M13 預留 Data Explorer 和 Article History 的深度導航及狀態。M14 預留維運表單、工作診斷與全站一致性調整。
+- Category and Topic use pagination, and the API has no full-text search. The eligible binding endpoint has no single-ID lookup. Refresh rereads the browsed range of 24 items. A moved pin outside that range is removed as unverified, and Load more can recover it for selection.
+- Reloading or closing loses unsent draft and the unconfirmed POST view. With sessionStorage available, entering the same eligible intent reuses its UUID. Collection requests can also locate the outcome.
+- M13 was reserved for Data Explorer and Article History deep navigation and state. M14 was reserved for Operations forms, Job diagnostics, and consistency.
 
-**GO，可以交由獨立審閱。M12 授權、資格核對、UUID 重播、真實提交與結果交接均通過。**
+**GO for independent review. M12 authorisation, eligibility, UUID replay, live submission, and results handoff passed.**

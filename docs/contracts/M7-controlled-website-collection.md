@@ -1,16 +1,16 @@
 # M7 Controlled Website Collection
 
-## 操作流程
+## Operator workflow
 
-1. 在 **Sources → Create source** 登記 `https://` origin、可核對的許可參考，以及適用的路徑前綴。使用標準 HTTPS port 443，由小寫 DNS 名稱組成的 origin。`allowed_paths` 以 origin 作鍵，`/catalog` 涵蓋該路徑及其子路徑。`/catalogue` 屬於另一個路徑。
-2. 檢查 access policy，然後選擇 **Authorize Source access**。可信本機 UI 沿用 `LOCAL_PROFILE_APPROVAL=1`。直接 REST 操作沿用 `PATCH /api/v1/sources/{source_id}/authorization`。
-3. 在 Profile Draft 選擇 **Keyword search and detail pages**。選取已登記的 origin，輸入搜尋 path、query parameter、結果項目與詳情連結 selector。詳情頁使用既有 item selector、fields、型別及 identity field。
-4. 用樣本關鍵字 **Preview** 和 **Validate sample**。兩種操作各取一個搜尋頁，檢查 next link，並擷取第一個詳情結果。以通過且符合目前設定 hash 的報告核准 Profile Version。
-5. 在 **New Collection Job** 選擇核准版本並輸入關鍵字。完成後在 **Capture evidence** 檢查 Search results 和 Detail 頁，在 **Data Explorer** 追查各筆紀錄所屬的 Evidence。
+1. In **Sources → Create source**, register an `https://` origin, a verifiable permission reference, and applicable path prefixes. Use standard HTTPS port 443 and a lower-case DNS name. `allowed_paths` is keyed by origin. `/catalog` includes that path and its children. `/catalogue` is separate.
+2. Review access policy and select **Authorize Source access**. The trusted local UI uses `LOCAL_PROFILE_APPROVAL=1`. Direct REST clients use `PATCH /api/v1/sources/{source_id}/authorization`.
+3. In Profile Draft, select **Keyword search and detail pages**. Choose the registered origin and enter the search path, query parameter, result item selector, and detail link selector. Detail pages use the existing item selector, fields, types, and identity field.
+4. Use a sample keyword with **Preview** and **Validate sample**. Each reads one search page, checks the next link, and fetches the first detail result. Approve the Profile Version using a passing report matching the current configuration hash.
+5. In **New Collection Job**, select the approved version and enter the keyword. When finished, inspect Search results and Detail pages under **Capture evidence** and trace individual Records to Evidence in **Data Explorer**.
 
-## REST 設定
+## REST configuration
 
-在既有 HTML `configuration` 加入 `search`。`selector_type` 同時管控搜尋 selectors。每個匹配的結果項目需恰好含有一個符合 detail-link selector 的 `<a href>`。搜尋 path 不含 query 或 fragment。`keyword_parameter` 為固定 query 名稱，執行時以 UTF-8 percent encoding 加入關鍵字。
+Add `search` to the HTML `configuration`. `selector_type` applies to search selectors. Each matching result item must contain exactly one `<a href>` matching the detail-link selector. The search path excludes a query and fragment. `keyword_parameter` is the fixed query key. At execution the keyword is added using UTF-8 percent encoding.
 
 ```json
 {
@@ -25,30 +25,30 @@
 }
 ```
 
-Preview／Validate 的 request body 及 Job request 的 `entry` 支援 `{"adapter_type":"web","keyword":"C++ & 茶"}`。可用關鍵字為 1–128 個可列印字元。公開 HTTPS Job、Preview 和 Validate 需使用已配置搜尋的版本與 keyword entry。舊有受控 HTTP 的 `url`、舊有 CSV entry 和未設定 `search` 的 Profile hash 格式繼續有效。
+Preview and Validate bodies and Job `entry` accept `{"adapter_type":"web","keyword":"C++ & 茶"}`. Keywords may contain 1–128 printable characters. Public HTTPS Job, Preview, and Validate calls require a search-configured version and keyword entry. The legacy controlled HTTP `url`, CSV entries, and hashes for Profiles without `search` remain valid.
 
-| 控制 | 預設 | 允許範圍 |
+| Control | Default | Allowed range |
 | --- | --- | --- |
-| Search pages | 未配置分頁時為 1 | `pagination.max_pages` 1–5 |
+| Search pages | 1 without pagination | `pagination.max_pages` 1–5 |
 | Unique detail links | 5 | `max_detail_pages` 1–10 |
-| Outbound requests per attempt | 12 | `max_requests` 3–20，包含 robots 和 redirects |
+| Outbound requests per attempt | 12 | `max_requests` 3–20 including robots and redirects |
 | Redirects per document | 2 | `max_redirects` 0–2 |
 | Response bytes | 1,048,576 | `max_body_bytes` 512,000–1,048,576 |
-| DNS + transfer time per request | 2 秒 | `timeout_seconds` 1–2 秒 |
-| Fetch and traversal time per attempt | 45 秒 | `max_seconds` 5–45 秒 |
-| Execution attempts | 3 | `max_attempts` 1–3，包含 worker lease 復原 |
-| Minimum time between response completion and next request | 1 秒 | Source 的 `min_request_interval_ms` 1,000–10,000，robots 可拉長 |
-| Concurrent M7 requests per origin | 1 | Redis 固定互斥 |
+| DNS + transfer time per request | 2 seconds | `timeout_seconds` 1–2 seconds |
+| Fetch and traversal time per attempt | 45 seconds | `max_seconds` 5–45 seconds |
+| Execution attempts | 3 | `max_attempts` 1–3 including worker lease recovery |
+| Minimum time between response completion and next request | 1 second | Source `min_request_interval_ms` 1,000–10,000. Robots rules can extend this interval. |
+| Concurrent M7 requests per origin | 1 | Fixed Redis mutual exclusion |
 
-Worker hard limit 為 60 秒，PostgreSQL lease 為 90 秒。Retry 在既有 PostgreSQL／Celery 模型重新由第一個搜尋頁執行。較長的 `Retry-After` 會寫入共享 Redis 冷卻期。若延遲超過 Job 自動重試所容許的 300 秒，該 attempt 會以可讀錯誤結束。
+The worker hard limit is 60 seconds and the PostgreSQL lease is 90 seconds. The existing PostgreSQL and Celery retry model restarts from the first search page. A longer `Retry-After` is stored as a shared Redis cooldown. Above the Job's automatic retry limit of 300 seconds, the attempt ends with a readable error.
 
-## 權限及結果
+## Permissions and results
 
-- 每個 HTTP request 須持有 Source 授權與共享 origin 鎖。搜尋、next link、detail link、redirect 各自驗證同源與路徑。取得 robots 時只對精確 `/robots.txt` 豁免路徑前綴。公網 DNS 的每個解析結果都須合資格，HTTPS transfer 固定在核准 IP，並驗證 TLS hostname 及實際 peer。公開流量禁用環境代理。
-- `/robots.txt` 200 須為 UTF-8 純文字，404／410 表示沒有檔案。支援同一 UA 群組、最長路徑、`*`、`$`、`Crawl-delay` 和 `Request-rate`。明確阻擋、其他非成功狀態、redirect 或無法在現有限制內執行的 timing 規則會停止收集。Legacy M6 HTTP fixture 的 robots 與請求模式保留。
-- Search page 屬於 `capture_kind=search`，詳情屬於 `detail`。既有輸入預設 `input`。`page_number` 表示本次發布的捕捉順序。舊 Evidence 單物件 endpoint 繼續回傳第一頁，`/evidence-pages` 回傳依捕捉順序排列的列表。
-- 空結果會保留搜尋 Evidence 並以 `empty_search_results` 結束。下一頁循環、部分詳情失敗或達上限可回傳 `partial`。至少一筆通過欄位驗證才會成為 `partial`。單筆無效欄位由既有 Quarantine 保存。403 和已識別的 challenge 會中止，429 與暫時性連線／HTTP 問題依既有政策重試。
-- 同一次 attempt 內依正規化後的詳情 URL 去除重複連結，再由既有 Generic Record 驗證和 identity 處理重複紀錄。Job 終態只發布一組 attempt 結果。檔案儲存與 PostgreSQL 各自提交，失效 attempt 可留下未被引用的 Evidence 檔案。
+- Each HTTP request requires Source authorisation and the shared origin lock. Search, next, detail, and redirect links are individually checked for same origin and allowed path. Only exact `/robots.txt` can bypass the path prefix requirement when fetching robots. Every public DNS answer must be eligible. HTTPS connects to an approved IP and verifies the TLS hostname and actual peer. Public traffic ignores environment proxies.
+- A 200 from `/robots.txt` must be UTF-8 plain text. A 404 or 410 means the file is absent. Supports matching user-agent groups, longest path, `*`, `$`, `Crawl-delay`, and `Request-rate`. Explicit blocking, another unsuccessful status, redirects, or timing directives that exceed limits stop collection. The legacy M6 HTTP fixture retains its robots and request behaviour.
+- Search pages use `capture_kind=search` and detail pages use `detail`. Existing inputs default to `input`. `page_number` is the published capture order. The legacy single-Evidence endpoint still returns the first page. `/evidence-pages` returns an ordered capture list.
+- Empty results retain search Evidence and finish with `empty_search_results`. A next-page loop, detail fetch failures, or a reached limit may produce `partial`. At least one record must pass field validation for `partial`. Existing Quarantine retains invalid fields per candidate. A 403 or detected challenge stops the run. A 429 or transient connection or HTTP failure follows the retry policy.
+- Within one attempt, normalised detail URLs deduplicate links, and existing Generic Record validation and identity handle duplicate records. A terminal Job publishes one attempt's results. File storage and PostgreSQL commit separately, so an invalidated attempt can leave unreferenced Evidence files.
 
 Public network transport uses libcurl DNS pinning. [libcurl CURLOPT_RESOLVE](https://curl.se/libcurl/c/CURLOPT_RESOLVE.html)
 
