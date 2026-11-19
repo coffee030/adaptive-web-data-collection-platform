@@ -7,3 +7,6 @@ cwd = '<ABSOLUTE_CHECKOUT_PATH>'
 
 [mcp_servers.fyp.env]
 FYP_MCP_API_BASE = "http://127.0.0.1:<DEMO_API_PORT>/api/v1"
+
+[mcp_servers.fyp.tools.start_collection]
+approval_mode = "prompt"

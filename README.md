@@ -1,4 +1,4 @@
-# Adaptive Web Data Collection Platform
+# Adaptive Scalable and Observable Web Data Collection Platform
 
 A local dashboard for collecting structured records from approved websites and CSV inputs. Organize website searches by category and topic, track each source job, and download validated records with their provenance.
 
@@ -60,3 +60,4 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 - [Development and testing](docs/demo/M5-core-demo-runbook.md)
 - [MVP release readiness](docs/evaluation/M16-Release-Readiness.md)
 - [FYP presentation runbook](docs/evaluation/M16-FYP-Presentation-Runbook.md)
+- [Local Codex MCP setup and presenter walkthrough](docs/setup/Windows-MCP-Access.md#four-minute-presenter-walkthrough)

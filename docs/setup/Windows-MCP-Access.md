@@ -1,8 +1,8 @@
-# Windows 本機 MCP 使用指南
+# Local MCP Access on Windows
 
-在 Windows 11 安裝 Python 3.12 或 3.13，並按 [Windows 一鍵啟動指南](Windows-One-Click-Setup.md) 準備 Docker Desktop Linux Engine 和 Node.js。由本 checkout 根目錄啟動 `Start-FYP-Demo.bat`，等待 `Synthetic Demo is ready!`。執行 `Diagnose-Platform.bat -Demo` 取得當次 **API port** 和 **Dashboard URL**。
+On Windows 11, install Python 3.12 or 3.13 and follow the Windows setup guide to prepare Docker Desktop in Linux container mode and Node.js. From the checkout root, start `Start-FYP-Demo.bat` and wait for `Synthetic Demo is ready!`. Run `Diagnose-Platform.bat -Demo` to find the current **API port** and **Dashboard URL**. [Windows one-click setup](Windows-One-Click-Setup.md)
 
-在 checkout 根目錄開啟 PowerShell。將 `<DEMO_API_PORT>` 換成診斷報告的 API port。下例的 `python` 代表已安裝的 Python 執行檔，亦可使用它的完整路徑。
+Open PowerShell in the checkout root. Replace `<DEMO_API_PORT>` with the API port from diagnostics. The example uses `python` for the installed interpreter. You can use its full path.
 
 ```powershell
 python -m venv mcp_access/.venv
@@ -12,11 +12,11 @@ $env:FYP_MCP_API_BASE = 'http://127.0.0.1:<DEMO_API_PORT>/api/v1'
 Invoke-RestMethod "$env:FYP_MCP_API_BASE/health"
 ```
 
-## 連接 Codex 或其他本機 MCP client
+## Connect Codex or another local MCP client
 
-將 [設定範例](../../mcp_access/codex.config.example.toml) 的 `fyp` 表加入此 checkout 的 `.codex/config.toml`。填入 checkout 的絕對路徑和本次 Demo API port。在信任此 checkout 的 Codex CLI 新工作階段，請它呼叫 `fyp.list_categories` 並回傳第一個 Category 的名稱和 ID。其他本機 client 可使用同一個 Python 執行檔、參數 `-m mcp_access.server`、checkout 根目錄及環境變數，stream 設定為 stdio。 [Codex MCP 設定](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
+Add the example's `fyp` tables to this checkout's local `.codex/config.toml`. Fill in the absolute checkout path and the current Demo API port. In a fresh Codex CLI session that trusts the checkout, ask it to call `fyp.list_categories` and report the first Category name and ID. Other local clients can use the same Python executable, arguments `-m mcp_access.server`, checkout root, and environment variable, with stdio transport. [Project configuration example](../../mcp_access/codex.config.example.toml) [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 
-也可以從 PowerShell 以單次設定執行。以下指令沿用上節的 `$python` 和 `FYP_MCP_API_BASE`。
+For a one-off read from PowerShell, reuse `$python` and `FYP_MCP_API_BASE` from the setup above.
 
 ```powershell
 $command = (Resolve-Path $python).Path.Replace('\', '/')
@@ -30,28 +30,41 @@ $overrides = @(
 codex @overrides --ask-for-approval never exec --ignore-user-config --ephemeral --sandbox read-only --json 'Use only the fyp MCP server. Call list_categories with limit 1 and report the category name and ID.'
 ```
 
-## 提交一次 Topic Collection
+## Four-minute presenter walkthrough
 
-1. 使用 `list_categories`、`list_topics` 和 `list_topic_sources` 查閱可選來源。以 **Core Demonstration → Fixture Listings** 為例，選擇 Demo Cards 和 Demo Catalog 的 binding ID。
-2. 使用者明確要求採集後，呼叫 `prepare_collection(topic_id, keyword, binding_ids)`。傳入 1 至 4 個相異的 binding ID。準備結果的 `submitted` 為 `false`，每次準備會產生新的 UUID。呼叫端應先保存完整的 `submission`，再進行提交。
-3. 核對 Topic、keyword、bindings 及 host 的寫入審批。將 `submission` 的四個欄位原樣傳入 `start_collection`。HTTP 201 的 `created` receipt 表示已建立 Request，HTTP 200 的 `replayed` 表示同一意圖已存在。Receipt 含伺服器分派的 `request_id`、當前狀態、每個 binding 及其 Job ID。以 `request_id` 開啟 Dashboard 或限時輪詢 `get_collection_status`，例如每秒一次、最多 90 秒。
-4. 若 MCP 回報 `outcome: unknown` 或 client 在提交後失去回覆，以保存的 key 和同一組參數再呼叫一次 `start_collection`。傳輸錯誤的 `structuredContent` 包含 `request_key` 與 `retry_same_key`。如 key 已遺失，先到 Dashboard 的 **Collection requests** 核對歷史。HTTP 409 的 `collection_request_conflict` 代表該 key 已用於其他意圖。新增另一個明確要求的採集時，重新呼叫 `prepare_collection`。
+Complete the setup above before the presentation. Open the Dashboard URL from diagnostics. In a new PowerShell window at the trusted checkout, confirm `codex --version` and `codex login status`. Ensure the local copy of the example sets `start_collection` to `approval_mode = "prompt"`. Start the signed-in interactive host with `codex --ask-for-approval on-request --sandbox read-only`. Ask the host to use the local FYP MCP server for platform actions. Review the action, keyword, and two source bindings at each write prompt, and approve that call once.
 
-`start_collection` 每次呼叫只發出一個有時限的 POST，由平台判斷資格並建立 Request 和 Jobs。已接受意圖的重播可取回歷史 receipt。若來源或 binding 後來失去資格，以新 key 提交的混合選擇會整批被拒絕。使用 host 原有的寫入審批設定。
+| Time | Say this to the host | Show in the Dashboard |
+| --- | --- | --- |
+| 0:00–0:45 | “Which approved sources can I use for Fixture Listings under Core Demonstration? Show me the choices and wait.” | The available choices are Demo Catalog and Demo Cards. |
+| 0:45–1:30 | “Collect the keyword quick from both of those sources once. Give me the request ID so I can open it in the Dashboard.” | Open **Collection requests** and choose the exact Request ID. Explain the state the receipt reported. |
+| 1:30–2:45 | “How did each source finish? Show me one accepted record, where it came from, and the stored SHA-256 for its evidence.” | Check both **Child jobs**, then select **View request records**. Match the Record ID under **Provenance and identifiers** because both headlines can be Alpha. Open **View capture evidence** and compare Evidence ID and **Content SHA-256**. |
+| 2:45–4:00 | “Run one new collection for detail404 using the same two sources. Once it finishes, tell me what each source retained, what failed, and show me the evidence for a retained record.” | In the new Request, show Partial for the parent and both Jobs. Each Job retains one Alpha with zero invalid records and duplicates, and separately reports a fetch error with HTTP 404. Follow the host's retained Record to Evidence. |
 
-`get_collection_status` 按來源呈現 Job 狀態、已接受、驗證無效和重複的紀錄數，以及已知的錯誤代碼和 HTTP 狀態。部分完成可能保留有效紀錄，可用 `get_collection_records` 查閱。`invalid_count` 計算驗證無效的紀錄。頁面擷取錯誤見各 Job 的錯誤及 Dashboard execution events。
+For acceptance, also ask “For Fixture Listings, can you include a website that is not on the approved source list? Explain my options and wait.” The expected response explains Source authorisation, separate Profile Version approval, and an approved Topic binding. Compare Request and Job ID sets before and after each scenario in the isolated Demo.
 
-維護者可在獨立 Synthetic Demo 執行以下驗收。它會提交 `quick`、確認相同意圖在新 key 下可另建 Request、模擬已提交但回覆遺失、提交 `detail404`，並在獨立的臨時 Topic 測試 binding 失效。在沒有其他操作者提交的 Demo 上執行，才能比較 Request 和 Job ID 集合。
+## Submit one Topic Collection
+
+1. Use `list_categories`, `list_topics`, and `list_topic_sources` to discover eligible sources. For **Core Demonstration → Fixture Listings**, select the Demo Cards and Demo Catalog binding IDs.
+2. After the operator explicitly requests collection, call `prepare_collection(topic_id, keyword, binding_ids)` with 1 to 4 distinct binding IDs. The result sets `submitted` to `false`. Each preparation generates a fresh UUID. Save the complete `submission` before sending it.
+3. Check the Topic, keyword, bindings, and the host's write approval. Pass all four fields from `submission` unchanged to `start_collection`. HTTP 201 with a `created` receipt means a new Request. HTTP 200 with a `replayed` receipt means this intent already exists. The receipt contains the server-assigned `request_id`, current status, and the Job ID for each binding. Open the Dashboard with `request_id` or poll `get_collection_status` at a bounded interval, for example once per second for up to 90 seconds.
+4. If MCP reports `outcome: unknown` or the client loses the submission reply, call `start_collection` again with the saved key and same parameters. The transport error's `structuredContent` includes `request_key` and `retry_same_key`. If the key is lost, first check **Collection requests** history in the Dashboard. HTTP 409 with `collection_request_conflict` means the key belongs to a different intent. Call `prepare_collection` again for a separate, explicitly requested collection.
+
+Each `start_collection` call sends one POST with a deadline. The platform decides eligibility and creates the Request and Jobs. Replaying an accepted intent returns its historical receipt. If a Source or binding later becomes ineligible, a new key with a mixed selection fails as a whole. Keep the host's write approval enabled.
+
+`get_collection_status` reports each source's Job status, accepted, invalid, and duplicate counts, and known error codes and HTTP statuses. A partially completed Job can retain valid records. Use `get_collection_records` to read them. `invalid_count` counts records that failed validation. Page fetch failures appear in the Job error and Dashboard execution events.
+
+Maintainers can run the following verification on an isolated Synthetic Demo. It submits `quick`, checks that a fresh key can create another Request with the same intent, simulates a lost reply after commit, submits `detail404`, and tests binding ineligibility on a separate temporary Topic. Run it without other operators submitting collections so the Request and Job ID sets can be compared.
 
 ```powershell
 & $python -m mcp_access.verify_start_demo
 ```
 
-## 重現一筆 Demo 紀錄的證據追溯
+## Reproduce an evidence trace for a Demo record
 
-1. 在 Dashboard 的 **Collection requests** 開啟已保存的 **Fixture Listings · quick**。從網址複製 Request UUID。
-2. 執行下列指令。SDK 透過 stdio 發現和呼叫七個工具，讀取兩頁 Records，並用 REST API 比對 selected Record 的 lineage、Evidence hash，以及前後的 Request 與 Job ID 集合。
-3. 回到同一個 Request，核對 **Child jobs** 的 Job details 和 **Pinned profile version** 連結。點選 **View request records**，以 **Oldest first** 排序後開啟第一筆 Record。展開 **Provenance and identifiers** 核對各 ID，再按 **View capture evidence** 核對 **Content SHA-256**。如兩筆 Record 標題相同，以 SDK 輸出的 Record ID 確認。
+1. Open the persisted **Fixture Listings · quick** under **Collection requests** in the Dashboard. Copy the Request UUID from the URL.
+2. Run the commands below. The SDK discovers and calls seven tools over stdio, reads two pages of Records, and cross-checks the selected Record's lineage and Evidence hash and the before and after Request and Job ID sets against the REST API.
+3. Open the same Request. Check the Job details and **Pinned profile version** links under **Child jobs**. Select **View request records**, sort by **Oldest first**, and open the first Record. Expand **Provenance and identifiers** to verify each ID, then select **View capture evidence** to check **Content SHA-256**. If two Records have the same headline, select the one with the Record ID printed by the SDK.
 
 ```powershell
 & $python -m mcp_access.verify_demo '<REQUEST_UUID>'
@@ -59,9 +72,9 @@ codex @overrides --ask-for-approval never exec --ignore-user-config --ephemeral 
 & $python -m pytest -q mcp_access/tests
 ```
 
-## 疑難排解
+## Troubleshooting
 
-- 如 MCP 初始化失敗，檢查 Python 絕對路徑、checkout 工作目錄、依賴套件及 stderr。API base 必須是 `http://127.0.0.1:<port>/api/v1` 或 IPv6 loopback 等效位置。
-- 如收到 API unavailable 或 HTTP 錯誤，執行 `Diagnose-Platform.bat -Demo` 並查 `/api/v1/health`。更新 host 設定後開啟新的 MCP session，提交結果不明時沿用已保存的 key 和參數。
-- `get_collection_records` 要求 Request UUID。未知 Request 回傳工具錯誤，已知 Request 的空頁回傳空的 `items`。每頁上限為 25 筆，使用 `next_offset` 繼續。單次 REST 讀取上限為 5 秒和 2 MiB，遇到大小限制時調低 `limit`。
-- `payload` 是擷取的來源資料。每筆預覽最多 12 欄，每個文字值最多 512 字元。省略超長欄名或截短文字時，`payload_truncated` 會標示為 `true`。Evidence 的 `content_hash` 代表後端儲存的 SHA-256。驗證原始擷取內容需要另外取得並重新計算該內容的雜湊。
+- If MCP fails to initialize, check the absolute Python path, checkout working directory, dependencies, and stderr. The API base must be `http://127.0.0.1:<port>/api/v1` or its IPv6 loopback equivalent.
+- If the API is unavailable or returns an HTTP error, run `Diagnose-Platform.bat -Demo` and check `/api/v1/health`. Start a fresh MCP session after changing the host config. Reuse the saved key and parameters if the submission outcome is unknown.
+- `get_collection_records` requires a Request UUID. An unknown Request returns a tool error. An empty page for a known Request returns empty `items`. The page limit is 25. Continue with `next_offset`. Each REST read is limited to 5 seconds and 2 MiB. Reduce `limit` if a response exceeds the size limit.
+- `payload` is extracted source data. Each preview contains up to 12 fields with up to 512 characters per text value. `payload_truncated` is `true` if the preview omits an overlong field name or clips text. Evidence `content_hash` is the stored SHA-256. To verify raw capture bytes, obtain them independently and recompute the digest.
