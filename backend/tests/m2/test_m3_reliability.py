@@ -3,10 +3,12 @@ from uuid import uuid4
 
 import pytest
 from conftest import approve_job_profile
+from fastapi.testclient import TestClient
 from kombu.exceptions import OperationalError
 from sqlalchemy import event, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 
+from backend.api.app import create_app
 from backend.application.execution import JobExecutor
 from backend.application.jobs import MAX_ATTEMPTS
 from backend.core.contracts import CollectionError
@@ -97,7 +99,7 @@ def test_publication_before_rollback_and_concurrent_dispatch(sessions, execution
 
 
 def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
-    sessions, execution, caplog
+    sessions, execution, caplog, pg_engine
 ):
     executor, job_id = execution
     worker_a, worker_b = uuid4(), uuid4()
@@ -129,15 +131,33 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
     assert (
         executor.evidence.root / stale_result.evidence.evidence_id / "input.bin"
     ).is_file()
+    path = f"/api/v1/collection-jobs/{job_id}"
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=executor.evidence.root),
+        base_url="http://127.0.0.1",
+    ) as client:
+        detail = client.get(path)
+        history = client.get(f"{path}/events")
+    assert detail.status_code == history.status_code == 200
+    assert detail.json() == final.model_dump(mode="json") | {
+        "latest_claim_worker_instance_id": str(worker_b),
+        "latest_claim_execution_origin": "worker",
+    }
     assert [
-        (event.kind, event.worker_instance_id) for event in executor.jobs.events(job_id)
+        (
+            event["kind"],
+            event["execution_attempt"],
+            event["worker_instance_id"],
+            event["execution_origin"],
+        )
+        for event in history.json()
     ] == [
-        ("JOB_CREATED", None),
-        ("CLAIMED", worker_a),
-        ("WORKER_LOST", worker_a),
-        ("RECOVERY_REQUESTED", worker_a),
-        ("CLAIMED", worker_b),
-        ("SUCCEEDED", worker_b),
+        ("JOB_CREATED", 0, None, None),
+        ("CLAIMED", 1, str(worker_a), "worker"),
+        ("WORKER_LOST", 1, str(worker_a), "worker"),
+        ("RECOVERY_REQUESTED", 1, str(worker_a), "worker"),
+        ("CLAIMED", 2, str(worker_b), "worker"),
+        ("SUCCEEDED", 2, str(worker_b), "worker"),
     ]
 
 

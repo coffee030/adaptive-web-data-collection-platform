@@ -276,9 +276,12 @@ def test_multiple_sources_refresh_history_and_revocation(
     response(client, "POST", REQUESTS, 409, intent | {"keyword": "different"})
 
     worker = JobExecutor(sessions, LocalEvidenceStore(tmp_path))
-    run_children(worker, original)
+    completed = run_children(worker, original)
     first = response(client, "GET", f"{REQUESTS}/{original['id']}", 200)
     assert first["status"] == "succeeded" and first["finished_at"]
+    assert [child["job"] for child in first["jobs"]] == [
+        job.model_dump(mode="json") for job in completed
+    ]
     articles = response(client, "GET", f"/articles?request_id={original['id']}", 200)
     assert len(articles) == len({article["id"] for article in articles}) == 2
     card_id = next(
