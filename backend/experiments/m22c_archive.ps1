@@ -1,17 +1,19 @@
 param(
     [Parameter(Mandatory)]
-    [ValidatePattern('^(reference|M22A-0[1-4])$')]
-    [string]$Session
+    [ValidatePattern('^(reference(?:-[a-z0-9-]+)?|M22A-0[1-4])$')]
+    [string]$Session,
+    [string]$Project = 'm22c-operator-pilot',
+    [string]$EnvFile = '.local/m22c/pilot.env'
 )
 $ErrorActionPreference = 'Stop'
-$stack = @('-p','m22c-operator-pilot','--env-file','.local/m22c/pilot.env',
+$stack = @('-p',$Project,'--env-file',$EnvFile,
     '-f','compose.yaml','-f','compose.fixture.yaml','-f','backend/experiments/m22c.compose.yaml')
 $directory = Join-Path '.local/m22c' $Session
 $events = Get-Content -LiteralPath (Join-Path $directory 'session.jsonl') |
     ForEach-Object { ConvertFrom-Json -DateKind String $_ }
 $start = $events | Where-Object event -eq 'start' | Select-Object -First 1
 $stop = $events | Where-Object event -eq 'stop' | Select-Object -Last 1
-if ($Session -eq 'reference' -and $events[-1].event -eq 'rehearsal_finished') {
+if ($Session.StartsWith('reference') -and $events[-1].event -eq 'rehearsal_finished') {
     $since = $events[0].utc
     $until = $events[-1].utc
 } elseif ($start -and $stop) {

@@ -10,6 +10,7 @@ from itertools import pairwise
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
+from lxml import html
 from pydantic import ValidationError
 
 from backend.core.contracts import (
@@ -18,11 +19,12 @@ from backend.core.contracts import (
     Source,
 )
 from backend.core.ingestion import ingest
-from backend.core.inputs import CapturedInput, InputError
-from backend.core.search import SearchTraversal
+from backend.core.inputs import CapturedInput, InputError, KeywordInput
+from backend.core.robots import parse_policy
+from backend.core.search import SearchTraversal, initial_input
 from backend.core.suggestion_models import SuggestedMapping
-from backend.core.web_adapter import html_candidates
-from backend.experiments.m22a_fixture import KEYWORD, fixture_html
+from backend.core.web_adapter import USER_AGENT, html_candidates
+from backend.experiments.m22a_fixture import KEYWORD, ROBOTS, fixture_html
 
 ROOT = Path(".local/m22c")
 ORIGIN = COMPOSE_FIXTURE_ORIGIN
@@ -48,6 +50,51 @@ def capture(target):
     return CapturedInput(
         body, ORIGIN + target, http_status=200, content_type="text/html"
     )
+
+
+def configured_search(source, config, prefix, keyword):
+    try:
+        entry = initial_input(source, config, KeywordInput(keyword))
+    except InputError as exc:
+        return {
+            "status": "denied"
+            if exc.error.code == "destination_denied"
+            else "invalid_input",
+            "error": exc.error.code,
+            "assigned_results": None,
+        }
+
+    result = {"url": entry.url, "assigned_results": None}
+    if source.approval_status != "approved":
+        return result | {"status": "denied", "error": "source_not_approved"}
+    parts = urlsplit(entry.url)
+    if f"{parts.scheme}://{parts.netloc}" != ORIGIN:
+        return result | {"status": "unavailable", "error": "no_offline_fixture"}
+    robots = parse_policy(ROBOTS, USER_AGENT.split("/", 1)[0])
+    if not robots.can_fetch(USER_AGENT, entry.url):
+        return result | {"status": "denied", "error": "robots_denied"}
+    markup = fixture_html(route(entry.url))
+    if markup is None:
+        return result | {"status": "missing", "fixture_status": 404}
+
+    # Inspect the actual page independently of the operator's selectors.
+    hrefs = set(html.fromstring(markup).xpath("//a/@href"))
+    slugs = KEY[prefix.rstrip("/").rsplit("/", 1)[1]]
+    count = sum(f"{prefix}detail/{slug}" in hrefs for slug, *_ in slugs)
+    return result | {
+        "status": "assigned_listing"
+        if count == len(slugs)
+        else ("partial_assigned_results" if count else "no_assigned_results"),
+        "fixture_status": 200,
+        "assigned_results": count,
+    }
+
+
+def unavailable(reason):
+    return {
+        "unscored": reason,
+        "configured_search": {"status": "unavailable", "assigned_results": None},
+    }
 
 
 def score(source, config, prefix, keyword):
@@ -112,8 +159,13 @@ def score(source, config, prefix, keyword):
     }
 
 
-def proposal_config(raw):
-    proposal = SuggestedMapping.model_validate(raw)
+def score_config(source, config, prefix, keyword):
+    return score(source, config, prefix, keyword) | {
+        "configured_search": configured_search(source, config, prefix, keyword)
+    }
+
+
+def proposal_config(proposal):
     mapped = tuple(field.mapping for field in proposal.fields if field.mapping)
     omitted = sorted({field.name for field in proposal.fields if not field.mapping})
     schema = proposal.record_schema.model_dump()
@@ -136,12 +188,25 @@ def proposal_config(raw):
 
 def score_proposal(source, raw, prefix, keyword):
     if not raw:
-        return {"unscored": "No proposal artifact"}
+        return unavailable("No proposal artifact")
     try:
-        config, omitted = proposal_config(raw)
+        proposal = SuggestedMapping.model_validate(raw)
     except ValidationError:
-        return {"unscored": "Proposal has no replayable Core record configuration"}
-    return score(source, config, prefix, keyword) | {"unresolved_fields": omitted}
+        return unavailable("Proposal artifact could not be validated")
+    try:
+        config, omitted = proposal_config(proposal)
+    except ValidationError:
+        # Keyword entry construction uses only the proposal's validated search.
+        entry_config = ExtractionConfiguration.model_construct(search=proposal.search)
+        return {
+            "unscored": "Proposal has no replayable Core record configuration",
+            "configured_search": configured_search(
+                source, entry_config, prefix, keyword
+            ),
+        }
+    return score_config(source, config, prefix, keyword) | {
+        "unresolved_fields": omitted
+    }
 
 
 def rows(path):
@@ -272,7 +337,7 @@ def verify_reference(directory):
         config.search.max_requests == 4
         and artifact["suggested"]["proposal"]["search"]["max_requests"] == 3
     )
-    final_score = score(source, config, REFERENCE, KEYWORD)
+    final_score = score_config(source, config, REFERENCE, KEYWORD)
     original_score = score_proposal(
         source, artifact["suggested"]["proposal"], REFERENCE, KEYWORD
     )
@@ -281,6 +346,7 @@ def verify_reference(directory):
         assert scorecard["correct_required_fields"] == 4
         assert scorecard["wrong_detail_links"] == scorecard["missing_detail_links"] == 0
         assert not scorecard["core_errors"]
+        assert scorecard["configured_search"]["status"] == "assigned_listing"
     return {
         "technical_only": True,
         "profile_version_id": final["profile_version_id"],
@@ -292,35 +358,52 @@ def verify_reference(directory):
         "denied_before_send": 1,
         "final_score": final_score,
         "unedited_proposal_score": original_score,
+        "adjudication": events[-1].get("adjudication"),
     }
 
 
 def score_trial(directory, prefix, keyword):
-    events = rows(directory / "session.jsonl")
-    source = Source.model_validate(
-        next(row["source"] for row in events if row["event"] == "operator")
+    try:
+        events = rows(directory / "session.jsonl")
+    except (OSError, ValueError):
+        return unavailable("Session journal unavailable or unreadable")
+    registration = next(
+        (row for row in events if row["event"] in {"operator", "rehearsal"}), None
     )
+    if not registration:
+        return unavailable("No recorded Source")
+    source = Source.model_validate(registration["source"])
     assert source.allowed_paths == {ORIGIN: (prefix,)}
-    versions_path = directory / "versions.json"
-    versions = (
-        json.loads(versions_path.read_text(encoding="utf-8-sig"))
-        if versions_path.exists()
-        else []
-    )
     proposals = [
-        score_proposal(source, row["result"]["proposal"], prefix, keyword)
+        score_proposal(source, row["result"].get("proposal"), prefix, keyword)
         | {"request_id": row["id"]}
         for row in events
-        if row["event"] == "api_body"
-        and row["kind"] == "profile-suggestions"
-        and row["result"].get("proposal")
+        if row["event"] == "api_body" and row["kind"] == "profile-suggestions"
     ]
-    if len(versions) != 1:
-        return {"unscored": "No unique final saved snapshot", "proposals": proposals}
+    try:
+        versions = json.loads(
+            (directory / "versions.json").read_text(encoding="utf-8-sig")
+        )
+    except (OSError, ValueError):
+        return unavailable("Final saved snapshot unavailable or unreadable") | {
+            "proposals": proposals
+        }
+    if not isinstance(versions, list) or len(versions) != 1:
+        return unavailable("No unique final saved snapshot") | {"proposals": proposals}
     [final] = versions
-    config = ExtractionConfiguration.model_validate(final["configuration"])
-    assert config.config_hash() == final["config_hash"]
-    return score(source, config, prefix, keyword) | {
+    try:
+        config = ExtractionConfiguration.model_validate(
+            final.get("configuration") if isinstance(final, dict) else None
+        )
+    except ValidationError:
+        return unavailable("No replayable final configuration") | {
+            "proposals": proposals
+        }
+    if config.config_hash() != final.get("config_hash"):
+        return unavailable("Final configuration hash mismatch") | {
+            "proposals": proposals
+        }
+    return score_config(source, config, prefix, keyword) | {
         "approval_status": final["approval_status"],
         "proposals": proposals,
     }
@@ -332,14 +415,18 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     reference = commands.add_parser("reference")
     reference.add_argument("--root", type=Path, default=ROOT)
+    reference.add_argument("--session", default="reference")
     trial = commands.add_parser("trial")
     trial.add_argument("directory", type=Path)
     trial.add_argument("prefix")
     trial.add_argument("keyword")
     opts = parser.parse_args()
     if opts.command == "reference":
-        result = verify_reference(opts.root / "reference")
-        with (opts.root / "technical-readiness.json").open(
+        result = verify_reference(opts.root / opts.session)
+        destination = (
+            opts.root if opts.session == "reference" else opts.root / opts.session
+        )
+        with (destination / "technical-readiness.json").open(
             "x", encoding="utf-8"
         ) as handle:
             json.dump(result, handle, indent=2)

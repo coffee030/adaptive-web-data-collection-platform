@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
+import { adjudicate, capSeconds, journal, loadAttempt, persistStop, requireRecordedResult, stamp, writeEvidence } from './m22c_completion.mjs';
 
 const { chromium } = createRequire(new URL('../../frontend/package.json', import.meta.url))('@playwright/test');
 const api = process.env.M22C_API ?? 'http://127.0.0.1:58196';
@@ -11,7 +12,6 @@ const dashboard = process.env.M22C_DASHBOARD ?? 'http://127.0.0.1:5224';
 const mirror = process.env.M22C_MIRROR ?? 'http://127.0.0.1:58197';
 const origin = 'http://collection-fixture:8001';
 const evidence = resolve('.local/m22c');
-const cap = 900;
 const productSha = '5fcff7a2ac4283cfba69ce6f43e6380be6c8094a';
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const reference = { id: 'reference', name: 'M22C Reference', path: '/m22a/cards/reference/', keyword: 'C++ & tea', limit: 4 };
@@ -25,6 +25,7 @@ const assignments = [
 async function sources(path = '', method = 'GET', body) {
   const response = await fetch(api + '/api/v1/sources' + path, {
     method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000),
   });
   const result = await response.json();
   assert(response.ok, JSON.stringify({ path, method, status: response.status, result }));
@@ -50,18 +51,9 @@ async function getSource(task, create = false) {
   return source;
 }
 
-function journal(directory) {
-  const path = resolve(directory, 'session.jsonl');
-  writeFileSync(path, '', { flag: 'wx' });
-  return (event, details = {}) => {
-    appendFileSync(path, JSON.stringify({ utc: new Date().toISOString(), mono_ms: performance.now(), event, ...details }) + '\n');
-  };
-}
-
 function observe(context, record, sourceId) {
   const active = new Map();
   const pending = new Set();
-  const responses = [];
   let nextId = 0;
   context.on('request', request => {
     const url = new URL(request.url());
@@ -79,16 +71,16 @@ function observe(context, record, sourceId) {
     record('request', { id, kind, url: request.url(), method: request.method(), ...(productRequest ? { body: request.postData() } : {}) });
   });
   context.on('response', response => {
+    const observed = stamp();
     const entry = active.get(response.request());
     if (!entry) return;
     const { id, kind } = entry;
-    record('response', { id, status: response.status() });
+    record('response', { id, kind, status: response.status() }, observed);
     if (kind === 'site') return;
     const capture = (async () => {
       try {
         const result = await response.json();
         record('api_body', { id, kind, result });
-        responses.push({ id, kind, result });
       } catch (error) {
         record('observation_gap', { id, reason: String(error) });
       }
@@ -104,16 +96,22 @@ function observe(context, record, sourceId) {
       active.delete(request);
     });
   }
-  return { responses, drain: () => Promise.all([...pending]) };
+  return { drain: () => Promise.all([...pending]) };
 }
 
 async function startBrowser(record, sourceId, headless) {
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL ?? 'msedge', headless });
-  const context = await browser.newContext({ serviceWorkers: 'block' });
-  const observation = observe(context, record, sourceId);
-  const page = await context.newPage();
-  await page.goto(dashboard + '/sources/' + sourceId);
-  return { browser, context, page, ...observation };
+  try {
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    const observation = observe(context, record, sourceId);
+    const page = await context.newPage();
+    page.on('crash', () => record('observation_gap', { reason: 'Dashboard page crashed' }));
+    await page.goto(dashboard + '/sources/' + sourceId);
+    return { browser, context, page, ...observation };
+  } catch (error) {
+    await browser.close();
+    throw error;
+  }
 }
 
 function card(task, sourceId) {
@@ -141,10 +139,11 @@ async function trial(id) {
   assert(index >= 0, 'Select the next frozen assignment');
   const task = assignments[index];
   for (const previous of assignments.slice(0, index)) {
-    assert(existsSync(resolve(evidence, previous.id, 'stop.json')), 'Previous assignment has no terminal record');
+    const attempt = assignedAttempt(previous);
+    assert(attempt.events.some(row => row.event === 'start'), 'Previous assignment has no start record');
     const result = readFileSync('docs/evaluation/m22c-onboarding-results.csv', 'utf8').split(/\r?\n/)
       .find(line => line.split(',')[0].replace(/^"|"$/g, '') === previous.id);
-    assert(result && /^"?(completed|failed|incomplete)"?$/.test(result.split(',')[8]), 'Save the previous assignment in the CSV before opening the next');
+    requireRecordedResult(adjudicate(attempt.events, attempt.versions, attempt), result?.split(',')[8]?.replace(/^"|"$/g, ''));
   }
   assert(existsSync(resolve(evidence, 'technical-readiness.json')), 'Reference evidence must be verified first');
   const directory = resolve(evidence, id);
@@ -159,10 +158,8 @@ async function trial(id) {
     const layoutFamiliarity = (await input.question('Layout familiarity: ')).trim();
     const exposure = (await input.question('Relevant prior exposure: ')).trim();
     assert(operator && dashboardFamiliarity && layoutFamiliarity && exposure, 'Record all operator context before opening the card');
-    const prior = assignments.slice(0, index).map(row => resolve(evidence, row.id, 'stop.json'));
-    for (const path of prior) {
-      const data = JSON.parse(readFileSync(path, 'utf8'));
-      assert.equal(data.operator, operator, 'Primary pilot uses the same operator');
+    for (const previous of assignments.slice(0, index)) {
+      assert.equal(assignedAttempt(previous).events[0].operator, operator, 'Primary pilot uses the same operator');
     }
     mkdirSync(directory);
     const record = journal(directory);
@@ -170,35 +167,39 @@ async function trial(id) {
       product_sha: productSha, evaluation_sha: git('rev-parse', 'HEAD'), dashboard, mirror, api });
     session = await startBrowser(record, source.source_id, false);
     await input.question('Press Enter to open the card and start the clock when ready. ');
-    const startedAt = new Date().toISOString();
-    const start = performance.now();
-    record('start', { startedAt });
-    console.log(card(task, source.source_id));
+    const start = stamp();
+    record('start', { startedAt: start.utc }, start);
     const expiry = new AbortController();
-    timer = setTimeout(() => expiry.abort(), cap * 1000);
-    let status = 'failed';
-    let reason = '15-minute cap';
+    let observed;
+    let signal = 'interrupted';
+    const halt = () => {
+      observed = stamp();
+      expiry.abort();
+    };
+    input.once('close', halt);
+    timer = setTimeout(halt, Math.max(0, Math.ceil(start.mono_ms + capSeconds * 1000 - performance.now())));
+    console.log(card(task, source.source_id));
     let fallbackUsed = false;
-    let abandoned = false;
-    const seconds = () => (performance.now() - start) / 1000;
+    const seconds = at => (at.mono_ms - start.mono_ms) / 1000;
     try {
-      while (seconds() < cap) {
+      while (seconds(stamp()) < capSeconds) {
         const answer = (await input.question('Press Enter on confirmed approval, A then Enter to abandon, or F then Enter to request fallback: ', { signal: expiry.signal })).trim();
-        if (seconds() >= cap) break;
+        const received = stamp();
+        if (seconds(received) >= capSeconds || expiry.signal.aborted) break;
         if (answer === '') {
-          status = 'completed';
-          reason = 'operator observed matching Dashboard approval';
+          observed = received;
+          signal = 'dashboard_confirmation';
           break;
         }
         if (answer.toLowerCase() === 'a') {
-          abandoned = true;
-          reason = 'operator abandonment';
+          observed = received;
+          signal = 'abandonment';
           break;
         }
         if (answer.toLowerCase() === 'f' && !fallbackUsed) {
-          const fallbackSeconds = seconds();
+          const fallbackSeconds = seconds(received);
           const fallbackReason = (await input.question('Fallback reason: ', { signal: expiry.signal })).trim();
-          if (seconds() >= cap) break;
+          if (seconds(stamp()) >= capSeconds || expiry.signal.aborted) break;
           if (!fallbackReason) continue;
           fallbackUsed = true;
           const search = new URLSearchParams({ [task.path.includes('/cards/') ? 'q' : 'term']: task.keyword });
@@ -213,36 +214,23 @@ async function trial(id) {
     } catch (error) {
       if (error.name !== 'AbortError') throw error;
     }
-    const elapsed = reason === '15-minute cap' ? cap : Math.min(cap, seconds());
-    const stop = { operator, status, reason, started_at: startedAt, elapsed_seconds: elapsed, fallback_used: fallbackUsed };
-    record('stop', stop);
+    const stop = persistStop(directory, record, start, observed ?? stamp(), signal, { operator, fallback_used: fallbackUsed });
     clearTimeout(timer);
-    if (abandoned) {
-      const abandonmentReason = (await input.question('Reason for abandonment: ')).trim();
-      if (abandonmentReason) stop.reason = abandonmentReason;
-      record('abandonment_reason', { reason: stop.reason });
-    }
-    writeFileSync(resolve(directory, 'stop.json'), JSON.stringify(stop, null, 2), { flag: 'wx' });
-    try {
-      await session.drain();
-      const final = await sources('/' + source.source_id + '/versions');
-      writeFileSync(resolve(directory, 'versions.json'), JSON.stringify(final, null, 2), { flag: 'wx' });
-      record('snapshot', { versions: final.map(({ profile_version_id, revision, config_hash, validation_report_id }) =>
-        ({ profile_version_id, revision, config_hash, validation_report_id })) });
-      if (status === 'completed') {
-        const [version] = final;
-        const validation = session.responses.findLast(row => row.kind === 'validate' && row.result.passed);
-        const approval = session.responses.findLast(row => row.kind === 'approve' && row.result.approval_status === 'approved');
-        const fields = ['profile_version_id', 'revision', 'config_hash', 'validation_report_id'];
-        const matched = final.length === 1 && version.approval_status === 'approved' && validation && approval
-          && fields.every(key => version[key] === approval.result[key])
-          && validation.result.report_id === version.validation_report_id && validation.result.config_hash === version.config_hash;
-        record('approval_evidence', { matched: Boolean(matched) });
+    input.off('close', halt);
+    const capture = captureTerminal(directory, source.source_id, session, record);
+    if (stop.signal === 'abandonment') {
+      const closed = new AbortController();
+      input.once('close', () => closed.abort());
+      try {
+        const reason = (await input.question('Reason for abandonment: ', { signal: closed.signal })).trim();
+        if (reason) record('abandonment_reason', { reason });
+      } catch (error) {
+        record('observation_gap', { reason: String(error) });
       }
-      await session.page.screenshot({ path: resolve(directory, 'terminal.png'), timeout: 5000 });
-    } catch (error) {
-      record('observation_gap', { reason: String(error) });
     }
+    await capture;
+    await session.browser.close();
+    printResult(directory);
   } finally {
     clearTimeout(timer);
     input.close();
@@ -250,16 +238,80 @@ async function trial(id) {
   }
 }
 
-async function rehearse() {
-  const task = reference;
+async function saveVersions(directory, sourceId) {
+  const final = await sources('/' + sourceId + '/versions');
+  writeEvidence(directory, 'versions.json', final);
+  return final;
+}
+
+async function captureTerminal(directory, sourceId, session, record, screenshot = 'terminal.png') {
+  for (const capture of [
+    () => session.page.screenshot({ path: resolve(directory, screenshot), timeout: 5000 }),
+    async () => {
+      const versions = await saveVersions(directory, sourceId);
+      record('snapshot', { version_count: versions.length });
+    },
+    () => session.drain(),
+  ]) {
+    try {
+      await capture();
+    } catch (error) {
+      record('observation_gap', { reason: String(error) });
+    }
+  }
+}
+
+function printResult(directory) {
+  const attempt = loadAttempt(directory);
+  const result = adjudicate(attempt.events, attempt.versions, attempt);
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function assignedAttempt(task) {
+  const attempt = loadAttempt(resolve(evidence, task.id));
+  const header = attempt.events[0];
+  assert(header?.event === 'operator' && header.trial_id === task.id && header.arm === task.arm
+    && header.product_sha === productSha && /^[a-f0-9]{40}$/.test(header.evaluation_sha)
+    && header.source?.source_name === task.name && header.source.approval_status === 'approved',
+    'Review the provenance of the existing attempt before proceeding');
+  assert.deepEqual(header.source.allowed_origins, [origin]);
+  assert.deepEqual(header.source.allowed_paths, { [origin]: [task.path] });
+  return attempt;
+}
+
+async function resume(id) {
+  const task = assignments.find(row => row.id === id);
+  assert(task, 'Select an existing assignment to audit');
+  const directory = resolve(evidence, id);
+  const attempt = assignedAttempt(task);
+  if (attempt.stop?.schema === 1 && !attempt.evidenceIssue
+    && !existsSync(resolve(directory, 'versions.json'))) {
+    assert.equal(attempt.events[0].api, api, 'Use the API origin recorded for this attempt');
+    try {
+      await saveVersions(directory, attempt.events[0].source.source_id);
+    } catch (error) {
+      console.error('Could not capture the later readback', error.message);
+    }
+  }
+  printResult(directory);
+}
+
+async function rehearse(id = 'reference', timing = 'verified') {
+  assert(/^reference(?:-[a-z0-9-]+)?$/.test(id), 'Select a reference-only evidence directory');
+  assert(['verified', 'early'].includes(timing), 'Select verified or early reference timing');
+  const task = id === reference.id ? reference : { ...reference, id, name: `${reference.name} ${id}` };
+  const directory = resolve(evidence, id);
+  assert(!existsSync(directory), 'Reference evidence directory already exists');
   const source = await getSource(task, true);
-  const directory = resolve(evidence, 'reference');
   mkdirSync(directory);
   const record = journal(directory);
-  record('rehearsal', { source, technical: true, product_sha: productSha, dashboard, api, mirror });
+  record('rehearsal', { source, technical: true, product_sha: productSha, evaluation_sha: git('rev-parse', 'HEAD'), dashboard, api, mirror });
   const session = await startBrowser(record, source.source_id, true);
   const { browser, context, page } = session;
   try {
+    const start = stamp();
+    record('start', { startedAt: start.utc }, start);
     const site = await context.newPage();
     record('action', { name: 'mirror' });
     const entry = await site.goto(mirror + task.path);
@@ -312,12 +364,15 @@ async function rehearse() {
     await page.getByRole('heading', { name: 'Validation passed' }).waitFor();
     await page.getByRole('textbox', { name: 'Approver label' }).fill('M22C technical rehearsal');
     await page.getByRole('checkbox', { name: /confirm approval/ }).check();
+    const stopReference = () => persistStop(directory, record, start, stamp(), 'dashboard_confirmation');
+    if (timing === 'early') stopReference();
     record('action', { name: 'approval' });
     const approval = page.waitForResponse(reply => reply.url().endsWith('/approve'));
     const clock = performance.now();
     await page.getByRole('button', { name: 'Approve version' }).click();
     assert.equal((await approval).status(), 200);
     await page.getByText('Read only', { exact: true }).waitFor();
+    if (timing === 'verified') stopReference();
     record('clock_check', { elapsed_ms: performance.now() - clock });
     const final = await sources('/' + source.source_id + '/versions/' + draft.profile_version_id);
     assert.equal(final.approval_status, 'approved');
@@ -325,9 +380,10 @@ async function rehearse() {
     assert.equal(final.config_hash, report.config_hash);
     assert.equal(final.validation_report_id, report.report_id);
     writeFileSync(resolve(directory, 'artifacts.json'), JSON.stringify({ source, final, report, suggested, denied }, null, 2), { flag: 'wx' });
-    await page.screenshot({ path: resolve(directory, 'approved.png') });
-    await session.drain();
-    record('rehearsal_finished');
+    await captureTerminal(directory, source.source_id, session, record, 'approved.png');
+    const verdict = printResult(directory);
+    assert.equal(verdict.status, timing === 'verified' ? 'completed' : 'failed');
+    record('rehearsal_finished', { adjudication: verdict });
   } catch (error) {
     record('observation_gap', { reason: String(error) });
     throw error;
@@ -336,7 +392,7 @@ async function rehearse() {
   }
 }
 
-const [action, trialId] = process.argv.slice(2);
+const [action, trialId, timing] = process.argv.slice(2);
 mkdirSync(evidence, { recursive: true });
 assert.deepEqual(git('diff', '--name-only', productSha, '--', 'backend', 'frontend', 'compose.yaml', 'compose.fixture.yaml', 'alembic.ini')
   .split('\n').filter(path => path && !path.startsWith('backend/experiments/m22c')), [],
@@ -346,9 +402,11 @@ if (action === 'provision') {
   for (const task of assignments) prepared.push({ trial_id: task.id, source: await getSource(task, true), versions: 0 });
   writeFileSync(resolve(evidence, 'sources.json'), JSON.stringify(prepared, null, 2), { flag: 'wx' });
 } else if (action === 'rehearse') {
-  await rehearse();
+  await rehearse(trialId, timing);
 } else if (action === 'trial') {
   await trial(trialId);
+} else if (action === 'resume') {
+  await resume(trialId);
 } else {
-  throw new Error('Use provision, rehearse, or trial <trial_id>');
+  throw new Error('Use provision, rehearse [reference-name] [verified|early], trial <trial_id>, or resume <trial_id>');
 }
