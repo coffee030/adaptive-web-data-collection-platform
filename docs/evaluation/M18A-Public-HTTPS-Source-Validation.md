@@ -1,5 +1,7 @@
 # M18A public HTTPS source validation handoff
 
+The original run below is preserved. See the [20 November continuation](#continuation-on-20-november-2026-utc) for the current counts and readiness verdict.
+
 **20 November 2026 (UTC). M18A verified a live Record-to-detail-Evidence trace. M18B is not ready.** Economics Observatory passed live Core Preview and Validate for `inflation` and received an approved immutable Profile Version. Two Jobs failed with `timeout`. The third Job finished `partial` at the approved detail-page limit and persisted one accepted Record. The Dashboard, REST API and stored capture bytes agree on its detail Evidence.
 
 | Validated profiles | Fully successful Jobs | Partial Jobs | Failed Jobs |
@@ -133,3 +135,125 @@ From a Normal environment with reliable HTTPS egress, resume at the Resolution F
 If timeouts recur on an otherwise healthy and permitted route, review a generic, bounded public transfer timeout separately. Keep a total attempt deadline and worker hard limit. Expose the effective budget consistently to the Profile UI, REST schema and Worker. A fixture with a delayed first response and a response beyond the proposed cap should demonstrate bounded success and continued fail-closed behavior. This change would increase connection occupancy and could affect retry timing. For ONS, a separate generic operator-configured institutional contact suffix on the User-Agent would address the observed policy gap while retaining the stable robots product token. Verify the header on robots, search and detail requests in a fixture before revisiting the ONS HTML search.
 
 The embedded profile passed Core schema validation and reproduced the approved configuration SHA-256. All seven internal links resolved. Only this handoff is tracked. Source pages, credentials, captures, launcher settings and database state are local.
+
+## Continuation on 20 November 2026 (UTC)
+
+**Ready for M18B.** Three independently operated public HTTPS origins passed live Core Preview and Validate for **UK economic publications** using exactly `inflation`. Their samples address inflation expectations or the effects of inflation on UK public budgets. The earlier Economics Observatory Job still resolves from its accepted Record to the matching article-detail Evidence. The three Profile Versions are approved. Topic creation and binding approvals are pending.
+
+| Independent live-validated publishers | Fully successful Jobs | Partial Jobs | Failed Jobs |
+| ---: | ---: | ---: | ---: |
+| 3 | 0 | 1 | 2 |
+
+Fetched `feature/M18-real-source-validation`. Local and remote heads matched `350f8093750a463a59255b13e429d0249bb6f47b` before this evaluation. `.\Diagnose-Platform.bat -NonInteractive` confirmed the same Windows Normal stack, its loopback frontend and API, and healthy PostgreSQL, Redis, dispatcher and Worker. The existing Drafts and authorised Sources for Resolution Foundation and LSE were present. The FastAPI container runs synchronous Preview and Validate via the Core profile service. The Celery Worker runs Jobs in a separate process and container with the same image and Evidence volume. These continuation timeouts were observed in the API container. The earlier Worker failures remain separate observations. Synthetic Demo remained available.
+
+### Existing drafts and failing stages
+
+All continuation profiles used a two-second DNS-plus-transfer cap per request, a 15-second traversal deadline, at most three outbound requests, one detail, zero redirects, and a 512,000-byte response cap. The minimum interval was two seconds per origin and the Job attempt setting was one. Preview and Validate each performed their own bounded traversal. HTTP elapsed times below include origin pacing and local API overhead.
+
+| UTC start | Publisher and FastAPI call | HTTP and elapsed | Observed stage and outcome |
+| --- | --- | --- | --- |
+| 10:07:13.419 | Resolution Foundation Preview, v1 revision 1 | 200, 8.510 s | Robots, search, detail and extraction completed. One candidate, [What a ratchet!](https://www.resolutionfoundation.org/publications/what-a-ratchet/), title, canonical URL and published time `2026-06-10T06:50:54+01:00`. It examines the effect of price inflation on the UK's State Pension triple lock. |
+| 10:07:14.185 | LSE Business Review Preview, v1 revision 1 | 400, 5.006 s | `timeout`. The API response omits the stage. Detail and extraction success were unverified. |
+| 10:07:23.971 | Resolution Foundation Validate, v1 revision 1 | 200, 4.918 s | `passed=false`, `timeout`, no sample location. The API response omits the stage. No validated field sample. Report `3f287e1d-589c-43d4-b23f-06153e7930d1`. |
+| 10:11:03.948 | Resolution Foundation Preview, v1 revision 2 | 400, 4.930 s | `timeout`. The API response omits the stage. No extraction result and no Validate for revision 2. |
+
+Separate same-runtime diagnostics ran in the FastAPI container with the existing SearchTraversal, robots policy, Redis origin lock, pinned HTTPS transport and the same budgets. Each diagnostic stopped at the first error. These measurements describe the diagnostic calls.
+
+| UTC start | Origin | Robots result | First failure |
+| --- | --- | --- | --- |
+| 10:08:58.579 | Resolution Foundation | HTTP 200, 23 bytes of `text/plain`. DNS 0.129 s, transfer 0.887 s | Root `/?s=inflation` transport timed out. DNS 0.007 s and transfer 1.995 s. Detail and extraction were unreached. |
+| 10:09:03.999 | LSE Blogs | HTTP 404. Core treated robots as absent. DNS 0.065 s, transfer 0.906 s | Canonical `/search/?swps=inflation` transport timed out. DNS 0.003 s and transfer 2.000 s. Detail and extraction were unreached. |
+| 10:08:59.220 | Economics Observatory | DNS 0.064 s, transfer timed out after 1.938 s | Robots transport. Search, detail and extraction were unreached. |
+
+DNS and whole-transfer times were measured in the API container. Connect, TLS and first-byte times were unavailable there. A separate host check for Resolution Foundation's root keyword route returned HTTP 200 with first byte at 2.188 s and total time 2.711 s. The timeouts establish a transport budget failure. There was no publisher denial response on those diagnostic routes.
+
+Resolution Foundation's policy permits electronic access and covered non-commercial reproduction with attribution, with third-party material excluded. The public form submits `s` at `/`. The narrower `/search/?s=inflation` returned HTTP 404. Under current prefix matching, authorising `/` covers the entire origin. Revision 2 keeps the single search page and replaces the detail link selector with `h2.entry-title > a[href^="https://www.resolutionfoundation.org/publications/"]`. This narrows the tested profile's detail selection while the Source permission remains broad. The Foundation draft remains unapproved after the failed Preview. Its v1 ID is `fc8a48b5-9734-46bd-904a-e7aba69ed5c1` and revision 2 hash is `d993a41af07ce8de5dd98823f35eef345ea73ba211285344440a6b2db009245d`. [Resolution Foundation copyright](https://www.resolutionfoundation.org/privacy/copyright/)
+
+The LSE Draft retains the `/search` and `/businessreview` allowlist and direct same-origin `/search/?swps=inflation`. Its selector matches only absolute Business Review anchors in result cards. The LSE Blogs policy licenses covered articles under CC BY 4.0 with title, author, source and licence attribution. The site terms apply to the evaluation and third-party assets have separate terms. The Draft remains v1 revision 1 `00dffb13-7f25-4a9f-b032-46f17671ac15` with hash `22047d9661fdbbe498ef5eaa12fe4e612c9c893b900a614637602c8daea132a7`. [Terms of use](https://blogs.lse.ac.uk/terms-of-use/) · [Republishing policy](https://blogs.lse.ac.uk/republishing-policy/)
+
+### Per-origin continuation verdict
+
+| Origin and publisher | Current evidence | Outcome |
+| --- | --- | --- |
+| `https://www.economicsobservatory.com` · Economics Observatory | Historical live Preview, Validate, approved v1, and one partial Job with an accepted Record and retained detail capture. Host `/search?keyword=inflation` returned HTTP 200. Parsing its HTML with the stored selector gave the first two allowed detail paths in their existing order. The first is the persisted sample. The separate API diagnostic timed out on robots. | **Validated.** Current host result order fits the pinned allowlist. Live API egress was intermittent. |
+| `https://www.resolutionfoundation.org` · Resolution Foundation | One successful live Preview. Validate and revised Preview timed out. A separate API diagnostic timed out on search. | **Preview only.** Immutable approval pending a passing report. |
+| `https://blogs.lse.ac.uk` · LSE Business Review | Live Preview timed out. A separate API diagnostic timed out on search. | **Transport blocked during the continuation.** Draft remains unapproved. |
+| `https://www.gov.wales` · Welsh Government | Published form `/search?globalkeywords=inflation` returned server-rendered results. Wildcard robots disallows `/search/`. The advertised bare `/search` and the detail route passed live under Core. Results also contain HTTP links. The XPath scopes selection to same-origin HTTPS budget statements. [Copyright and OGL conditions](https://www.gov.wales/copyright-statement) | **Validated and approved.** Credit Welsh Government, link the licence and observe exceptions for logos and third-party material. |
+| `https://fiscalcommission.scot` · Scottish Fiscal Commission | Official independent non-ministerial forecaster. The root search form submits `s`, and robots rules restrict calendar routes unrelated to the tested search and detail. The root prefix covers the origin. For this bounded academic evaluation it was explicitly authorised with a single origin, a news-post selector, zero redirects and one detail. Search anchors include publisher tracking parameters and the profile extracts the clean declared canonical URL. [Independence](https://fiscalcommission.scot/about-us/what-we-do/) · [Crown copyright and publication scheme](https://fiscalcommission.scot/our-work/governance/foi-eir-data-protection-publication-scheme-and-privacy-notice/) | **Validated and approved.** Credit the Commission, acknowledge Crown copyright and the OGL, and preserve the publication's meaning. Review the root scope again when binding the profile. |
+| `https://www.parliament.scot` · Scottish Parliament | Advertised `/search?qry=inflation` returned HTTP 200 with SPICe briefing links. Two listed detail routes timed out in six-second host probes with zero bytes. [Reuse terms](https://www.parliament.scot/about/copyright/) | **Screened.** Detail markup could not be confirmed. No Core profile was authorised. |
+| `https://www.ukri.org` · UK Research and Innovation | Root `/?st=inflation` returned mixed grant guidance and corporate reports. The narrower `/search/?st=inflation` returned 404. [Terms of use](https://www.ukri.org/who-we-are/terms-of-use/) | **Screened.** The sample and broad root were less suitable than the qualified substitutes. No Core profile was authorised. |
+
+No additional Economics Observatory Job was needed. The read API verified the original three Job IDs and the accepted Record's detail reference. A read-only Worker `sha256sum` check over both existing `input.bin` captures matched the historical search SHA-256 `f1fee63ce50f43082120c4ae34059fd3baab46c4329cbf2eaa2d1a0abb148d1c` and the detail SHA-256 listed above.
+
+### Shared keyword samples
+
+The Topic is **UK economic publications** and the search entry in all three cases was **`inflation`**. Titles and canonical URLs are the actual Core field values.
+
+| Publisher and approved Profile Version | Sample publication | Why it matches |
+| --- | --- | --- |
+| Economics Observatory · v1 `3d65cca7-9854-4903-a217-d1adb6cd3e97` | [Can higher inflation expectations ever stimulate the economy?](https://www.economicsobservatory.com/can-higher-inflation-expectations-ever-stimulate-the-economy) | Stefano Fasani and Lorenza Rossi examine inflation expectations and monetary policy. This sample is the accepted pilot Record. |
+| Welsh Government · v1 `416c007b-3099-4e97-9f9a-b557f3d89ae3` | [Written Statement: The implications of the UK Autumn Budget](https://www.gov.wales/written-statement-implications-uk-autumn-budget) | Elin Jones explains how inflation reduces the real value of the Welsh block grant. The extracted publication time is `2026-11-05T12:18:07Z`. |
+| Scottish Fiscal Commission · v1 `566c575e-24a8-4258-a9bf-719b472de06e` | [Supply and demand pressures on public funding](https://fiscalcommission.scot/supply-and-demand-pressures-on-public-funding/) | Graeme Roy discusses how higher inflation reduces the spending power of Scottish public budgets. The page's publication metadata is `2022-10-03T14:13:40+00:00`. |
+
+### Approved profiles and reproduction
+
+Use the REST procedure above in isolated Normal mode. Register each Source with its listed origin, permission reference and paths, then authorise it with `PATCH /sources/{source}/authorization`. Create a draft with the JSON embedded as `configuration`. Use `POST /sources/{source}/versions/{version}/preview` and `/validate` with `{"adapter_type":"web","keyword":"inflation"}`. Require one clean publication and a passing report before `POST .../approve` with the matching report ID and hash. Set `min_request_interval_ms=2000` on both Sources. The runs waited two seconds between Preview and Validate.
+
+| Publisher | Source ID and paths | Live Preview and Validate (UTC start) | Approval |
+| --- | --- | --- | --- |
+| Welsh Government | `bdcfcc2a-18b0-478c-a27b-b1eca17625f4`. `/search` and `/written-statement-implications-uk-autumn-budget`. | Preview 10:11:03.943, HTTP 200 in 6.306 s. Validate 10:11:12.268, HTTP 200 in 5.834 s. One valid, zero invalid, zero duplicates. Report `64e5d305-53f9-47ee-ba46-d301ab0ac7a3`, sample SHA-256 `988ba2515255f96c3968b249b4395bd10ddb6ba6e29b89fb9e346e7dd1e39558`. | HTTP 200 at 10:12:06.894, config SHA-256 `493daad685f4f78ba8db86ea4e3c9cc98b2b71d20baa3ee9de070e61a17cd1c0`. |
+| Scottish Fiscal Commission | `5b8c960a-2e19-46ee-9ec3-13bb26705abd`. Root prefix `/`. | Preview 10:14:27.033, HTTP 200 in 8.056 s. Validate 10:14:37.111, HTTP 200 in 7.930 s. One valid, zero invalid, zero duplicates. Report `a56207fb-7531-4af6-8767-b21d34cb8567`, sample SHA-256 `d2d4c07c886f6150574071af31ae722c58ad0ab560c830821f0dd8b6ea069204`. | HTTP 200 at 10:15:12.194, config SHA-256 `807f724c07a69719ddba687fb7964b83348bbc4720ba9accc9ef2f97ee411bd2`. |
+
+Welsh Government configuration
+
+```json
+{
+  "adapter_type": "web", "config_schema_version": "1", "selector_type": "xpath", "item_selector": "//html",
+  "record_schema": {
+    "record_type": "publication", "schema_version": "1", "identity_field": "publication_url",
+    "fields": [{"name":"title"}, {"name":"publication_url"}, {"name":"published_at","required":false}]
+  },
+  "fields": [
+    {"name":"title","selector_type":"css","selector":"h1.page-header__title"},
+    {"name":"publication_url","selector_type":"css","selector":"head link[rel=\"canonical\"]","mode":"attribute","attribute":"href"},
+    {"name":"published_at","selector":"(.//time[@datetime])[1]","mode":"attribute","attribute":"datetime"}
+  ],
+  "search": {
+    "origin": "https://www.gov.wales", "path": "/search", "keyword_parameter": "globalkeywords",
+    "result_item_selector": "//h3/a[starts-with(@href,\"https://www.gov.wales/written-statement-\") and contains(@href,\"budget\")]",
+    "detail_link_selector": "self::a",
+    "max_detail_pages": 1, "max_requests": 3, "max_redirects": 0, "max_body_bytes": 512000,
+    "timeout_seconds": 2, "max_seconds": 15, "max_attempts": 1
+  }
+}
+```
+
+Scottish Fiscal Commission configuration
+
+```json
+{
+  "adapter_type": "web", "config_schema_version": "1", "selector_type": "css", "item_selector": "html",
+  "record_schema": {
+    "record_type": "publication", "schema_version": "1", "identity_field": "publication_url",
+    "fields": [{"name":"title"}, {"name":"publication_url"}, {"name":"published_at","required":false}]
+  },
+  "fields": [
+    {"name":"title","selector":"article.category-news header h2.entry-title"},
+    {"name":"publication_url","selector":"head link[rel=\"canonical\"]","mode":"attribute","attribute":"href"},
+    {"name":"published_at","selector":"head meta[property=\"article:published_time\"]","mode":"attribute","attribute":"content"}
+  ],
+  "search": {
+    "origin": "https://fiscalcommission.scot", "path": "/", "keyword_parameter": "s",
+    "result_item_selector": "article.type-post.category-news",
+    "detail_link_selector": "header h2.entry-title > a[href^=\"https://fiscalcommission.scot/\"]",
+    "max_detail_pages": 1, "max_requests": 3, "max_redirects": 0, "max_body_bytes": 512000,
+    "timeout_seconds": 2, "max_seconds": 15, "max_attempts": 1
+  }
+}
+```
+
+The two search-stage timeouts demonstrate sensitivity to the current transport cap. They did not prevent qualification because independent substitutes passed. There is no shared Core change in this continuation. If latency is revisited separately, measure the delay in the failing runtime first. One reusable proposal for review is a bounded per-request transport budget for new profile versions. Preserve existing approved bytes and defaults, apply the same bound in API Preview, Validate and Worker Jobs, and retain the overall traversal deadline and the 60-second Celery hard limit. A controlled fixture should return one response within the reviewed bound and delay another past it, with tests for success, fail-closed timeout and the overall traversal deadline. The current two-second cap governs this handoff.
+
+The Topic list was empty in this isolated environment. For M18B, create the intended Topic and approve bindings to the three versions above. Recheck Economics Observatory's first two eligible paths and the Welsh Government statement against current result ordering before submitting a Request. The next milestone owns the three formal Jobs, multi-origin Request, export reconciliation and retry comparison. [Topic and binding procedure](../contracts/M8-data-identity-collection-management.md)
+
+All three JSON examples parsed against the deployed Core schema, reproduced their approved configuration SHA-256 values and generated the observed search URLs for `inflation`. The relative links and continuation anchor resolved.
