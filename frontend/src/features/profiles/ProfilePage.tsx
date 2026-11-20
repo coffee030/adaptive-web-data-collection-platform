@@ -14,6 +14,7 @@ import type { Profile } from './api';
 import { compileDraft, draftFrom } from './configuration';
 import { ConfigurationEditor } from './ConfigurationEditor';
 import { ProfileChecks } from './ProfileChecks';
+import { ProfileSuggestion } from './ProfileSuggestion';
 import type { Action } from './ProfileChecks';
 import { ConfigurationSummary } from './ProfileResults';
 import { BackToBindings, OperatorLink, OperatorReturn } from '../operator/navigation';
@@ -271,6 +272,11 @@ function Workspace({ initialSource, initial }: { initialSource: Source; initial?
         {immutable ? <span className="muted timezone">Read only</span>
           : <span className="muted timezone" role="status">{dirty ? 'Unsaved changes' : profile ? 'Saved draft' : 'New draft'}</span>}
       </div>
+      {!profile && source.adapter_type === 'web' && source.approval_status === 'approved' &&
+        <ProfileSuggestion sourceId={id} draft={draft} dirty={dirty} disabled={!!busy || locked}
+          change={(next, unsaved) => {
+            setDraft(next); setDirty(unsaved); setErrors({}); setStatus(''); setFailure('');
+          }} />}
       {immutable ? <ConfigurationSummary configuration={profile.configuration} /> : <form className="profile-body profile-editor" noValidate onSubmit={event => {
         event.preventDefault();
         if (locked || busy) return;
