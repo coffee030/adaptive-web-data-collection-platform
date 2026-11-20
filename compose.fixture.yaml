@@ -22,7 +22,12 @@ services:
   collection-fixture:
     stop_signal: SIGINT
     build: .
-    image: collection-backend:local
+    image: ${COLLECTION_BACKEND_IMAGE:-collection-backend:local}
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "3"
     command: ["python", "-m", "backend.tests.m3_fixture_site"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/robots.txt', timeout=2).close()"]

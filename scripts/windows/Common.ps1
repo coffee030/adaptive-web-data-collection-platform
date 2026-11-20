@@ -137,8 +137,9 @@ function Get-SafeReason($Text) {
         'password authentication failed' { return 'database login rejected' }
         'permission denied|access is denied|unauthorized|forbidden|EACCES|EPERM' { return 'access denied' }
         'address already in use|port is already allocated|EADDRINUSE|failed to bind' { return 'port already allocated' }
-        'all predefined address pools|could not find an available.*address pool' { return 'Docker network address pools exhausted' }
+        'all predefined address pools|could not find an available.*address pool|pool overlaps' { return 'Docker network address pools exhausted' }
         'no space left|ENOSPC' { return 'insufficient disk space' }
+        'out of memory|cannot allocate memory|OOMKilled' { return 'insufficient memory' }
         'no matching manifest|pull access denied|manifest unknown|failed to resolve source metadata' { return 'container image unavailable' }
         'can.t locate revision|target database is not up to date|multiple head revisions' { return 'migration revision mismatch' }
         'EUSAGE|package-lock.json.*in sync' { return 'package manifest and lockfile mismatch' }
@@ -146,6 +147,7 @@ function Get-SafeReason($Text) {
         'certificate|CERT_' { return 'certificate validation problem' }
         'timeout|timed out|ETIMEDOUT|EAI_AGAIN' { return 'timeout' }
         'connection refused|ECONNREFUSED' { return 'connection refused' }
+        'could not resolve|no such host|network is unreachable|ENOTFOUND' { return 'registry or network unavailable' }
         'system cannot find the file specified|cannot connect to the docker daemon|error during connect' { return 'Docker or a required local file is unavailable' }
         default { return 'no recognized details' }
     }

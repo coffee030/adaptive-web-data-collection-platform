@@ -25,8 +25,7 @@ function Assert-OwnedDocker {
 }
 
 function Assert-LauncherPorts {
-    $state = Get-FrontendState
-    Assert-PortAvailable $Config.FRONTEND_PORT 'NET-002' 'Frontend' -Owned:((Test-FrontendProcess $state) -and $state.Port -eq [int]$Config.FRONTEND_PORT)
+    Assert-PortAvailable $Config.FRONTEND_PORT 'NET-002' 'Frontend' -Owned:(Test-BackendPort frontend 8080 $Config.FRONTEND_PORT)
     Assert-PortAvailable $Config.API_PORT 'NET-001' 'API' -Owned:(Test-BackendPort api 8000 $Config.API_PORT)
     Assert-PortAvailable $Config.POSTGRES_PORT 'NET-003' 'PostgreSQL' -Owned:(Test-BackendPort postgres 5432 $Config.POSTGRES_PORT)
     Write-Step '[PASS] Configured ports are available or owned by this launcher.'
@@ -35,9 +34,9 @@ function Assert-LauncherPorts {
 function Start-Platform {
     Write-Step '[1/7] Checking system requirements...'
     $system = Get-SystemFacts
-    if ($system.Build -lt 22000 -or $system.Architecture -notin @('AMD64', 'ARM64')) {
-        Stop-WithError 'ENV-001' 'Windows 11 Is Required' 'This launcher needs 64-bit Windows 11.' 'The OS build or CPU architecture was unsupported.' `
-            @('Use an AMD64 or ARM64 Windows 11 computer.')
+    if ($system.Build -lt 22000 -or $system.Architecture -ne 'AMD64') {
+        Stop-WithError 'ENV-001' 'Windows 11 x64 Is Required' 'This launcher targets Windows 11 on x64.' 'The OS build or CPU architecture was unsupported.' `
+            @('Use a supported Windows 11 x64 computer.')
     }
     Write-Step '[PASS] 64-bit Windows 11 detected.'
     if ($system.FreeGB -lt 1 -or $system.DockerGB -lt 1) {
@@ -47,17 +46,15 @@ function Start-Platform {
     if ($system.FreeGB -lt 5 -or $system.DockerGB -lt 10) {
         Write-Step '[WARN] Free space is limited. Installing packages and Docker images may require more space.'
     }
+    if ($system.RAM -and $system.RAM -lt 7GB) {
+        Write-Step '[WARN] Installed RAM is below the approximately 8 GB target. Builds may fail or run slowly.'
+    }
     $script:WSL = Get-WSLStatus
-    $offlineSetup = $DemoMode -and $Action -eq 'Setup'
-    $node = Initialize-Node -Offline:$offlineSetup
-    if ($Action -eq 'Start') { $script:Docker = Initialize-Docker $system }
+    $script:Docker = Initialize-Docker $system
     Write-Step '[2/7] Checking project dependencies...'
-    $state = Get-FrontendState
-    if ((Test-FrontendProcess $state) -and !(Test-FrontendDependencies $node)) { Stop-OwnedFrontend }
-    Initialize-FrontendDependencies $node -Offline:$offlineSetup
+    if ($DemoMode) { Assert-DemoFixtureFiles }
     Write-Step '[3/7] Loading private local configuration...'
-    $script:Config = Get-LauncherConfig -Create -AutoDemoNetwork:$OneClickDemo
-    if ($Action -eq 'Setup') { $script:Docker = Initialize-Docker $system -Offline:$offlineSetup }
+    $script:Config = Get-LauncherConfig -Create -AutoDemoNetwork:$DemoMode
     $compose = Invoke-Compose @('config', '--quiet')
     if ($compose.Code -ne 0) {
         Stop-WithError 'CFG-004' 'Compose Configuration Failed Validation' 'Docker Compose rejected the local configuration.' `
@@ -65,18 +62,15 @@ function Start-Platform {
     }
     Assert-OwnedDocker
     if ($Action -eq 'Setup') {
-        if ($DemoMode) {
-            Assert-LauncherPorts
-            Assert-DemoFixtureFiles
-        }
         Write-Step '[PASS] Compose configuration and resource ownership verified.'
-        $command = if ($DemoMode) { 'Start-Platform.bat -Demo' } else { 'Start-Platform.bat' }
+        $command = if ($DemoMode) { 'Start-FYP-Demo.bat' } else { 'Start-Platform.bat' }
         Write-Step "[SUCCESS] Setup checks passed. Run $command to launch the application."
         return
     }
-    if ($DemoMode) { Assert-DemoFixtureFiles }
+    Stop-OwnedFrontend
     Assert-LauncherPorts
-    Update-BackendImage
+    Update-PlatformImage api
+    Update-PlatformImage frontend
     Write-Step '[4/7] Starting PostgreSQL and Redis...'
     Start-StorageServices
     Write-Step '[5/7] Checking migrations and starting API, dispatcher, and worker...'
@@ -85,18 +79,13 @@ function Start-Platform {
     Stop-DisabledFixture
     if ($DemoMode) { Invoke-DemoProvisioning }
     Write-Step '[6/7] Starting the React frontend...'
-    $started = Start-Frontend $node
+    Start-ContainerFrontend
     Write-Step '[7/7] Preparing the browser...'
     $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)/"
-    if (!$NoBrowser -and $OneClickDemo) {
-        Write-Step "URL: $url"
-        Open-PlatformBrowser $url -Required
-    }
-    elseif (!$NoBrowser -and $started) { Open-PlatformBrowser $url }
-    elseif (!$started) { Write-Step '[INFO] Frontend already running. Use the existing browser tab or the URL below.' }
+    Write-Step "URL: $url"
+    if (!$NoBrowser) { Open-PlatformBrowser $url }
     if ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
     else { Write-Step '[SUCCESS] Platform is ready!' }
-    if (!$OneClickDemo -or $NoBrowser) { Write-Step "URL: $url" }
 }
 
 function Stop-Platform {
@@ -130,15 +119,13 @@ function Stop-Platform {
         Stop-WithError 'STOP-003' 'Backend Stopped but Frontend Is Still Running' 'Docker services have stopped and the frontend shutdown could not be verified.' `
             'See the frontend shutdown error above.' @('Close the platform tab and retry Stop-Platform.bat.') 'Graceful shutdown attempted.'
     }
-    Write-Step '[SUCCESS] Launcher services stopped. PostgreSQL, Redis, and Evidence volumes were kept.'
+    Write-Step '[SUCCESS] Launcher services stopped. All data volumes were kept.'
 }
 
 function Invoke-Diagnosis {
     $null = Get-SystemFacts
     $null = Get-WSLStatus
-    $node = Get-NodeTools
-    Write-Step "[INFO] Node.js: $($node.State) $($node.Version); npm: $($node.NpmVersion)."
-    if ($node.State -eq 'healthy') { Write-Step "[INFO] Frontend dependencies verified: $(Test-FrontendDependencies $node)." }
+    Write-Step '[INFO] The frontend runs in Docker. Host Node.js and npm are optional developer tools.'
     $script:Docker = Get-DockerTools
     Write-Step "[INFO] Docker Desktop executable found: $([bool]$Docker.Desktop); Docker CLI found: $([bool]$Docker.CLI)."
     $engine = Get-LinuxEngine $Docker
@@ -153,13 +140,14 @@ function Invoke-Diagnosis {
         Write-Step "[INFO] Launcher settings valid. API port $($Config.API_PORT), frontend port $($Config.FRONTEND_PORT), PostgreSQL port $($Config.POSTGRES_PORT)."
         if ($DemoMode) { Write-Step "URL: http://127.0.0.1:$($Config.FRONTEND_PORT)/" }
         $state = Get-FrontendState
-        Write-Step "[INFO] Launcher frontend process verified: $(Test-FrontendProcess $state)."
+        Write-Step "[INFO] Previous host frontend detected: $(Test-FrontendProcess $state)."
         if (Test-LinuxEngine $engine) {
             if (Confirm-DockerOwnership) {
-                $services = @('postgres', 'redis', 'api', 'dispatcher', 'worker')
+                $services = @('postgres', 'redis', 'api', 'dispatcher', 'worker', 'frontend')
                 if ($Config.LAUNCHER_FIXTURE -eq '1') { $services += 'collection-fixture' }
                 foreach ($service in $services) { $null = Write-ServiceDiagnosis $service }
                 Write-Step "[INFO] API health: $(Test-ApiHealth "http://127.0.0.1:$($Config.API_PORT)/api/v1/health")."
+                Write-Step "[INFO] Frontend proxy health: $(Test-ApiHealth "http://127.0.0.1:$($Config.FRONTEND_PORT)/api/v1/health")."
                 if ($DemoMode) { Write-DemoDiagnosis }
             } else { Write-Step '[WARN] Docker project ownership could not be verified.' }
         }

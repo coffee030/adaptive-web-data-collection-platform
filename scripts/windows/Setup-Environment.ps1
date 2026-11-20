@@ -57,14 +57,13 @@ function Get-LinuxEngine($Docker) {
 function Test-LinuxEngine($Result) { return $Result.Code -eq 0 -and $Result.Out -ceq 'linux' }
 
 function Install-DockerDesktop($System) {
-    if ($System.Build -lt 22631 -or $System.Architecture -notin @('AMD64', 'ARM64') -or
+    if ($System.Build -lt 22631 -or $System.Architecture -ne 'AMD64' -or
         ($System.RAM -and $System.RAM -lt 7GB)) {
         Stop-WithError 'ENV-005' 'Docker Desktop Requirements Are Unmet' 'The computer did not pass Docker Desktop installation checks.' `
             'Docker Desktop requires a supported Windows release, 64-bit CPU, and about 8 GB RAM.' `
             @('Check the current requirements at https://docs.docker.com/desktop/setup/install/windows-install/.')
     }
-    $architecture = if ($System.Architecture -eq 'AMD64') { 'amd64' } else { 'arm64' }
-    $uri = "https://desktop.docker.com/win/main/$architecture/Docker%20Desktop%20Installer.exe"
+    $uri = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
     if (!(Confirm-Change 'Docker Desktop is missing. Download the signed installer from Docker and install for this user using WSL 2? Read and accept Docker terms in Docker Desktop when it opens. Windows may ask for permissions.')) {
         Stop-WithError 'ENV-005' 'Docker Desktop Is Missing' 'Start requires Docker Desktop and its Linux Engine.' 'Installation approval was unavailable or declined.' `
             @('Run Setup-Platform.bat and approve the install, or install Docker Desktop from the official Docker website.')
@@ -93,7 +92,7 @@ function Install-DockerDesktop($System) {
     finally { [IO.File]::Delete($installer) }
 }
 
-function Initialize-Docker($System, [switch]$Offline) {
+function Initialize-Docker($System) {
     $docker = Get-DockerTools
     $engine = Get-LinuxEngine $docker
     if (!(Test-LinuxEngine $engine)) {
@@ -105,7 +104,7 @@ function Initialize-Docker($System, [switch]$Offline) {
         if (!$script:WSL.Available -and $engine.Reason -ne 'access denied') {
             $flag = if ($script:WSL.Outdated) { '--update' } else { '--install' }
             $arguments = if ($flag -eq '--install') { @($flag, '--no-distribution') } else { @($flag) }
-            if (!$Offline -and (Confirm-Change "WSL 2 could not be verified. Run wsl $($arguments -join ' ') with administrator approval? Windows may request a restart.")) {
+            if ((Confirm-Change "WSL 2 could not be verified. Run wsl $($arguments -join ' ') with administrator approval? Windows may request a restart.")) {
                 Write-Step "[INFO] Requesting Windows approval for wsl $flag."
                 try {
                     $wslSetup = Start-Process -FilePath $script:WSL.File -ArgumentList $arguments -Verb RunAs -PassThru
@@ -118,14 +117,10 @@ function Initialize-Docker($System, [switch]$Offline) {
             if (!$script:WSL.Available) {
                 Stop-WithError 'ENV-004' 'WSL 2 Is Unavailable' 'The WSL checks did not verify a working WSL installation.' `
                     'WSL may be outdated or the Virtual Machine Platform feature may need enabling or a restart.' `
-                    @('Follow https://learn.microsoft.com/windows/wsl/install.', 'Complete any Windows restart, then run Setup-Platform.bat again.')
+                    @('Approve WSL installation when prompted, or follow https://learn.microsoft.com/windows/wsl/install.', 'After any required restart, double-click the same launcher again.')
             }
         }
         if (!$docker.Desktop -and !$docker.CLI) {
-            if ($Offline) {
-                Stop-WithError 'ENV-005' 'Docker Desktop Is Missing' 'Offline Demo setup requires an installed Docker Desktop.' `
-                    'The local Desktop executable and CLI were unavailable.' @('Install Docker Desktop with the WSL 2 backend and rerun Demo setup.')
-            }
             Install-DockerDesktop $System
             $docker = Get-DockerTools
         }
@@ -166,95 +161,4 @@ function Initialize-Docker($System, [switch]$Offline) {
     }
     Write-Step "[PASS] Docker Linux Engine and Compose $($compose.Out) are available."
     return $docker
-}
-
-function Get-NodeTools {
-    $paths = @((Join-Path $env:ProgramFiles 'nodejs/node.exe'), (Join-Path $env:LOCALAPPDATA 'Programs/nodejs/node.exe'))
-    $node = Find-Application 'node.exe' $paths
-    if (!$node) { return @{ State = 'missing' } }
-    $result = Invoke-Tool $node @('--version') 8 -Environment @{ NODE_OPTIONS = $null; NODE_PATH = $null }
-    $version = [regex]::Match($result.Out, '^v(?<version>\d+\.\d+\.\d+)$').Groups['version'].Value
-    if ($result.Code -ne 0 -or !$version) { return @{ State = 'unusable'; Node = $node } }
-    $parsed = [version]$version
-    # The root manifest is less restrictive than locked Playwright and React plugin versions.
-    if (!(($parsed.Major -eq 22 -and $parsed.Minor -ge 13) -or $parsed -ge [version]'23.5.0')) {
-        return @{ State = 'incompatible'; Node = $node; Version = $version }
-    }
-    $npm = Join-Path (Split-Path $node) 'npm.cmd'
-    $cli = Join-Path (Split-Path $node) 'node_modules/npm/bin/npm-cli.js'
-    if (!(Test-Path -LiteralPath $npm) -or !(Test-Path -LiteralPath $cli)) { return @{ State = 'npm unavailable'; Node = $node; Version = $version } }
-    $tools = @{ State = 'healthy'; Node = $node; Npm = $npm; Version = $version }
-    $npmVersion = Invoke-Npm $tools @('--version') 10
-    if ($npmVersion.Code -ne 0 -or $npmVersion.Out -notmatch '^\d+\.\d+\.\d+') { $tools.State = 'npm unusable' }
-    else { $tools.NpmVersion = $npmVersion.Out }
-    return $tools
-}
-
-function Invoke-Npm($Node, [string[]]$Arguments, $Seconds) {
-    # Use npm.cmd with fixed launcher arguments. CMD expands the quoted executable path once.
-    $processEnv = @{ LAUNCHER_NPM_COMMAND = $Node.Npm; NODE_OPTIONS = $null; NODE_PATH = $null
-        NPM_CONFIG_PRODUCTION = $null; NPM_CONFIG_OMIT = $null; NPM_CONFIG_INCLUDE = $null; NODE_ENV = $null }
-    $file = Join-Path $env:SystemRoot 'System32/cmd.exe'
-    $native = @('/d', '/v:off', '/c', '%LAUNCHER_NPM_COMMAND%') + $Arguments
-    return Invoke-Tool $file $native $Seconds $Frontend -Environment $processEnv
-}
-
-function Initialize-Node([switch]$Offline) {
-    $node = Get-NodeTools
-    if ($node.State -ne 'healthy') {
-        Write-Step "[INFO] Node.js status: $($node.State) $($node.Version)."
-        $id = 'OpenJS.NodeJS.22'
-        $winget = Find-Application 'winget.exe' @((Join-Path $env:LOCALAPPDATA 'Microsoft/WindowsApps/winget.exe'))
-        $available = $null
-        if ($winget -and !$Offline) {
-            $query = Invoke-Tool $winget @('show', '--id', $id, '--exact', '--source', 'winget', '--versions', '--disable-interactivity') 35
-            $versions = [regex]::Matches($query.Out, '(?m)^\s*(22\.\d+\.\d+)\s*$')
-            $available = $versions | ForEach-Object { [version]$_.Groups[1].Value } |
-                Where-Object { $_ -ge [version]'22.13.0' } | Sort-Object -Descending | Select-Object -First 1
-        }
-        $recovery = 'Not attempted. No approved compatible installer was available.'
-        if ($available -and (Confirm-Change "Install Node.js $available with npm from the verified Windows Package Manager source? The Node.js installer may ask for administrator permissions.")) {
-            Write-Step "[INFO] Starting WinGet for Node.js $available. Review the package and any installer prompts."
-            $installed = Invoke-Tool $winget @('install', '--id', $id, '--exact', '--version', "$available", '--source', 'winget', '--interactive') 900 -Interactive
-            Write-LauncherLog INFO "WinGet exit: $($installed.Code)."
-            $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-            $env:Path = "$machinePath;$userPath;$env:Path"
-            $node = Get-NodeTools
-            $recovery = "WinGet installation attempted. Installer exit: $($installed.Code)."
-        }
-        if ($node.State -ne 'healthy') {
-            Stop-WithError 'ENV-009' 'A Compatible Node.js and npm Are Required' 'The frontend dependency check could not verify Node.js and npm.' `
-                "Node.js status: $($node.State). WinGet may be unavailable or installation may require approval." `
-                @('Install a compatible Node.js 22 release from https://nodejs.org/en/download and include npm.', 'Close and reopen Start-Platform.bat.') $recovery
-        }
-    }
-    Write-Step "[PASS] Node.js $($node.Version) and npm $($node.NpmVersion) verified."
-    return $node
-}
-
-function Test-FrontendDependencies($Node) {
-    if (!(Test-Path -LiteralPath (Join-Path $Frontend 'node_modules/.package-lock.json'))) { return $false }
-    $check = Invoke-Tool $Node.Node @((Join-Path $PSScriptRoot 'check-dependencies.cjs')) 20 $Frontend -Environment @{ NODE_OPTIONS = $null; NODE_PATH = $null }
-    Write-LauncherLog INFO "Frontend locked dependency check exit: $($check.Code)."
-    return $check.Code -eq 0
-}
-
-function Initialize-FrontendDependencies($Node, [switch]$Offline) {
-    if (!(Test-FrontendDependencies $Node)) {
-        Write-Step '[INFO] Installing frontend dependencies from package-lock.json. This can take a few minutes.'
-        $installArgs = @('ci', '--include=dev', '--include=optional', '--no-audit', '--no-fund', '--fetch-retries=1')
-        if ($Offline) { $installArgs += @('--offline', '--ignore-scripts') }
-        $installed = Invoke-Npm $Node $installArgs 600
-        Write-LauncherLog INFO "npm ci exit: $($installed.Code); details: $($installed.Reason)."
-        if ($installed.Code -ne 0 -or !(Test-FrontendDependencies $Node)) {
-            if ($Offline) {
-                Stop-WithError 'WEB-001' 'Offline Demo Dependencies Are Unavailable' 'The locked frontend dependencies were unavailable in the local npm cache.' `
-                    $installed.Reason @('Run npm ci in frontend with package registry access, then rerun Demo setup.')
-            }
-            Stop-WithError 'WEB-001' 'Frontend Dependency Installation Failed' 'The locked npm packages could not be installed and verified.' `
-                $installed.Reason @('Check network access to the package registry and available disk space.', 'Check that package.json and package-lock.json match this checkout.', 'Run Setup-Platform.bat again.') 'Attempted with npm ci.'
-        }
-    }
-    Write-Step '[PASS] Frontend dependencies match the lockfile.'
 }

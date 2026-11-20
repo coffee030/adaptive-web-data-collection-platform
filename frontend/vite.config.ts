@@ -46,10 +46,13 @@ function approvalBoundary(enabled: boolean): Plugin {
 export default defineConfig(({ mode, command, isPreview }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const target = env.API_PROXY_TARGET || 'http://127.0.0.1:8000';
+  // The container enforces the local approval boundary at its reverse proxy.
+  const containerApproval = command === 'build' && env.PLATFORM_CONTAINER_FRONTEND === '1'
+    && env.LOCAL_PROFILE_APPROVAL === '1';
   const localApproval = command === 'serve' && !isPreview && env.LOCAL_PROFILE_APPROVAL === '1'
     && /^http:\/\/127\.0\.0\.1:[0-9]+$/.test(target)
     && (!env.VITE_API_BASE_URL || env.VITE_API_BASE_URL === '/api/v1');
-  const syntheticDemo = localApproval && env.PLATFORM_SYNTHETIC_DEMO === '1';
+  const syntheticDemo = (localApproval || containerApproval) && env.PLATFORM_SYNTHETIC_DEMO === '1';
   const apiProxy = {
     '/api/v1': {
       target,
@@ -61,7 +64,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
   return {
     plugins: [react(), approvalBoundary(localApproval)],
     define: {
-      __LOCAL_PROFILE_APPROVAL__: JSON.stringify(localApproval),
+      __LOCAL_PROFILE_APPROVAL__: JSON.stringify(localApproval || containerApproval),
       __PLATFORM_SYNTHETIC_DEMO__: JSON.stringify(syntheticDemo),
     },
     cacheDir: syntheticDemo ? '../.local-demo/vite' : undefined,

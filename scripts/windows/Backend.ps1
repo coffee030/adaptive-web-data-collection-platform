@@ -170,37 +170,51 @@ function Start-StorageServices {
     Write-Step '[PASS] Redis returned PONG.'
 }
 
-function Get-BackendFingerprint {
-    $files = @(Get-Item -LiteralPath @((Join-Path $Root 'Dockerfile'), (Join-Path $Root 'alembic.ini'), (Join-Path $Root '.dockerignore')))
-    $files += @(Get-ChildItem -LiteralPath (Join-Path $Root 'backend') -File -Recurse |
-        Where-Object { $_.FullName -notmatch '[\\/]__pycache__[\\/]' -and $_.Extension -notin @('.pyc', '.pyo') } | Sort-Object FullName)
+function Get-ImageFingerprint([ValidateSet('api', 'frontend')][string]$Service) {
+    $settings = ''
+    if ($Service -eq 'api') {
+        $files = @(Get-Item -LiteralPath @((Join-Path $Root 'Dockerfile'), (Join-Path $Root 'alembic.ini'), (Join-Path $Root '.dockerignore')))
+        $files += @(Get-ChildItem -LiteralPath (Join-Path $Root 'backend') -File -Recurse |
+            Where-Object { $_.FullName -notmatch '[\\/](?:__pycache__|\.pytest_cache|\.ruff_cache)[\\/]' -and $_.Extension -notin @('.pyc', '.pyo') })
+    } else {
+        $files = @(Get-ChildItem -LiteralPath $Frontend -File -Force |
+            Where-Object { $_.Name -match '^(Dockerfile|\.dockerignore|package(-lock)?\.json|index\.html|vite\.config\.ts|tsconfig.*\.json|nginx\.conf\.template)$' })
+        foreach ($directory in @('src', 'public')) {
+            $path = Join-Path $Frontend $directory
+            if (Test-Path -LiteralPath $path) { $files += @(Get-ChildItem -LiteralPath $path -File -Recurse) }
+        }
+        $settings = "approval=$($Config.LOCAL_PROFILE_APPROVAL); demo=$DemoMode"
+    }
     $hash = [Security.Cryptography.SHA256]::Create()
     try {
-        $entries = foreach ($file in $files) {
+        $entries = foreach ($file in ($files | Sort-Object FullName)) {
             $stream = [IO.File]::OpenRead($file.FullName)
             try { $file.FullName.Substring($Root.Length) + '=' + [BitConverter]::ToString($hash.ComputeHash($stream)) }
             finally { $stream.Dispose() }
         }
-        return [BitConverter]::ToString($hash.ComputeHash($Utf8.GetBytes($entries -join "`n")))
+        return [BitConverter]::ToString($hash.ComputeHash($Utf8.GetBytes((@($settings) + $entries) -join "`n")))
     }
     finally { $hash.Dispose() }
 }
 
-function Update-BackendImage {
-    $stamp = Join-Path $Local 'backend-image.txt'
-    $fingerprint = Get-BackendFingerprint
-    $imageName = "$($Config.COMPOSE_PROJECT_NAME)-backend:local"
+function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, [switch]$NoCache) {
+    $kind = if ($Service -eq 'api') { 'backend' } else { 'frontend' }
+    $stamp = Join-Path $Local "$kind-image.txt"
+    $fingerprint = Get-ImageFingerprint $Service
+    $imageName = "$($Config.COMPOSE_PROJECT_NAME)-${kind}:local"
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
-    if ($image.Code -eq 0 -and (Test-Path -LiteralPath $stamp) -and
+    if (!$NoCache -and $image.Code -eq 0 -and (Test-Path -LiteralPath $stamp) -and
         [IO.File]::ReadAllText($stamp) -ceq "$fingerprint $($image.Out)") {
-        Write-Step '[PASS] Reusing the verified backend image.'
+        Write-Step "[PASS] Reusing the verified $kind image."
         return
     }
-    Write-Step '[INFO] Building the backend image for this checkout. The first build can take several minutes.'
-    $built = Invoke-Compose @('build', 'api') 900
+    Write-Step "[INFO] Building the $kind image for this checkout. The first build downloads packages and may take several minutes."
+    $arguments = @('build')
+    if ($NoCache) { $arguments += '--no-cache' }
+    $built = Invoke-Compose ($arguments + $Service) 1200
     if ($built.Code -ne 0) {
-        Stop-WithError 'SVC-001' 'Backend Image Build Failed' 'Docker could not build the backend image.' $built.Reason `
-            @('Check access to Docker Hub and the Python package index.', 'Check free disk space and Docker Desktop.', 'Run Diagnose-Platform.bat, then try again.')
+        Stop-WithError 'SVC-001' 'Container Image Build Failed' "Docker could not build the $kind image." $built.Reason `
+            @('Check internet access to Docker Hub and the package registries.', 'Check free disk space and Docker Desktop.', 'Run Diagnose-Platform.bat, then try again.')
     }
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
     if ($image.Code -eq 0) { Write-AtomicFile $stamp "$fingerprint $($image.Out)" }
@@ -210,7 +224,7 @@ function Update-DatabaseSchema {
     $alembic = @('run', '--rm', '-T', '--no-deps', 'api', 'python', '-m', 'alembic')
     $head = Invoke-Compose ($alembic + @('current', '--check-heads')) 60
     if ($head.Code -ne 0) {
-        $migration = Invoke-Compose @('stop', 'dispatcher', 'worker', 'api') 160
+        $migration = Invoke-Compose @('stop', 'frontend', 'dispatcher', 'worker', 'api') 160
         if ($migration.Code -eq 0) {
             $migration = Invoke-Compose ($alembic + @('upgrade', 'head')) 120
         }
