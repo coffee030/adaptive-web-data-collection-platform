@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 .env
+/.codex/config.toml
 /.local/
 /.local-demo/
 /logs/launcher/
