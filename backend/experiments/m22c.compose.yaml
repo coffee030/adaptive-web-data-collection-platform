@@ -1,0 +1,39 @@
+# Use with compose.yaml and compose.fixture.yaml in a dedicated project.
+services:
+  api:
+    image: ${M22C_BACKEND_IMAGE:-collection-backend:m21c-f0ba4a3}
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+  worker:
+    image: ${M22C_BACKEND_IMAGE:-collection-backend:m21c-f0ba4a3}
+    volumes:
+      - ./backend:/app/backend:ro
+  dispatcher:
+    image: ${M22C_BACKEND_IMAGE:-collection-backend:m21c-f0ba4a3}
+    volumes:
+      - ./backend:/app/backend:ro
+  collection-fixture:
+    image: ${M22C_BACKEND_IMAGE:-collection-backend:m21c-f0ba4a3}
+    command: ["python", "-m", "backend.experiments.m22c_fixture", "internal"]
+    volumes:
+      - ./backend:/app/backend:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8001/robots.txt',headers={'User-Agent':'M22C-Compose-Health/1.0'}),timeout=2).close()"]
+  browser-mirror:
+    image: ${M22C_BACKEND_IMAGE:-collection-backend:m21c-f0ba4a3}
+    command: ["python", "-m", "backend.experiments.m22c_fixture", "mirror"]
+    stop_signal: SIGINT
+    ports:
+      - "127.0.0.1:${M22C_MIRROR_PORT:-58197}:8001"
+    volumes:
+      - ./backend:/app/backend:ro
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${M22C_API_SUBNET:-10.251.90.0/24}
+  fixtures:
+    ipam:
+      config:
+        - subnet: ${M22C_FIXTURE_SUBNET:-10.251.91.0/24}
