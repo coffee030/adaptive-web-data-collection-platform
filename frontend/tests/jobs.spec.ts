@@ -611,7 +611,8 @@ test('a narrow touch viewport opens the Job and its related Record without horiz
 test('Chrome native 200 percent zoom keeps Jobs and diagnostics usable', async ({ baseURL, browserName }) => {
   test.skip(browserName !== 'chromium', 'Uses the native Chromium Appearance settings.');
   const context = await chromium.launchPersistentContext('', {
-    channel: process.env.PLAYWRIGHT_CHANNEL, baseURL, viewport: { width: 1440, height: 900 },
+    // The Chromium Headless Shell does not include chrome://settings.
+    channel: process.env.PLAYWRIGHT_CHANNEL || 'chromium', baseURL, viewport: { width: 1440, height: 900 },
   });
   try {
     const page = context.pages()[0]!;
