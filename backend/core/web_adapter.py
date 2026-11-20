@@ -3,7 +3,7 @@
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from email.message import Message
 from email.utils import parsedate_to_datetime
@@ -318,20 +318,36 @@ def _robots_policy(origin: str) -> RobotFileParser:
     return robots
 
 
+@dataclass(frozen=True)
+class RequestLimits:
+    max_requests: int
+    max_redirects: int
+    max_body_bytes: int
+    timeout_seconds: int
+    max_seconds: int
+    min_interval_ms: int = 0
+
+
 class SearchRequests:
     def __init__(
         self,
         source: Source,
-        config: KeywordSearch,
+        config: KeywordSearch | RequestLimits,
         rate: OriginRate,
         check_access: Callable[[], object],
+        *,
+        observe: Callable[[bool, str], None] | None = None,
     ):
         self.config = config
         self.rate = rate
         self.check_access = check_access
         self.deadline = monotonic() + config.max_seconds
         self.remaining = config.max_requests
-        self.interval_ms = source.min_request_interval_ms
+        self.interval_ms = max(
+            source.min_request_interval_ms,
+            config.min_interval_ms if isinstance(config, RequestLimits) else 0,
+        )
+        self.observe = observe
         self.policy: RobotsPolicy | None = None
 
     def robots(self, origin: str) -> RobotsPolicy:
@@ -349,6 +365,8 @@ class SearchRequests:
                 "Collection exhausted its approved request budget",
             )
         self.remaining -= 1
+        if self.observe is not None:
+            self.observe(robots, "reserved_unsent")
         if monotonic() >= self.deadline:
             raise InputError(
                 "collection_deadline", "Collection exhausted its approved time budget"
@@ -363,9 +381,12 @@ class SearchRequests:
                     addresses = resolve_public(
                         urlsplit(origin).netloc, self._time_left(deadline)
                     )
+                timeout = self._time_left(deadline)
+                if self.observe is not None:
+                    self.observe(robots, "transport_attempt")
                 document, location, challenge = _get(
                     url,
-                    timeout=self._time_left(deadline),
+                    timeout=timeout,
                     max_body=self.config.max_body_bytes,
                     addresses=addresses,
                 )
