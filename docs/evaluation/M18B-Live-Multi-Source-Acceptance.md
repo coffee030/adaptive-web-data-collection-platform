@@ -1,6 +1,6 @@
 # M18B live multi-source acceptance
 
-**Current verdict: PARTIAL.** Two of three independent publishers have verified successful Worker Jobs. The CSV reconciliation fix passed. [Closure evaluation on 20 November 2026](#closure-on-20-november-2026-utc)
+**The opt-in timeout contract and live M18B acceptance both PASS.** All three independent publishers have verified successful Worker Jobs. [Timeout validation and final acceptance](#timeout-validation-and-final-acceptance-on-20-november-2026-utc)
 
 Evaluation on **20 November 2026 (UTC)** from reviewed baseline `7b16e1a80b136067bf8e8897fb96617900009274`. **Overall PARTIAL.** Two of three real publishers met the full Worker success gate. The shared-topic MCP Request, Dashboard exports and controlled Worker retry comparison passed.
 
@@ -180,3 +180,93 @@ Replayed all five saved Dashboard download pairs with `python -m backend.experim
 1. Run the Normal launcher diagnostic and confirm the approved Topic binding and evidence mount. After a measured change in search availability, repeat the one bounded Core preflight from the Worker and require one eligible link and successful detail extraction. A passing robots check alone only verifies robots.
 2. When that preflight passes, use the Normal MCP stdio procedure above with the same keyword and single binding. Save the prepared key before `start_collection` and poll to a terminal state. Require `succeeded` with an accepted publication. Read the exact Request, Job, Record and detail Evidence through the Dashboard and API, independently rehash the original bytes in the Worker, then download both Request exports and run the corrected verifier.
 3. To reproduce the CSV correction independently, run the focused test and existing export suite with the disposable PostgreSQL and Redis setup above. Replay the five original download pairs with their Request IDs and API ports.
+
+## Timeout validation and final acceptance on 20 November 2026 (UTC)
+
+| Acceptance claim | Verdict | Verified result |
+| --- | --- | --- |
+| Optional per-request timeout and backward compatibility | **PASS** | Saved drafts accept 1–5 whole seconds. The two-second default and the approved v1 snapshot and hash are reproducible. The controlled HTTPS transfer and clock tests passed. |
+| Three independent publishers with successful Worker Jobs and verified detail Evidence | **PASS** | The new Economics Observatory v3 Worker Job succeeded, published an accepted Record with independently verified detail bytes, and had both Dashboard exports reconciled. |
+| Shared-topic MCP Request with Records from two real origins | **PASS** | The original MCP Request remains partial and retained one Record from each origin. |
+| Dashboard access and scoped CSV/JSON reconciliation | **PASS** | The original paired Requests and the new single-source Request each reconciled against their own paginated REST records. |
+| Comparable Worker retries through Dashboard and MCP | **PASS** | The prior controlled runs each succeeded on attempt 2 with verified output. |
+| CSV reconciliation correction | **PASS** | The independent correction above remains in use for the new comparison. |
+
+### Controlled timeout checks and rollout
+
+The reviewed starting commit was `4157f88453b5e6f0f30b6abc27773481bbef83a7`. Contract and tests are in `35b711e2f86d9b9a56f621de0c20b7c4e4101407`. The existing `KeywordSearch.timeout_seconds` applies to new drafts through the REST schema and **Pagination and request limits** in the Profile Draft editor. The approved Profile summary continues to show the effective value. There is no environment-wide override. [M7 contract](../contracts/M7-controlled-website-collection.md) · [Timeout tests](../../backend/tests/m1/test_m7_timeout.py)
+
+Preview, Validate and Worker use the same Core traversal. Redis origin pacing and lock waits consume the traversal allowance. After the slot and access check, Core caps the individual deadline at the remaining traversal time. DNS uses part of that deadline and libcurl receives the remainder. The installed `curl_cffi` 0.17.0 sets `CURLOPT_TIMEOUT_MS` for the non-streaming scalar timeout, covering the entire transfer, including the response body. The Dashboard's keyword Preview and Validate clients each allow 50 seconds. MCP submits asynchronously and polls status. A larger transfer allowance can occupy an origin slot and Worker longer. The 60-second Celery hard limit and 90-second PostgreSQL lease remain in force.
+
+| Controlled HTTPS fixture | Configured cap | Actual result and elapsed time |
+| --- | ---: | --- |
+| Body delayed by 3 seconds after HTTP headers | 2 s | Core `timeout` in 2.002 s |
+| Same delay | 5 s | HTTP 200 and complete body in 3.005 s |
+| Body delayed by 6 seconds after HTTP headers | 5 s | Core `timeout` in 5.002 s |
+
+The isolated TLS fixture substituted its local address, port and test CA. It used `SearchRequests` and the real curl transfer path. The clock tests gave DNS 5.000 s and left transfer 3.750 s after 1.250 s of DNS. With only 2.000 s of traversal remaining after pacing, the same DNS time left 0.750 s for transfer. An exhausted deadline prevented the next network stage. Tests accepted 5, rejected 6, rejected non-integers, and matched the saved baseline search fixture hash for both omitted and explicit two-second values. Automated tests used local fixtures only.
+
+Ran `python -m pytest -q -rs -s --tb=short -p no:cacheprovider backend/tests/m1/test_m7_timeout.py backend/tests/m1/test_m7_search.py backend/tests/m1/test_m1_profiles.py backend/tests/m2/test_profiles_api.py backend/tests/m2/test_profiles_storage.py backend/tests/m2/test_m7_results.py backend/tests/m2/test_m3_retry.py` in the disposable internal PostgreSQL 17 and Redis 7.4 Compose environment. **122 passed in 60.81 seconds.** The frontend `npm run build` passed, followed by **20 passed** for `npm test -- tests/profiles.spec.ts` using Chrome. The draft test verified keyboard selection, the integer submitted on save, and persistence on reload. The deployed immutable v1 and v2 summaries showed two and five seconds at 1440 px and 390 px.
+
+Before rollout, verified restricted local backups of launcher settings, PostgreSQL and Evidence. Ran the Windows Normal Stop, Setup, Start and Diagnose commands. The API, dispatcher and Worker moved from the prior image in the closure section to `sha256:5613917f3933ab0d2ac64a2eb2f3bc357acccfd7604cfe63c3ab17fbdf69bf00`. The Dashboard was at `http://127.0.0.1:5197/` and REST and MCP used `http://127.0.0.1:58097/api/v1`. Both deployed API and Worker copies of `contracts.py` matched the checked-out file hash and reported a maximum of five and default of two. Live OpenAPI showed the same bounds. The approved Economics Observatory v1 REST snapshot matched before and after, and its historical M18A detail digest still verified from `adaptive-web-core-local-61e8e50ea0c3_evidence_data`.
+
+### Economics Observatory approval and Worker runs
+
+The authorised Source was `3ac6a0c7-57cd-4ca2-b815-9f000fafe620` and the active **UK economic publications** Topic was `8637186a-2dda-4593-8ed0-04e19958edd1`. All comparisons used exactly `Can higher inflation expectations ever stimulate the economy`. Each version retained two-second origin pacing, 15 seconds per traversal, three outbound requests, one detail, one attempt, zero redirects, and 512,000 bytes per response.
+
+| Immutable version | Configuration SHA-256 | Topic binding | Canonical configuration change |
+| --- | --- | --- | --- |
+| v1 `3d65cca7-9854-4903-a217-d1adb6cd3e97` | `2fb6d6d804bd5a473bbac5aa4a4fcadbde5f380377aa842e48680f2c3f27b0c5` | `eb9a9f08-3392-40c8-bceb-8f085c1a43cb` | Reviewed M18A pin, two seconds |
+| v2 `cfc35682-3438-4a97-85db-7a132122bfc3` | `c04523ef5fffbbdd41cac4ad7025dadad2b6a6d0c4208e04a8f030bc2abae252` | `8d925353-7ff1-4414-9d06-c2a3859ae443` | Only `search.timeout_seconds` changed from 2 to 5 |
+| v3 `62c1f0b3-9748-48e4-bda4-5b7512f3b0bf` | `35fe2ad718bd1d96b7966a52e666850734df7b571664d3e61ca1a86a15c76ed7` | `f0df72f6-5eff-40e6-b153-86a4022d3b2a` | Only `search.result_item_selector` changed from v2 |
+
+The v1 closure preflight recorded robots HTTP 200 in 1.900 seconds, then a search timeout after 4.006 seconds including origin pacing. The ordinary v2 and v3 Preview and Validate calls each reached the intended detail article and returned HTTP 200. Each Validate reported one valid Record, zero invalid and zero duplicates. The following elapsed times are API wall time, including pacing, DNS, transfers and extraction.
+
+| Version | Preview start (UTC) and elapsed | Validate start (UTC) and elapsed | Passing validation report and sample SHA-256 |
+| --- | --- | --- | --- |
+| v2 | 11:23:49.964, 12.406 s | 11:24:04.570, 6.621 s | `95250000-b4c2-475a-882e-b7d847443ecb` · `0817974d045afa74f864acb9617e0533bb72d53fc7571a25d7d712df9ce9383c` |
+| v3 | 11:26:44.100, 6.567 s | 11:26:52.869, 6.602 s | `09f49c9c-d944-48f7-80b8-3365cdc5b2ef` · `f46baeb68f60181d5cf37bfabcb987b7f763bf88f0845adaf3b3858cb1430039` |
+
+For each version the operator approved the matching validation report, added a separate eligible binding, and preserved the existing bindings. MCP stdio discovered the active Topic and bindings, saved the exact single-binding intent and fresh key before submission, then received HTTP 201 and polled the terminal state. The dispatcher and Worker emitted actual dispatch and claim events.
+
+| Version | Request and key | Worker Job and claim → terminal (UTC) | Terminal outcome |
+| --- | --- | --- | --- |
+| v2 | `442793aa-0b00-4920-b7b1-bf5e5265cf94` · `d48576cd-c99f-4f18-9117-bc5fe6f75804` | `2280d5e8-8c7c-4237-a8d8-4e5bb75d1cc5` · 11:24:34.099 → 11:24:38.588 | `failed/invalid_detail_url` on attempt 1, 0 accepted, 0 invalid, 0 duplicates, 1 search capture |
+| v3 | `65474649-ddb1-4774-b1e9-3b2a59e5c198` · `466574b4-443f-48e5-95b4-35762f7d3f8b` | `e0ad50ff-e7e8-448e-b2e2-d6c7b9cbb96e` · 11:27:15.507 → 11:27:22.253 | `succeeded` on attempt 1, 1 accepted, 0 invalid, 0 duplicates, 2 captures |
+
+The v2 Worker stored HTTP 200 search Evidence `0a337e74-391e-4496-8197-63c0c9116f72` with SHA-256 `ceed4e21801ccef9eab14a0c4f2cba9fb5ce4ec384f5635e008f3e668e53433d`. Its confirmed bytes contained five matching article cards. Preview sampled the permitted first article. Full traversal encountered the second card outside the Source allowlist before fetching any detail. The other three cards were also out of scope. The v3 XPath keeps the same titled article cards and adds an `@href` predicate for **all four already approved detail paths**, in their canonical same-origin absolute and root-relative forms. It retains eligible links regardless of position and leaves the Source policy intact. Replaying the stored page through Core confirmed the original failure and exactly one permitted result with v3 before live qualification. [Reviewed detail paths](M18A-Public-HTTPS-Source-Validation.md#reproduce-the-profiles)
+
+The live Job succeeded with the five-second profile and corrected selector. The effect of the larger timeout on that specific success remains unmeasured. The API and Job timings include pacing and other work, and the v2 Job exposed an independent selector mismatch.
+
+### Successful Record, Evidence and exports
+
+The successful Request was created at 11:27:15.358 UTC and finished at 11:27:22.258 UTC. Dashboard Request Detail linked through the child Job to Record `0eefb7e0-c789-5964-a5bc-d57c883c2bf5` and its detail Evidence. MCP lineage and independent REST reads agreed on the Request, Job, Source, pinned v3 and configuration hash. The title is **Can higher inflation expectations ever stimulate the economy?** by Stefano Fasani and Lorenza Rossi. The fetched detail URL and extracted canonical URL both match the publisher link. Credit the authors and Economics Observatory under CC BY-SA 4.0. [Publication](https://www.economicsobservatory.com/can-higher-inflation-expectations-ever-stimulate-the-economy) · [Reuse policy](https://www.economicsobservatory.com/about)
+
+Read-only `sha256sum` over each original `/data/evidence/<uuid-without-hyphens>/input.bin` in the Normal Worker matched the stored digest. Both captures are in run `7df02723-3911-4bb9-a174-4d6aebe15672`.
+
+| Capture | Evidence ID | Captured (UTC) | HTTP and original bytes | Recomputed SHA-256 |
+| --- | --- | --- | --- | --- |
+| Search, page 1 | `51eb42fb-71ec-47e7-b436-2f47c63604c7` | 11:27:19.903 | 200, 249,637 bytes | `922ae1ccef6d10505221d6d4a23c1c7d4b6b57954cfdd692abebccfb4d438866` |
+| Detail, page 2 | `b4d9e7ce-6f7e-40e4-9478-3cffd59b8882` | 11:27:22.246 | 200, 338,283 bytes | `680641438cd965318c48bcf27c01308a6d598f22dc219b974ffffd12e4eb2c54` |
+
+Downloaded both files from the live Dashboard for Request `65474649-ddb1-4774-b1e9-3b2a59e5c198`. The corrected verifier paginated the request-scoped REST reference and checked the same Source and Job. Each file matched one Record with zero missing, extra or repeated IDs and zero field differences.
+
+| Download | Rows | SHA-256 |
+| --- | ---: | --- |
+| `request-65474649-ddb1-4774-b1e9-3b2a59e5c198-records.csv` | 1 | `2d5c023da7d561b22b10e2485829c3ffd476ab23d46405261d3ff5777c842f79` |
+| `request-65474649-ddb1-4774-b1e9-3b2a59e5c198-records.json` | 1 | `31b41e2b064ab33bd44297ed317a69f781f5b0051ee401594d29da206bbb02ca` |
+
+| Publisher | Cumulative M18B Jobs (succeeded / partial / failed) | Accepted Records | Origin gate |
+| --- | ---: | ---: | --- |
+| Welsh Government | 2 / 0 / 0 | 2 | PASS |
+| Scottish Fiscal Commission | 1 / 2 / 0 | 3 | PASS |
+| Economics Observatory | 1 / 0 / 2 | 1 | PASS |
+| **Total** | **4 / 2 / 2** | **6** | **3 of 3** |
+
+The historical M18A pilot remains separate. There is no remaining M18B acceptance blocker.
+
+### Reproduce the checks
+
+1. Run the controlled timeout suite above with the checkout mounted into the disposable backend environment. Run the profile build and Chrome suite for editor coverage.
+2. Back up Normal data with the launcher guide, restart on the timeout-contract checkout, and verify diagnostics, OpenAPI, the Worker schema and the old v1 pin. For an equivalent fresh evaluation, clone v1 as a new draft with five seconds, pin the saved selector to all four approved detail paths if the documented result mismatch recurs, and Preview, Validate, approve and bind through the normal workflow. [Windows update procedure](../setup/Windows-One-Click-Setup.md)
+3. In Normal MCP stdio, prepare and save the key for a single-binding Request with the exact title query. Start it once, poll to terminal, and follow the accepted Record to detail Evidence. Rehash the Worker bytes and download both files from Request Detail. Run `python -m backend.experiments.m18b_reconcile --port 58097 <request-id> <download.csv> <download.json>`.
