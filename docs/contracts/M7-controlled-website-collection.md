@@ -4,7 +4,7 @@
 
 1. In **Sources → Create source**, register an `https://` origin, a verifiable permission reference, and applicable path prefixes. Use standard HTTPS port 443 and a lower-case DNS name. `allowed_paths` is keyed by origin. `/catalog` includes that path and its children. `/catalogue` is separate.
 2. Review access policy and select **Authorize Source access**. The trusted local UI uses `LOCAL_PROFILE_APPROVAL=1`. Direct REST clients use `PATCH /api/v1/sources/{source_id}/authorization`.
-3. In Profile Draft, select **Keyword search and detail pages**. Choose the registered origin and enter the search path, query parameter, result item selector, and detail link selector. Detail pages use the existing item selector, fields, types, and identity field.
+3. In Profile Draft, select **Keyword search and detail pages**. Choose the registered origin and enter the search path, query parameter, result item selector, and detail link selector. Detail pages use the existing item selector, fields, types, and identity field. To opt into a different request timeout, select a value under **Pagination and request limits** and save the draft.
 4. Use a sample keyword with **Preview** and **Validate sample**. Each reads one search page, checks the next link, and fetches the first detail result. Approve the Profile Version using a passing report matching the current configuration hash.
 5. In **New Collection Job**, select the approved version and enter the keyword. When finished, inspect Search results and Detail pages under **Capture evidence** and trace individual Records to Evidence in **Data Explorer**.
 
@@ -34,11 +34,13 @@ Preview and Validate bodies and Job `entry` accept `{"adapter_type":"web","keywo
 | Outbound requests per attempt | 12 | `max_requests` 3–20 including robots and redirects |
 | Redirects per document | 2 | `max_redirects` 0–2 |
 | Response bytes | 1,048,576 | `max_body_bytes` 512,000–1,048,576 |
-| DNS + transfer time per request | 2 seconds | `timeout_seconds` 1–2 seconds |
+| DNS + transfer time per request | 2 seconds | `timeout_seconds` 1–5 whole seconds |
 | Fetch and traversal time per attempt | 45 seconds | `max_seconds` 5–45 seconds |
 | Execution attempts | 3 | `max_attempts` 1–3 including worker lease recovery |
 | Minimum time between response completion and next request | 1 second | Source `min_request_interval_ms` 1,000–10,000. Robots rules can extend this interval. |
 | Concurrent M7 requests per origin | 1 | Fixed Redis mutual exclusion |
+
+An approved Profile retains its saved timeout. A change requires a fresh draft, validation and approval. Origin pacing and lock waits use traversal time. Each outbound request uses the smaller of its configured timeout and the remaining traversal time. DNS resolution and the complete transfer share that request deadline. A larger timeout can hold the origin slot and Worker for longer.
 
 The worker hard limit is 60 seconds and the PostgreSQL lease is 90 seconds. The existing PostgreSQL and Celery retry model restarts from the first search page. A longer `Retry-After` is stored as a shared Redis cooldown. Above the Job's automatic retry limit of 300 seconds, the attempt ends with a readable error.
 
