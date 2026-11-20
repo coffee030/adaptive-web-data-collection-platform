@@ -4,9 +4,9 @@ Record the commit SHA, runner or machine, Windows/WSL/Docker versions, checked m
 
 ## Hosted release gate
 
-The Compose job in [Core release verification](../../.github/workflows/pull-request.yml) starts from a fresh GitHub Actions checkout. It selects two random Compose project identities with dynamically allocated loopback ports. It runs a no-cache application build, migrates a fresh volume, exercises the production proxy and records startup, disk and container statistics. It provisions and verifies the three Demo requests, runs MCP discovery and replay-safe submission, stops and restarts the stack, checks persisted presets and runs the Worker and browser suites. The second project supplies the controlled M22B reference endpoints. Base image cache on the Docker runner may be available. No public publisher is a required dependency.
+The Compose job in [Core release verification](../../.github/workflows/pull-request.yml) starts from a fresh GitHub Actions checkout. It selects three random Compose project identities and reserves distinct loopback ports that remain fixed across restart. It runs a no-cache application build, migrates a fresh volume, exercises the production proxy and records startup, disk and container statistics. It provisions and verifies the three Demo requests, runs MCP discovery and replay-safe submission, stops and restarts the stack, checks persisted presets and runs the Worker and browser suites. Separate projects supply the controlled M22B reference endpoints and the empty Normal Dashboard. Base image cache on the Docker runner may be available. The required tests use bundled fixtures.
 
-To repeat on an isolated Linux Docker test host, install the CI test dependencies into dedicated environments as shown in the workflow and run `bash scripts/release-compose.sh`. The job removes only its two disposable projects and their volumes. Inspect the workflow log for results and resource samples.
+To repeat on an isolated Linux Docker test host, install the CI test dependencies into dedicated environments as shown in the workflow and run `bash scripts/release-compose.sh`. The job removes its three disposable projects and their volumes. Inspect the workflow log for results and resource samples.
 
 ## Windows procedure
 
@@ -24,3 +24,7 @@ powershell.exe -NoProfile -File scripts/windows/Test-ReleaseAcceptance.ps1 -NoCa
 7. Run Diagnose while stopped. Confirm the created projects have no running containers and unrelated projects are unaffected. Keep the disposable checkout and volumes for evidence review, or remove only those projects after checking their saved names and backups.
 
 The [final matrix](Final-Core-Readiness.md) records the observed release results.
+
+## Observed outcome
+
+The [hosted run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44793217466) passed all three Compose projects. It verified both exports and the persisted Demo after Stop and restart, exercised approved Reference onboarding, and checked the empty Normal Dashboard without the fixture service. The same run verified controlled MCP submission and Worker recovery. The fresh Windows ZIP was extracted to a writable path with spaces and Unicode. Diagnose completed, and Setup reported `ENV-004` before any Docker services could start. The interactive Windows installation and clean Windows runtime remain pending.

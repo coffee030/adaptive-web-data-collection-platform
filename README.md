@@ -13,8 +13,6 @@ Extract the release ZIP into a writable local NTFS folder, or clone the release 
 Use Windows 11 x64 supported by Docker Desktop, hardware virtualization, WSL 2.1.5 or newer, Docker Desktop with Linux containers and Compose 2.20 or later, and a modern browser. The target is about 8 GB of installed RAM. Allow at least 10 GB free on the Docker data drive and 5 GB on the checkout drive as a starting budget, and allow internet access and installation permission for first use. Docker builds the frontend with Node.js and serves the static result. Host Node.js, npm, Python, PostgreSQL and Redis are optional developer or integration tools. [Beginner setup](docs/setup/Beginner-Windows-Setup.md)
 
 ```powershell
-git clone --branch main https://github.com/coffee030/adaptive-web-data-collection-platform.git
-cd adaptive-web-data-collection-platform
 .\Setup-Platform.bat
 .\Start-Platform.bat
 .\Diagnose-Platform.bat
