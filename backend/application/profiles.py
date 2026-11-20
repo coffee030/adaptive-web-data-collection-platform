@@ -2,16 +2,25 @@
 
 from functools import cached_property
 from hashlib import sha256
+from time import monotonic
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.core.contracts import Configuration, Sha256, Source, canonical_json
+from backend.core.contracts import (
+    Configuration,
+    ExtractionConfiguration,
+    Sha256,
+    Source,
+    canonical_json,
+)
 from backend.core.evidence import LocalEvidenceStore
 from backend.core.origin_rate import OriginRate
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.core.runner import CollectionInput, CollectionRunner
+from backend.core.suggestion_models import SuggestionRequest
+from backend.core.suggestions import SuggestionAttempt
 from backend.persistence.database import settings
 from backend.persistence.models import ProfileRow, SourceRow
 from backend.persistence.profiles import (
@@ -87,6 +96,26 @@ class Profiles:
                     .order_by(ProfileRow.version)
                 )
             ]
+
+    def suggest(self, source_id: UUID, request: SuggestionRequest):
+        started = monotonic()
+        source = self.get_source(source_id)
+        reviewed = []
+        if source.adapter_type == "web" and source.approval_status == "approved":
+            with self.sessions() as session:
+                rows = session.scalars(
+                    select(ProfileRow.configuration).where(
+                        ProfileRow.source_id == source_id,
+                        ProfileRow.approval_status.in_(("approved", "retired")),
+                    )
+                )
+                for row in rows:
+                    config = ExtractionConfiguration.model_validate(row)
+                    if config.search:
+                        reviewed.append(config.search)
+        return SuggestionAttempt(
+            source, lambda: self.get_source(source_id), self.rate, reviewed, started=started
+        ).run(request)
 
     def create_draft(self, source_id: UUID, configuration: Configuration):
         with self.sessions.begin() as session:
