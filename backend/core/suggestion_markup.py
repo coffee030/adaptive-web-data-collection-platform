@@ -338,68 +338,75 @@ def _field_mapping(
     item: Selector, heading: Selector, field: RecordField
 ) -> FieldSuggestion:
     key = re.sub(r"[^a-z0-9]+", "-", field.name.casefold()).strip("-")
-    candidates: dict[str, tuple[str, str]] = {}
+    integer_count = key == "count" and field.value_type == "integer"
+    candidates: dict[str, str | None] = {}
     if field.value_type == "string" and key in TITLE_ROLES:
         candidates[_relative(heading, item)] = (
-            node_text(heading),
-            "The detail heading matches the selected listing text.",
+            "The detail heading matches the selected listing text."
         )
     elif TOKEN.fullmatch(key):
         for node in item.xpath(
             ".//*" + _class(key) + f" | .//*[@id='{key}' or @itemprop='{key}']"
         ):
-            path = _relative(node, item)
-            candidates[path] = (
-                node_text(node),
-                "The element names the requested field and supplies a value of the requested type.",
+            candidates[_relative(node, item)] = (
+                "The element names the requested field and supplies a value of the requested type."
             )
         for node in item.css("dt"):
             if re.sub(r"[^a-z0-9]+", "-", node_text(node).casefold()).strip("-") == key:
                 companion = node.xpath("following-sibling::*[1][self::dd]").first
                 if companion is not None:
-                    path = _relative(companion, item)
-                    candidates[path] = (
-                        node_text(companion),
-                        "A definition label names the requested field.",
+                    candidates[_relative(companion, item)] = (
+                        "A definition label names the requested field."
                     )
-        if (
-            not candidates
-            and key == "count"
-            and field.value_type == "integer"
-            and heading.tag == "dt"
-        ):
+        if integer_count and heading.tag == "dt":
             companion = heading.xpath("following-sibling::*[1][self::dd]").first
             if companion is not None:
-                labels = {
-                    companion.attrib.get(attr, "").strip().casefold()
-                    for attr in ("itemprop", "aria-label")
-                } - {""}
-                if labels - {key}:
-                    return FieldSuggestion(
-                        name=field.name,
-                        reason="The adjacent definition names a different field. Choose a count selector in the editor.",
-                    )
-                path = _relative(companion, item)
-                candidates[path] = (
-                    node_text(companion),
-                    "The adjacent definition is labelled as a count."
-                    if labels
-                    else "The matching title's adjacent definition contains one integer. Review its meaning.",
-                )
+                candidates.setdefault(_relative(companion, item), None)
 
+    conflicting_label = False
+    allow_fallback = True
     usable = []
-    for selector, (value, reason) in candidates.items():
-        if len(selector) > 1024 or not value or len(item.xpath(selector)) != 1:
+    for selector, reason in candidates.items():
+        # The adjacent fallback comes last and is used only if no named candidate remains.
+        if reason is None and not allow_fallback:
+            break
+        matches = item.xpath(selector) if len(selector) <= 1024 else ()
+        if len(matches) != 1:
+            allow_fallback = False
+            continue
+        selected = matches.first
+        labels = set()
+        if integer_count:
+            labels = {
+                selected.attrib.get(attr, "").strip().casefold()
+                for attr in ("itemprop", "aria-label")
+            } - {""}
+            if labels - {key}:
+                conflicting_label = True
+                continue
+        allow_fallback = False
+        value = node_text(selected)
+        if not value:
             continue
         try:
             typed = _normalize(value, field.value_type)
         except (ValueError, OverflowError):
             continue
+        if reason is None:
+            reason = (
+                "The adjacent definition is labelled as a count."
+                if labels
+                else "The matching title's adjacent definition contains one integer. Review its meaning."
+            )
         usable.append((selector, typed, reason))
     if len(usable) != 1:
         return FieldSuggestion(
             name=field.name,
-            reason="No unique typed element was supported by the sample. Choose a field selector in the editor.",
+            reason=(
+                "A candidate has a label for a different field. Choose a count selector in the editor."
+                if not usable and conflicting_label
+                else "No unique typed element was supported by the sample. Choose a field selector in the editor."
+            ),
         )
     selector, value, reason = usable[0]
     return FieldSuggestion(

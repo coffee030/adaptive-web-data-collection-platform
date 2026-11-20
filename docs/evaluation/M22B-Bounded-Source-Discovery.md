@@ -120,3 +120,13 @@ git diff --check
 - The closure changed only Core suggestion inference and example-query validation. The Windows Dashboard and PostgreSQL/Redis integration results above are earlier evidence. Those integrations were not rerun for this revision.
 
 **Ready for the controlled M22C pilot.** Both review findings and the offline reference quality checks passed. The four reserved tasks, scoring keys and trial CSV were left untouched. Independent review is pending. Human timing and percentage savings remain unmeasured.
+
+## Count eligibility correction · 2026-11-21
+
+The fetched branch tip and starting checkout matched the reviewed revision `a1371acbadc5c386c374c3730e2f57a1a670b392`. With only the representative Catalog detail overridden, the reviewed code returned `usable` and mapped `./dl/dd` to `2026` because `class="count"` nominated the copyright year. The corrected code returns `partial` with `Alpha outlook` resolved, no count mapping or sample, and guidance to choose a count selector in the editor.
+
+- Core checks `itemprop` and `aria-label` on the element selected by each integer count candidate. Any explicit label for a different field rules out that candidate. An independently selectable count remains eligible under the same uniqueness and type checks. The generated selectors recovered the genuine count `2026` through typed Core ingestion, including with a conflicting element present.
+- The focused replay selection covering count metadata, labelled counts, both reference layouts and example URLs produced **7 failed, 11 passed, 17 deselected** on the reviewed code and **18 passed, 17 deselected** after correction. The M0/M1 and M22A/M22B command above with `-rs` passed **250 tests with 0 skips** in the same offline backend image. Ruff on both changed Python files and `git diff --check` passed.
+- Cards and Catalog each recovered **2/2 expected links** and **4/4 typed field values** and excluded the decoy. The direct, one-hop and examples replays made **4, 5 and 3** transport attempts respectively. Both equivalent space encodings passed. The blank companion and empty duplicate query parameters each caused **0** transport attempts.
+
+These checks were rerun for this correction. The Windows Dashboard and PostgreSQL/Redis results above are earlier integration evidence. Independent review is pending, and human timing remains unmeasured.

@@ -199,18 +199,45 @@ def test_wrong_title_is_unresolved(replay):
 
 
 @pytest.mark.parametrize(
-    "meaning",
+    "detail",
     [
-        'itemprop="copyrightYear" aria-label="Copyright year"',
-        'itemprop="copyrightYear"',
-        'aria-label="Copyright year"',
+        pytest.param(
+            '<dl><dt>Alpha outlook</dt><dd itemprop="copyrightYear" aria-label="Copyright year">2026</dd></dl>',
+            id="adjacent-both-labels",
+        ),
+        pytest.param(
+            '<dl><dt>Alpha outlook</dt><dd itemprop="copyrightYear">2026</dd></dl>',
+            id="adjacent-itemprop",
+        ),
+        pytest.param(
+            '<dl><dt>Alpha outlook</dt><dd aria-label="Copyright year">2026</dd></dl>',
+            id="adjacent-aria-label",
+        ),
+        pytest.param(
+            '<dl><dt>Alpha outlook</dt><dd class="count" itemprop="copyrightYear" aria-label="Copyright year">2026</dd></dl>',
+            id="mixed-class",
+        ),
+        pytest.param(
+            '<h1>Alpha outlook</h1><p id="count" aria-label="Copyright year">2026</p>',
+            id="id",
+        ),
+        pytest.param(
+            '<h1>Alpha outlook</h1><dl><dt>Count</dt><dd aria-label="Copyright year">2026</dd></dl>',
+            id="definition-label",
+        ),
+        pytest.param(
+            '<h1>Alpha outlook</h1><p itemprop="count" aria-label="Copyright year">2026</p>',
+            id="itemprop-disagrees-with-aria-label",
+        ),
+        pytest.param(
+            '<h1>Alpha outlook</h1><p class="count" itemprop="copyrightYear" aria-label="Count">2026</p>',
+            id="aria-label-disagrees-with-itemprop",
+        ),
     ],
 )
-def test_title_adjacent_metadata_is_not_a_count(meaning, replay):
+def test_conflicting_count_metadata_is_unresolved(detail, replay):
     _, overrides = replay
-    overrides[CATALOG + "/detail/alpha"] = (
-        f"<main><dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
-    )
+    overrides[CATALOG + "/detail/alpha"] = f"<main>{detail}</main>"
     result = suggest(make_source(CATALOG), examples())
     assert result.outcome == "partial", result
     fields = {field.name: field for field in result.proposal.fields}
@@ -222,17 +249,45 @@ def test_title_adjacent_metadata_is_not_a_count(meaning, replay):
     assert "Choose a count selector" in fields["count"].reason
 
 
-@pytest.mark.parametrize("meaning", ['itemprop="count"', 'aria-label="Count"'])
-def test_labelled_count_can_have_the_same_value_as_a_year(meaning, replay):
+@pytest.mark.parametrize(
+    "meaning,other",
+    [
+        pytest.param('itemprop="count"', "", id="itemprop"),
+        pytest.param('aria-label="Count"', "", id="aria-label"),
+        pytest.param(
+            'itemprop="count"',
+            '<p class="count" aria-label="Page number">12</p>',
+            id="valid-named-count-with-conflict",
+        ),
+        pytest.param(
+            'aria-label="Count"',
+            '<p id="count" aria-label="Page number">12</p>',
+            id="valid-adjacent-count-with-conflict",
+        ),
+    ],
+)
+def test_labelled_count_can_have_the_same_value_as_a_year(meaning, other, replay):
     _, overrides = replay
-    overrides[CATALOG + "/detail/alpha"] = (
-        f"<main><dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
-    )
-    result = suggest(make_source(CATALOG), examples())
+    path = CATALOG + "/detail/alpha"
+    detail = f"<main>{other}<dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
+    overrides[path] = detail
+    source = make_source(CATALOG)
+    result = suggest(source, examples())
     assert result.outcome == "usable", result
-    count = next(field for field in result.proposal.fields if field.name == "count")
-    assert count.mapping is not None
-    assert count.sample == 2026
+    fields = {field.name: field for field in result.proposal.fields}
+    assert fields["title"].mapping is not None
+    assert fields["title"].sample == "Alpha outlook"
+    assert fields["count"].mapping is not None
+    assert fields["count"].sample == 2026
+    config = as_config(result.proposal)
+    captured = CapturedInput(detail.encode(), ORIGIN + path)
+    outcome = ingest(
+        html_candidates(captured, config), config.record_schema, source.source_id
+    )
+    assert [record.payload for record in outcome.valid] == [
+        {"title": "Alpha outlook", "count": 2026}
+    ]
+    assert not outcome.invalid
 
 
 def test_misleading_alternate_link_is_not_fetched(replay):
