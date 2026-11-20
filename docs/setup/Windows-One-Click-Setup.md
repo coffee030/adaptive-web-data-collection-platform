@@ -43,7 +43,7 @@ Keep the Demo settings and its PostgreSQL, Redis, Evidence and `demo_state` volu
 
 ## Prerequisites and permissions
 
-- Use supported Windows 11 x64, built-in Windows PowerShell 5.1, Docker Desktop in Linux container mode, Docker Compose 2.20 or later, and WSL 2. Startup checks the Windows build, CPU architecture, WSL, virtualisation, and available RAM and disk space where measurable. See Docker's documentation for supported builds and minimum memory and WSL requirements. [Docker Desktop installation for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+- Use supported Windows 11 x64, built-in Windows PowerShell 5.1, Docker Desktop in Linux container mode, Docker Compose 2.20 or later, and WSL 2.1.5 or later. Startup checks the Windows build, CPU architecture, WSL, virtualisation, and available RAM and disk space where measurable. See Docker's documentation for supported builds and minimum memory and WSL requirements. [Docker Desktop installation for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
 - Normal and Demo use a Docker-built React bundle. PostgreSQL, Redis, Python and Node.js run inside the images required for ordinary startup. Allow first-run internet and budget at least 10 GB on the Docker data drive and 5 GB on the checkout drive.
 - If Docker Desktop is missing, the approved installation downloads it from Docker, verifies a valid Authenticode signature and the Docker publisher, and starts the installer with the WSL 2 per-user option. Review and handle licensing, initialisation, and permission prompts in Docker Desktop.
 - When the WSL 2 check fails, review and run `wsl --install --no-distribution` or `wsl --update`. Windows may require administrator approval and a manual restart. Double-click the same launcher when Windows is ready. If firmware virtualisation is disabled, follow the device manufacturer's instructions for enabling Intel Virtualization Technology or AMD SVM Mode in BIOS/UEFI. [Microsoft WSL installation guide](https://learn.microsoft.com/windows/wsl/install)
@@ -51,7 +51,7 @@ Keep the Demo settings and its PostgreSQL, Redis, Evidence and `demo_state` volu
 
 ## Settings, data, and the controlled demo
 
-The first Setup or Start generates `.local/launcher.env`. A restricted Windows ACL protects the file, which stores a random local PostgreSQL password and a Compose project identity specific to the checkout. Retain the file and original volumes to reuse Sources, Profiles, Jobs, Records, Redis, and Evidence. Keep the file private and out of Git and chat.
+After the prerequisites pass, the first Setup or Start generates `.local/launcher.env`. A restricted Windows ACL protects the file, which stores a random local PostgreSQL password and a Compose project identity specific to the checkout. Retain the file and original volumes to reuse Sources, Profiles, Jobs, Records, Redis, and Evidence. Keep the file private and out of Git and chat.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
