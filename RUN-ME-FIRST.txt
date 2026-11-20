@@ -1,0 +1,19 @@
+Adaptive Scalable and Observable Web Data Collection Platform
+
+Extract the complete ZIP into a writable local NTFS folder.
+
+Double-click Start-FYP-Demo.bat to try the bundled Synthetic Demo.
+Double-click Start-Platform.bat for an empty Normal workspace.
+Windows may request approval to install WSL 2 or Docker Desktop.
+If Windows requests a restart, double-click the same file afterward.
+Copy the printed localhost URL if the browser does not open.
+
+To stop, use Stop-Platform.bat. For Demo, run Stop-Platform.bat -Demo
+from PowerShell. Stop keeps the data. To diagnose a problem, run
+Diagnose-Platform.bat or Diagnose-Platform.bat -Demo.
+
+Ordinary use requires Windows 11 x64, hardware virtualization, WSL 2,
+Docker Desktop, a web browser, first-run internet and free disk space.
+Allow about 8 GB RAM. Host Node.js and Python are optional.
+
+Start with docs/setup/Beginner-Windows-Setup.md.

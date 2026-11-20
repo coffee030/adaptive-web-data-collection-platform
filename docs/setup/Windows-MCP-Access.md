@@ -1,6 +1,6 @@
 # Local MCP Access on Windows
 
-On Windows 11, install Python 3.12 or 3.13 and follow the Windows setup guide to prepare Docker Desktop in Linux container mode and Node.js. From the checkout root, start `Start-FYP-Demo.bat` and wait for `Synthetic Demo is ready!`. Run `Diagnose-Platform.bat -Demo` to find the current **API port** and **Dashboard URL**. [Windows one-click setup](Windows-One-Click-Setup.md)
+Optional MCP clients on Windows use a separate Python 3.12 or 3.13 environment for the stdio server. Start `Start-FYP-Demo.bat` and wait for `Synthetic Demo is ready!`. Run `Diagnose-Platform.bat -Demo` to find the current **API port** and **Dashboard URL**. Use the direct API port in the MCP configuration. The ordinary Dashboard runs entirely in Docker. [Windows one-click setup](Windows-One-Click-Setup.md)
 
 Open PowerShell in the checkout root. Replace `<DEMO_API_PORT>` with the API port from diagnostics. The example uses `python` for the installed interpreter. You can use its full path.
 
