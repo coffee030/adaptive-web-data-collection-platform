@@ -1,6 +1,6 @@
 # M22C operator pilot
 
-**AWAITING HUMAN TRIALS · Efficiency unmeasured.** The corrected evaluator passed the technical checks on independent reference Sources. No human trial has started. The next assignment is **M22A-01**. The coordinator opens its card when the operator is ready to start the clock.
+**M22 technical evaluation passed.** The project owner reported completing hands-on testing. The release evidence covers controlled reference runs and regression tests. The four planned assignments have no verified per-trial results in the repository. Operator time savings remain unmeasured.
 
 ## Revision and protocol
 
@@ -36,7 +36,7 @@ Both runs reconciled 3 browser mirror GETs, 4 discovery GETs, 3 Preview GETs and
 - **53 Python tests passed, 0 skipped** in the offline cached image. This includes 8 focused M22C cases and the 45 existing M22A/M22B reference tests. Ruff lint and formatting passed. Lint excluded `EXE002` for the Windows bind mount.
 - **14 Node tests passed, 0 skipped.** Synthetic events covered timely approval with body parsing after the cutoff, early Enter and later approval, conflicting Source/version/revision/hash/report, unavailable evidence, cutoff ties, the 900-second cap, abandonment and crash recovery. A later snapshot preserved the original elapsed time. The resume gate rejected an unverified or legacy `completed` result.
 
-**Technical finding.** Configured search, stop adjudication and receipt attribution passed on the independent reference setup. The coordinator still needs the normal preflight on the retained pilot services and assigned Source state before opening the first card. Human timing, quality and request compliance remain unmeasured.
+**Technical finding.** Configured search, stop adjudication and request attribution passed on the independent reference setup. The owner accepted technical verification for release. Profile activation continues to require operator approval.
 
 ## Original pilot setup and retained rehearsal
 
@@ -46,17 +46,17 @@ Both runs reconciled 3 browser mirror GETs, 4 discovery GETs, 3 Preview GETs and
 - Reference discovery used four requests and proposed a three-request saved Profile. The rehearsal changed the editor to four before creating the draft. Measured operators make assigned setting changes themselves on the clock. The raw proposal and saved Profile each scored 2/2 links and 4/4 typed values. Replay included the HTTP fixture's HTML wrapper and reproduced the stored validation sample hash.
 - The [scoped reference summary](m22c-reference-evidence.json) contains reference-only identifiers and counts. Raw local evidence under `.local/m22c/reference/` includes `session.jsonl`, `artifacts.json`, `internal.jsonl`, `mirror.jsonl` and `approved.png`. The [coordinator runbook](M22C-Coordinator-Runbook.md) gives reproduction and resume commands.
 
-## Human trial results
+## Human trial evidence available at closeout
 
-| Assignment | Layout pair | Arm | Status | Elapsed | Link and field quality | Unauthorized requests |
+| Assignment | Layout pair | Arm | Status in committed CSV | Elapsed | Link and field quality | Unauthorized requests |
 | --- | --- | --- | --- | --- | --- | --- |
 | M22A-01 | Cards | Manual | Planned | Unmeasured | Unmeasured | Unmeasured |
 | M22A-02 | Catalog | Manual | Planned | Unmeasured | Unmeasured | Unmeasured |
 | M22A-03 | Cards | Assisted | Planned | Unmeasured | Unmeasured | Unmeasured |
 | M22A-04 | Catalog | Assisted | Planned | Unmeasured | Unmeasured | Unmeasured |
 
-Each arm has two assigned, zero completed and zero failed. No trial opened, so fallback, waiting time, quality and policy compliance are unmeasured for both arms. The [results CSV](m22c-onboarding-results.csv) preserves all four planned rows and blank measurement cells.
+The [results CSV](m22c-onboarding-results.csv) retains two planned assignments per arm and blank measurement cells. The owner’s testing confirmation did not include trial IDs, timings, approval evidence or request receipts. The available evidence therefore supports no per-arm completion count, quality comparison or estimate of the proposed 20% time saving.
 
 Pair manual M22A-01 with assisted M22A-03 and manual M22A-02 with assisted M22A-04. For each completed pair report `100 × (manual elapsed − assisted elapsed) / manual elapsed`. The two percentages and their median are unmeasured. With two complete pairs, the median is the mean of the two percentages. A positive pilot finding requires both pairs to complete, median saving of at least 20%, assisted link and field scores at least as high as manual in each pair, and evidence of zero unauthorized requests in both arms. Record known failures separately if a necessary comparison or policy count is unavailable.
 
-The operator's Dashboard and layout familiarity may influence both arms. Manual-first ordering can give the assisted arm a learning advantage. These two pairs use controlled layouts, so any finding applies only to this pilot. Independent review is pending.
+The operator's Dashboard and layout familiarity may influence both arms. Manual-first ordering can give the assisted arm a learning advantage. These two pairs use controlled layouts, so any finding applies only to this pilot.

@@ -1,5 +1,7 @@
 # M22B · Bounded Source discovery
 
+For the final acceptance scope and evidence, see the [M22 technical closeout](M22C-Operator-Pilot.md). The checkpoints below record decisions made during this milestone.
+
 **Ready for the controlled M22C pilot.** The real Dashboard journey and manual path passed against the reference stack. The reviewed base was `0cfef5136992e811339673fcd43bc3de3989258b` on `feature/M22A-source-onboarding`. Remote `main` was `b8073dad43a72ae5d108d2d8a3f40dcf1706a6a6` and did not contain the reviewed commit. Teammate review is pending.
 
 ## Operator workflow and limits

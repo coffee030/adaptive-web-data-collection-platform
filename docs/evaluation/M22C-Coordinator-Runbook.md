@@ -1,6 +1,6 @@
 # M22C coordinator runbook
 
-Keep this runbook, raw evidence, source code and grading material in the coordinator workspace. Show the operator only the card opened for the active assignment. The checkpoint state is **AWAITING HUMAN TRIALS** and the next assignment is **M22A-01, manual**.
+M22 closed on [technical acceptance](M22C-Operator-Pilot.md). This optional protocol supports a separately recorded human pilot. Check previous attempts before opening any card. Keep raw evidence and grading material in the coordinator workspace and show the operator only the active card.
 
 ## Resume the existing project
 
