@@ -12,7 +12,7 @@ The primary users are authorised collection operators who create and approve sou
 
 ## Product Purpose
 
-The Adaptive Scalable and Observable Web Data Collection Platform turns permitted HTML and CSV inputs into validated, traceable structured records. Independent applications can reuse the Core. Operators can see the source, configuration version, and evidence used for a run, as well as partial success and failure.
+The Adaptive Scalable and Observable Web Data Collection Platform turns permitted HTML and CSV inputs into validated, traceable structured records. Its reusable Core manages source access, profile approval, collection jobs, validation, evidence and exports for downstream applications. Operators can see the source, configuration version, and evidence used for a run, as well as partial success and failure. [System overview](docs/architecture/System-Overview.md)
 
 ## Operating Context
 
@@ -29,7 +29,7 @@ The React and TypeScript frontend works with FastAPI, Pydantic, SQLAlchemy, Alem
 - The Core provides APIs for Sources and Profiles, Jobs, Records, quarantine, and Evidence Metadata. The Dispatcher sends Jobs to Celery workers.
 - The Core runs in trusted local mode. Approved Profiles can search static HTML by keyword and extract details from registered and authorised public HTTPS origins. Controlled HTTP fixtures and authorised CSV datasets remain available. The approval operator field supports local audits. [M7 Controlled Website Collection](docs/contracts/M7-controlled-website-collection.md)
 - PostgreSQL stores metadata and lineage. Local storage holds the raw evidence files. The UI shows available metadata and offers actions supported by the implemented API.
-- ML and sentiment analysis, and IA and KOL discovery, are independent downstream work. The IA platform, sources, and matching requirements still need confirmation.
+- The downstream industry application remains open. KOL discovery is one possible use if industry requirements are confirmed. ITP4524 coursework is outside the FYP scope.
 
 ## Evidence on Hand
 

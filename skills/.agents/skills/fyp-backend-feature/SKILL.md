@@ -15,7 +15,7 @@ description: "Use when implementing FastAPI endpoints or Pydantic schemas, Postg
 - Validate requests and responses with Pydantic. Follow established naming, error envelopes, and status codes. Return safe error messages, preserve actionable details in events or logs, and keep OpenAPI and client contracts accurate.
 - Use PostgreSQL for durable data and explicit migrations for schema changes. Respect foreign keys and constraints. Assess existing data before adding required fields or uniqueness. Use defined record identities and database constraints to prevent duplicate final records. Preserve evidence and configuration versions. Use JSONB for flexible payloads where appropriate and typed columns where strong constraints are needed.
 - Commit durable job state before publishing work to Redis via Celery. Record dispatch failure and provide a recovery path so jobs cannot silently remain pending. Define valid job and task transitions and protect terminal outcomes against late or repeated deliveries. Design for duplicate execution with idempotent writes. Bound transient retries and record permanent failures. Persist outcomes before acknowledgement where required by the worker contract. Record events with job and task identifiers, attempt, outcome, and safe error details.
-- Keep sentiment and KOL logic out of Core. Avoid KOL-specific schemas until IA requirements are confirmed. Keep small features within the modular monolith and existing infrastructure.
+- Keep the Core's schemas and services reusable across domains. Keep application-specific logic behind documented interfaces when a downstream use is confirmed. Keep small features within the modular monolith and existing infrastructure.
 
 ## Verify and report
 
