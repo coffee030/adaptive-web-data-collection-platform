@@ -86,7 +86,11 @@ def example_target(url: str, keyword: str) -> SearchTarget:
     parts = urlsplit(url)
     try:
         fields = parse_qsl(
-            parts.query, strict_parsing=True, errors="strict", max_num_fields=2
+            parts.query,
+            keep_blank_values=True,
+            strict_parsing=True,
+            errors="strict",
+            max_num_fields=2,
         )
     except ValueError:
         fields = []
@@ -366,10 +370,21 @@ def _field_mapping(
         ):
             companion = heading.xpath("following-sibling::*[1][self::dd]").first
             if companion is not None:
+                labels = {
+                    companion.attrib.get(attr, "").strip().casefold()
+                    for attr in ("itemprop", "aria-label")
+                } - {""}
+                if labels - {key}:
+                    return FieldSuggestion(
+                        name=field.name,
+                        reason="The adjacent definition names a different field. Choose a count selector in the editor.",
+                    )
                 path = _relative(companion, item)
                 candidates[path] = (
                     node_text(companion),
-                    "The matching title's adjacent definition contains one integer. Review its meaning.",
+                    "The adjacent definition is labelled as a count."
+                    if labels
+                    else "The matching title's adjacent definition contains one integer. Review its meaning.",
                 )
 
     usable = []

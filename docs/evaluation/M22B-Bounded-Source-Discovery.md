@@ -96,3 +96,27 @@ For a trial, record the non-overlapping action windows for browser mirror naviga
 Reconcile the discovery ledger's transport attempts with fixture logs in action order. The reference fixture logs caller identity, target and status. The Compose probe identifies itself with `M22B-Compose-Health/1.0` from the fixture container's loopback. Core identifies itself separately. Count Core robots requests in their action window. Browser traffic is identified separately, including browser-only requests when they occur. Distinguish Core discovery from Preview and Validate by the explicit API action, expected route sequence and exclusive window, since all three share the Core caller identity. Keep reserved but unsent entries in the ledger and count only confirmed server receipts as fixture requests. A transport failure can be recorded with no fixture receipt. Record ambiguous traffic or missing logs as **unmeasured**.
 
 The controlled run reconciled 14 discovery GETs, 9 separate assisted sample-check GETs and 3 manual Validate GETs. Compose robots probes were independently attributed by caller. Browser mirror navigation was unmeasured in this Dashboard run.
+
+## Review closure · 2026-11-21
+
+The fetched `feature/M22B-source-discovery` tip, starting checkout and reviewed revision all matched `ddeca9e4004ed38a2b79147c41547b930a78c199`.
+
+| Finding | Reviewed behavior | Closure behavior |
+| --- | --- | --- |
+| Count inference | The Catalog title-adjacency heuristic returned `usable` with count `2026` when `itemprop`, `aria-label` or both identified a copyright year. | All three variants return `partial` with the title resolved, no count mapping or sample, and a reason to choose a count selector manually. An explicitly labelled count of `2026` still maps. |
+| Example URL meaning | Both `&section=` and the empty duplicate `&term=` were discarded. Each replay fetched robots, canonical results and detail and returned `usable`. | Both return `unsupported_examples` with the single-parameter guidance and zero transport attempts, including robots. The reference `C++ & tea` works with spaces encoded as `+` or `%20`. |
+
+The backend closure rerun used the `collection-backend:m21c-f0ba4a3` image with the worktree mounted read-only at `/mnt/m22b`, `PYTHONPATH=/mnt/m22b`, `PYTHONDONTWRITEBYTECODE=1` and Docker `--network none`. These are the container commands, followed by the whitespace check from the worktree.
+
+```text
+python -m pytest -q -p no:cacheprovider backend/experiments/test_m22b_suggestions.py -k "title_adjacent_metadata or labelled_count or empty_extra_parameter or examples_on_restricted_source"
+python -m pytest -q -rs -p no:cacheprovider backend/tests/test_m0_http.py backend/tests/test_m0_extraction.py backend/tests/m1 backend/experiments/test_m22a_onboarding.py backend/experiments/test_m22b_suggestions.py
+ruff check --no-cache --extend-ignore EXE002 backend/core/suggestion_markup.py backend/experiments/test_m22b_suggestions.py
+git diff --check
+```
+
+- The focused selection produced **5 failed, 4 passed, 19 deselected** before the fixes and **9 passed, 19 deselected** afterward. The full M0/M1 and M22A/M22B selection passed **243 tests** with **0 skips**. Ruff and `git diff --check` passed. Ruff excluded `EXE002` for the Windows bind mount.
+- Unedited generated selectors recovered **2/2 detail links** and **4/4 typed field values** and excluded the decoy on each reference layout. The Cards direct path used **4** actual requests, the Catalog one-hop path used **5**, and Catalog examples used **3** for either equivalent encoding.
+- The closure changed only Core suggestion inference and example-query validation. The Windows Dashboard and PostgreSQL/Redis integration results above are earlier evidence. Those integrations were not rerun for this revision.
+
+**Ready for the controlled M22C pilot.** Both review findings and the offline reference quality checks passed. The four reserved tasks, scoring keys and trial CSV were left untouched. Independent review is pending. Human timing and percentage savings remain unmeasured.

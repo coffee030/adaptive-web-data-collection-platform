@@ -153,10 +153,13 @@ def test_reference(scope, key, hop, replay):
     assert expected_links[1] not in calls
 
 
-def test_examples_on_restricted_source(replay):
+@pytest.mark.parametrize("spaces", ["+", "%20"])
+def test_examples_on_restricted_source(spaces, replay):
     calls, _ = replay
     source = make_source(CATALOG + "/search", CATALOG + "/detail")
-    result = suggest(source, examples())
+    body = examples()
+    body = body.model_copy(update={"results_url": body.results_url.replace("+", spaces)})
+    result = suggest(source, body)
     assert result.outcome == "usable", result
     assert calls == [
         "/robots.txt",
@@ -193,6 +196,43 @@ def test_wrong_title_is_unresolved(replay):
     assert result.outcome == "partial"
     assert result.proposal.item_selector is None
     assert all(field.mapping is None for field in result.proposal.fields)
+
+
+@pytest.mark.parametrize(
+    "meaning",
+    [
+        'itemprop="copyrightYear" aria-label="Copyright year"',
+        'itemprop="copyrightYear"',
+        'aria-label="Copyright year"',
+    ],
+)
+def test_title_adjacent_metadata_is_not_a_count(meaning, replay):
+    _, overrides = replay
+    overrides[CATALOG + "/detail/alpha"] = (
+        f"<main><dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
+    )
+    result = suggest(make_source(CATALOG), examples())
+    assert result.outcome == "partial", result
+    fields = {field.name: field for field in result.proposal.fields}
+    assert fields["title"].mapping is not None
+    assert fields["title"].sample == "Alpha outlook"
+    assert fields["count"].mapping is None
+    assert fields["count"].sample is None
+    assert "different field" in fields["count"].reason
+    assert "Choose a count selector" in fields["count"].reason
+
+
+@pytest.mark.parametrize("meaning", ['itemprop="count"', 'aria-label="Count"'])
+def test_labelled_count_can_have_the_same_value_as_a_year(meaning, replay):
+    _, overrides = replay
+    overrides[CATALOG + "/detail/alpha"] = (
+        f"<main><dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
+    )
+    result = suggest(make_source(CATALOG), examples())
+    assert result.outcome == "usable", result
+    count = next(field for field in result.proposal.fields if field.name == "count")
+    assert count.mapping is not None
+    assert count.sample == 2026
 
 
 def test_misleading_alternate_link_is_not_fetched(replay):
@@ -312,6 +352,23 @@ def test_bad_example_inputs_send_nothing(replay):
         "unsupported_examples",
     )
     assert not calls
+
+
+@pytest.mark.parametrize("extra", ["&section=", "&term="])
+def test_examples_with_empty_extra_parameter_send_nothing(extra, replay):
+    calls, _ = replay
+    source = make_source(CATALOG + "/search", CATALOG + "/detail")
+    body = examples()
+    result = suggest(
+        source, body.model_copy(update={"results_url": body.results_url + extra})
+    )
+    assert (result.outcome, result.code, result.actual_attempts, calls) == (
+        "unsupported",
+        "unsupported_examples",
+        0,
+        [],
+    )
+    assert "single query parameter" in result.reason
 
 
 def test_robots_forbid_page_before_its_transport(replay):
