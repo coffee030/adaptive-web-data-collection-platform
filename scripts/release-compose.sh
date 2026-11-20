@@ -40,6 +40,16 @@ normal() {
     POSTGRES_PORT="$normal_pg" API_PORT="$normal_api" FRONTEND_PORT="$normal_web" LOCAL_PROFILE_APPROVAL=0 \
         docker compose "${normal_stack[@]}" "$@"
 }
+failures=()
+check() {
+    local label="$1"
+    shift
+    if "$@"; then
+        echo "PASS $label"
+    else
+        failures+=("$label")
+    fi
+}
 cleanup() {
     rc=$?
     if (( rc != 0 )); then
@@ -136,18 +146,15 @@ dc up -d --no-build --wait --wait-timeout 90
 echo "Repeated startup: ${SECONDS}s"
 sample restart
 export M2_TEST_DATABASE_URL="postgresql+psycopg://$POSTGRES_USER:$POSTGRES_PASSWORD@$(dc port postgres 5432)/$POSTGRES_DB"
-(
-    cd frontend
-    M13_QA_DEMO_URL="$url" M13_QA_FIXTURE="$project-collection-fixture-1" \
-        npm test -- m13-continuity.integration.ts --workers=1
-)
-python -m pytest -p scripts.require_pytest_pass -q backend/tests/m2/test_m3_compose.py -k 'not m20_worker_attempt_identity'
-(
-    cd frontend
-    npm test -- closure.integration.ts core-workflow.integration.ts jobs.integration.ts \
+check "Article History and result continuity" \
+    env M13_QA_DEMO_URL="$url" M13_QA_FIXTURE="$project-collection-fixture-1" \
+    npm --prefix frontend test -- m13-continuity.integration.ts --workers=1
+check "Compose recovery" \
+    python -m pytest -p scripts.require_pytest_pass -q backend/tests/m2/test_m3_compose.py -k 'not m20_worker_attempt_identity'
+check "Demo browser contracts" \
+    npm --prefix frontend test -- closure.integration.ts core-workflow.integration.ts jobs.integration.ts \
         operator.integration.ts profiles.integration.ts results.integration.ts sources.integration.ts \
         topic-collections.integration.ts --workers=1
-)
 
 cat > "$output/m20.yaml" <<'YAML'
 services:
@@ -155,7 +162,8 @@ services:
     command: ["python", "-m", "celery", "-A", "backend.queue.celery_app:app", "worker", "--loglevel=INFO", "--pool=prefork", "--without-gossip", "--without-mingle", "--max-tasks-per-child=1"]
 YAML
 docker compose "${demo[@]}" -f "$output/m20.yaml" up -d --no-build --no-deps --scale worker=1 worker
-M20_TEST_WORKER_IDENTITY=1 M20_DASHBOARD_DIR="$PWD/frontend/test-results/m20" \
+check "Worker attempt attribution through restart" \
+    env M20_TEST_WORKER_IDENTITY=1 M20_DASHBOARD_DIR="$PWD/frontend/test-results/m20" \
     M3_TEST_COMPOSE_EXTRA_ARGS="-f scripts/windows/compose.demo.yaml -f $output/m20.yaml" \
     python -m pytest -p scripts.require_pytest_pass -q backend/tests/m2/test_m3_compose.py -k m20_worker_attempt_identity
 
@@ -165,10 +173,8 @@ ref run --rm -T --no-deps api python -m alembic upgrade head
 ref up -d --no-build --wait --wait-timeout 90 frontend
 ref_frontend="$(ref port frontend 8080)"
 export M4_FRONTEND_PORT="${ref_frontend##*:}"
-(
-    cd frontend
-    npm test -- profile-suggestion.integration.ts --workers=1
-)
+check "Manual and assisted onboarding" \
+    npm --prefix frontend test -- profile-suggestion.integration.ts --workers=1
 
 normal build frontend
 normal up -d --wait --wait-timeout 90 postgres redis
@@ -177,8 +183,11 @@ normal up -d --no-build --wait --wait-timeout 90
 normal_url="http://$(normal port frontend 8080)"
 [[ "$(status -H "Origin: $normal_url" -X POST "$normal_url/api/v1/sources/test/versions/test/approve")" == 403 ]]
 [[ "$(normal config --services | grep -c 'collection-fixture' || true)" == 0 ]]
-(
-    cd frontend
-    M4_FRONTEND_PORT="$normal_web" M14_EMPTY_NORMAL=1 M15_EMPTY_NORMAL=1 M12_EMPTY_NORMAL=1 \
-        npm test -- jobs.integration.ts operator.integration.ts topic-collections.integration.ts -g 'fresh Normal database|isolated empty Normal' --workers=1
-)
+check "Empty Normal workspace" \
+    env M4_FRONTEND_PORT="$normal_web" M14_EMPTY_NORMAL=1 M15_EMPTY_NORMAL=1 M12_EMPTY_NORMAL=1 \
+    npm --prefix frontend test -- jobs.integration.ts operator.integration.ts topic-collections.integration.ts \
+    -g 'fresh Normal database|isolated empty Normal' --workers=1
+if (( ${#failures[@]} )); then
+    printf 'FAIL %s\n' "${failures[@]}"
+    exit 1
+fi

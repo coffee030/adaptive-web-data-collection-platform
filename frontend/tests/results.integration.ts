@@ -219,12 +219,16 @@ test('isolated API and database recover with identical result snapshots and stor
 
   compose('stop', 'api', 'postgres');
   try {
+    if (process.env.M4_DEPLOYED_FRONTEND === '1') {
+      const outage = await request.get(api + '/health', { timeout: 10_000 });
+      expect([502, 503, 504]).toContain(outage.status());
+    }
     await page.goto(fixture.recordsPath);
-    await expect(page.getByRole('alert')).toContainText('Backend unavailable');
+    await expect(page.getByRole('alert')).toContainText('Backend unavailable', { timeout: 12_000 });
     await expect(page.getByRole('list', { name: 'Persisted generic records' })).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Job ID' })).toHaveValue(record.job_id);
   } finally {
-    compose('start', '--wait', 'postgres', 'api');
+    compose('up', '-d', '--no-build', '--no-recreate', '--wait', 'postgres', 'api');
   }
   await expect.poll(async () => (await request.get(api + '/health')).ok(), { timeout: 20_000 }).toBe(true);
   const postgresAfter = compose('ps', '-q', 'postgres');
