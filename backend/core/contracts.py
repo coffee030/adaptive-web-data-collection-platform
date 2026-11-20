@@ -219,7 +219,7 @@ class KeywordSearch(Contract):
     max_body_bytes: Annotated[
         int, Field(strict=True, ge=512_000, le=MAX_SEARCH_BODY_BYTES)
     ] = MAX_SEARCH_BODY_BYTES
-    timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=2)] = 2
+    timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=5)] = 2
     max_seconds: Annotated[int, Field(strict=True, ge=5, le=MAX_SEARCH_SECONDS)] = (
         MAX_SEARCH_SECONDS
     )

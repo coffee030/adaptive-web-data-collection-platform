@@ -12,10 +12,10 @@ description: "Use when creating or modifying Scrapling source adapters, fetching
 
 ## Collect and extract
 
-- Keep source navigation and parsing inside the adapter or its configuration. Use Scrapling to fetch and parse. Apply the Core request and retry policy to initial URLs, redirects, and discovered links. Enforce source approval, robots rules, request limits, destination validation, timeouts, and explicit block handling. Use browser rendering only for approved configurations that need it.
+- Keep source navigation and parsing inside the adapter or its configuration. Use Scrapling selectors for HTML extraction, Scrapling's Fetcher for controlled HTTP fixtures, and the Core's vetted-address HTTPS transport for public sources. Apply the Core request and retry policy to initial URLs, redirects, and discovered links. Enforce source approval, robots rules, request limits, destination validation, timeouts, and explicit block handling.
 - Use configured item and field selectors, required-field rules, typed normalization, and text or attribute extraction as supported. Resolve relative links and recheck the policy before following them. Bound pagination and stop on loops, end markers, blocking, or access violations.
 - Preserve field failures with reasons through the shared validation or quarantine flow. Verify match counts, completeness, and types when HTML changes or adaptive selectors match new elements. Quarantine suspect results or report the extraction failure.
-- Return records and failure details through shared ingestion. Use the defined deduplication identity and preserve source URL, retrieval time, job or run ID, raw evidence reference and hash, and configuration version. Keep application-table writes and unrelated frontend, ML, KOL matching, or orchestration changes outside this workflow.
+- Return records and failure details through shared ingestion. Use the defined deduplication identity and preserve source URL, retrieval time, job or run ID, raw evidence reference and hash, and configuration version. Keep downstream application logic, application-table writes, and unrelated frontend or orchestration changes outside this workflow.
 
 ## Verify and report
 

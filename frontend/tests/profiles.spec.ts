@@ -96,6 +96,38 @@ test('HTML editor validates attribute mode and preserves selector overrides', as
   });
 });
 
+test('keyword draft can opt into a five-second request timeout', async ({ page }) => {
+  const origin = 'https://public.example';
+  const web: Source = { ...source, adapter_type: 'web', allowed_origins: [origin] };
+  const keywordProfile: Configuration = {
+    adapter_type: 'web', config_schema_version: '1', record_schema: configuration.record_schema,
+    selector_type: 'css', item_selector: 'article',
+    fields: [{ name: 'title', selector: 'h1', selector_type: null, mode: 'text',
+      attribute: null, resolve_url: false }],
+    search: { origin, path: '/search', keyword_parameter: 'q', result_item_selector: '.result',
+      detail_link_selector: 'a', max_detail_pages: 1, max_requests: 3 },
+  };
+  await setup(page, web, { ...draft, configuration: keywordProfile });
+  await page.goto(uiDraft);
+  await page.getByText('Pagination and request limits', { exact: true }).click();
+  const timeout = page.getByRole('combobox', { name: 'Request timeout (DNS and transfer)' });
+  await expect(timeout).toHaveValue('2');
+  await expect(timeout.getByRole('option')).toHaveCount(5);
+  await timeout.focus();
+  await timeout.press('End');
+  await expect(timeout).toBeFocused();
+  await expect(timeout).toHaveValue('5');
+  const put = page.waitForRequest(request => request.method() === 'PUT');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  expect((await put).postDataJSON().configuration.search).toEqual({
+    ...keywordProfile.search, timeout_seconds: 5,
+  });
+  await expect(page.getByText('Draft saved.', { exact: false })).toBeVisible();
+  await page.reload();
+  await page.getByText('Pagination and request limits', { exact: true }).click();
+  await expect(timeout).toHaveValue('5');
+});
+
 test('preview, validation, unsaved warning and revision invalidation', async ({ page }) => {
   await setup(page);
   await page.route(url => url.pathname === apiVersion + '/preview', route => route.fulfill({ json: [{

@@ -30,8 +30,8 @@ class JobExecutor:
         self.profiles = Profiles(sessions)
         self.evidence = evidence
 
-    def execute(self, job_id: UUID) -> Job:
-        job, entry = self.jobs.claim(job_id)
+    def execute(self, job_id: UUID, *, worker_instance_id: UUID | None = None) -> Job:
+        job, entry = self.jobs.claim(job_id, worker_instance_id=worker_instance_id)
         try:
             result = self._run(job, entry)
         except ProfileError as error:

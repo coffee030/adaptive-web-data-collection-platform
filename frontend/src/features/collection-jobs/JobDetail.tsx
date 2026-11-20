@@ -3,7 +3,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useResource } from '../../lib/useResource';
 import { apiGet } from '../../lib/api';
 import { getJob, jobsPath, listEvents, maxOffset, sameId } from './api';
-import type { CollectionJob, ExecutionEvent } from './api';
+import type { CollectionJob, ExecutionEvent, ExecutionOrigin, JobDetailResponse } from './api';
 import { Loading, Pagination, RequestProblem, Status, Timestamp } from '../../components/feedback';
 import { profilePath } from '../profiles/api';
 import { evidenceDetailPath, listJobEvidence, listRecords, quarantinePath, recordPath, recordsForJob } from '../results/api';
@@ -171,7 +171,12 @@ function JobSectionLink({ target, children }: { target: string; children: string
   return <Link to={{ search, hash: '#' + target }} state={state} replace>{children}</Link>;
 }
 
-function ExecutionDiagnostics({ job, active }: { job: CollectionJob; active: boolean }) {
+function ExecutionOwner({ workerId, origin }: { workerId?: string | null; origin?: ExecutionOrigin | null }) {
+  if (workerId) return <>Worker <code className="job-worker-id">{workerId}</code></>;
+  return origin === 'direct' ? 'Direct execution' : 'Unknown Worker';
+}
+
+function ExecutionDiagnostics({ job, active }: { job: JobDetailResponse; active: boolean }) {
   const pending = job.status === 'pending';
   const lease = job.status === 'running' ? job.lease_expires_at : null;
   const published = job.last_dispatched_at;
@@ -186,6 +191,9 @@ function ExecutionDiagnostics({ job, active }: { job: CollectionJob; active: boo
         <h3 id="attempt-title">Execution</h3>
         <dl className="job-facts">
           <div><dt>Execution attempts</dt><dd>{job.execution_attempt}</dd></div>
+          <div><dt>Latest claim owner</dt><dd>{job.execution_attempt > 0
+            ? <ExecutionOwner workerId={job.latest_claim_worker_instance_id} origin={job.latest_claim_execution_origin} />
+            : 'Awaiting first claim'}</dd></div>
           {pending && job.next_attempt_at && <div><dt>Earliest scheduled retry (UTC)</dt>
             <dd><Timestamp value={job.next_attempt_at} /></dd></div>}
           {lease && <div><dt>Execution lease deadline (UTC)</dt><dd><Timestamp value={lease} /></dd></div>}
@@ -262,6 +270,10 @@ const eventLabels: ReadonlyMap<string, string> = new Map([
   ['FAILED', 'Run failed'],
 ]);
 
+const attemptEventKinds = new Set([
+  'CLAIMED', 'RETRY_SCHEDULED', 'WORKER_LOST', 'RECOVERY_REQUESTED', 'SUCCEEDED', 'PARTIAL', 'FAILED',
+]);
+
 function EventTimeline({ resource }: { resource: ReturnType<typeof useResource<ExecutionEvent[]>> }) {
   const { result, retry, refreshing, refreshError } = resource;
   return (
@@ -279,25 +291,30 @@ function EventTimeline({ resource }: { resource: ReturnType<typeof useResource<E
       {result.state === 'ready' && (result.data.length === 0
         ? <p className="notice" role="status">No execution events recorded.</p>
         : <ol className="timeline" aria-label="Execution events in API order">
-          {result.data.map(event => (
-            <li key={event.event_id}>
-              <Timestamp value={event.occurred_at} />
-              <div className="event-body">
-                <div className="event-label">
-                  <strong>{event.kind ? eventLabels.get(event.kind) ?? 'Unrecognized execution event' : 'Historical status update'}</strong>
-                  <span className="muted">{statusLabels[event.status]}
-                    {event.execution_attempt != null && ` · Attempt ${event.execution_attempt}`}</span>
+          {result.data.map(event => {
+            const attempt = event.kind && attemptEventKinds.has(event.kind) ? event.execution_attempt : null;
+            return (
+              <li key={event.event_id}>
+                <Timestamp value={event.occurred_at} />
+                <div className="event-body">
+                  <div className="event-label">
+                    <strong>{event.kind ? eventLabels.get(event.kind) ?? 'Unrecognized execution event' : 'Historical status update'}</strong>
+                    <span className="muted">{statusLabels[event.status]}{attempt ? ` · Attempt ${attempt}` : ''}</span>
+                  </div>
+                  {!!attempt && <div className="muted">
+                    Attempt owner: <ExecutionOwner workerId={event.worker_instance_id} origin={event.execution_origin} />
+                  </div>}
+                  {event.error && <ErrorDetails error={event.error} />}
+                  <details className="event-metadata"><summary>Event metadata</summary>
+                    <dl className="job-facts">
+                      <div><dt>Event kind</dt><dd><code>{event.kind ?? 'Not recorded'}</code></dd></div>
+                      <div><dt>Event ID</dt><dd><code>{event.event_id}</code></dd></div>
+                    </dl>
+                  </details>
                 </div>
-                {event.error && <ErrorDetails error={event.error} />}
-                <details className="event-metadata"><summary>Event metadata</summary>
-                  <dl className="job-facts">
-                    <div><dt>Event kind</dt><dd><code>{event.kind ?? 'Not recorded'}</code></dd></div>
-                    <div><dt>Event ID</dt><dd><code>{event.event_id}</code></dd></div>
-                  </dl>
-                </details>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ol>)}
     </section>
   );

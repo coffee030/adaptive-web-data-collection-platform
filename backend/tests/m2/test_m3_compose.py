@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,7 @@ from uuid import UUID, uuid4
 import httpx2
 import pytest
 from conftest import ROOT
+from test_m8_collections import approved, bind, new_intent, response
 from test_vertical_slice import create_approved_source, submit_job
 
 from backend.core.contracts import COMPOSE_FIXTURE_ORIGIN
@@ -704,6 +706,315 @@ def test_m7_recovers_after_worker_loss_and_keeps_terminal_lineage(compose):
         print(
             f"M7 Job {job_id} recovered on attempt 2, ignored a duplicate and retained five captures after restart"
         )
+
+
+def docker_command(*args):
+    return subprocess.check_output(
+        ["docker", *args], cwd=ROOT, stderr=subprocess.STDOUT, timeout=35
+    ).decode(errors="replace")
+
+
+def worker_ids(container):
+    return re.findall(
+        r"Collection Worker instance ID: ([0-9a-f-]{36})",
+        docker_command("logs", container),
+    )
+
+
+def check_m20_dashboard(url, phase, request_id, job_id, worker_a, worker_b):
+    dashboard_dir = os.environ.get("M20_DASHBOARD_DIR")
+    if not dashboard_dir:
+        print(f"M20 Dashboard {phase} skipped (M20_DASHBOARD_DIR unset)")
+        return
+    subprocess.run(
+        [
+            "node",
+            "node_modules/@playwright/test/cli.js",
+            "test",
+            "m20-attempt-identity.integration.ts",
+            "--workers=1",
+            "--output",
+            os.path.join(dashboard_dir, phase),
+        ],
+        check=True,
+        cwd=ROOT / "frontend",
+        timeout=95,
+        env={
+            **os.environ,
+            "M4_REAL_API": "1",
+            "API_PROXY_TARGET": url,
+            "M20_DASHBOARD_PHASE": phase,
+            "M20_REQUEST_ID": request_id,
+            "M20_JOB_ID": job_id,
+            "M20_WORKER_A": worker_a,
+            "M20_WORKER_B": worker_b,
+        },
+    )
+
+
+def test_m20_worker_attempt_identity_survives_recovery_and_restart(compose):
+    if os.environ.get("M20_TEST_WORKER_IDENTITY") != "1":
+        pytest.skip(
+            "Set M20_TEST_WORKER_IDENTITY=1 with the dedicated M20 Worker settings"
+        )
+    prefix, url = compose
+
+    def workers():
+        return (
+            compose_command(prefix, "ps", "--status", "running", "--quiet", "worker")
+            .decode()
+            .splitlines()
+        )
+
+    def submit(client, keyword):
+        parent = response(
+            client,
+            "POST",
+            "/collection-requests",
+            201,
+            new_intent(topic, binding) | {"keyword": keyword},
+        )
+        return parent["id"], parent["jobs"][0]["job"]["job_id"]
+
+    (container_a,) = workers()
+    identities_a = wait_for(lambda: worker_ids(container_a))
+    worker_a = identities_a[-1]
+    with httpx2.Client(base_url=url, timeout=25, trust_env=False) as client:
+        category = response(
+            client,
+            "POST",
+            "/categories",
+            201,
+            {"name": f"M20 fixture {uuid4().hex[:8]}"},
+        )
+        topic = response(
+            client,
+            "POST",
+            "/topics",
+            201,
+            {"name": "Worker recovery fixture", "category_id": category["id"]},
+        )
+        binding = bind(client, topic, approved(client, COMPOSE_FIXTURE_ORIGIN, "cards"))
+        warmups = []
+        for _ in range(2):
+            _, warmup = submit(client, "quick")
+            path = f"/api/v1/collection-jobs/{warmup}"
+            warmups.append(warmup)
+            warm = wait_for(
+                lambda path=path: (
+                    job
+                    if (job := client.get(path).json())["status"] == "succeeded"
+                    else None
+                ),
+                seconds=25,
+            )
+            assert warm["latest_claim_worker_instance_id"] == worker_a
+            assert warm["execution_attempt"] == 1
+        children = wait_for(
+            lambda: (
+                matches
+                if len(
+                    matches := re.findall(
+                        r"ForkPoolWorker-(\d+).*Task collection\.execute_job\[.*\] succeeded",
+                        docker_command("logs", container_a),
+                    )
+                )
+                >= 2
+                else None
+            ),
+            seconds=12,
+        )
+        assert children[-2] != children[-1]
+        print(
+            f"M20 warmup Jobs {warmups} ran on {worker_a} in pool children {children[-2:]}"
+        )
+
+        with block_evidence_publication(prefix):
+            request_id, job_id = submit(client, KEYWORD)
+            path = f"/api/v1/collection-jobs/{job_id}"
+            events = path + "/events"
+            captures = path + "/evidence-pages"
+            records = f"/api/v1/records?job_id={job_id}"
+            wait_for(lambda: evidence_lock_exists(prefix, granted=False), seconds=30)
+            stale_claim = client.get(path).json()
+            assert (stale_claim["status"], stale_claim["execution_attempt"]) == (
+                "running",
+                1,
+            )
+            assert stale_claim["latest_claim_worker_instance_id"] == worker_a
+            assert client.get(events).json()[-1]["worker_instance_id"] == worker_a
+            compose_command(
+                prefix,
+                "up",
+                "-d",
+                "--no-build",
+                "--no-recreate",
+                "--scale",
+                "worker=2",
+                "worker",
+            )
+            (container_b,) = set(workers()) - {container_a}
+            worker_b = wait_for(lambda: worker_ids(container_b), seconds=15)[-1]
+            assert worker_b != worker_a
+            assert client.get(path).json() == stale_claim
+            docker_command("kill", "--signal", "SIGKILL", container_a)
+        assert workers() == [container_b]
+        assert client.get(captures).json() == []
+        assert client.get(records).json() == []
+        print(
+            f"M20 Request {request_id}, Job {job_id}, attempt 1 on {worker_a}, lease {stale_claim['lease_expires_at']}; Worker B {worker_b}"
+        )
+
+        def awaiting_recovery():
+            current = client.get(path).json()
+            return current if current["status"] == "pending" else None
+
+        pending = wait_for(awaiting_recovery, seconds=100)
+        assert pending["execution_attempt"] == 1
+        assert pending["latest_claim_worker_instance_id"] == worker_a
+        assert pending["error"]["code"] == "worker_lost"
+        wait_for(
+            lambda: (
+                (job := client.get(path).json())["execution_attempt"] == 2
+                and job["status"] == "running"
+            ),
+            seconds=20,
+        )
+
+        docker_command("pause", container_b)
+        try:
+            running_paths = [path, events, captures, records]
+            active = snapshot(client, running_paths)
+            assert active[path]["status"] == "running"
+            assert active[path]["latest_claim_worker_instance_id"] == worker_b
+            assert active[captures] == active[records] == []
+            stale_job = {
+                key: value
+                for key, value in stale_claim.items()
+                if not key.startswith("latest_claim_")
+            }
+            probe = compose_command(
+                prefix,
+                "exec",
+                "-T",
+                "api",
+                "python",
+                "-c",
+                "import sys; from backend.application.execution import JobExecutor; "
+                "from backend.application.jobs import Job; "
+                "from backend.core.contracts import CollectionRunResult; "
+                "from backend.core.evidence import LocalEvidenceStore; "
+                "from backend.persistence.database import database_url, evidence_path, make_engine, session_factory; "
+                "old = Job.model_validate_json(sys.argv[1]); "
+                "result = CollectionRunResult(run_id=str(old.job_id), profile_version_id=str(old.profile_version_id), status='completed'); "
+                "executor = JobExecutor(session_factory(make_engine(database_url())), LocalEvidenceStore(evidence_path())); "
+                "current = executor._publish(old, result); print(current.status, current.execution_attempt)",
+                json.dumps(stale_job),
+            )
+            assert probe.strip() == b"running 2"
+            assert snapshot(client, running_paths) == active
+        finally:
+            docker_command("unpause", container_b)
+
+        wait_for(lambda: client.get(path).json()["status"] == "partial", seconds=35)
+        parent_path = f"/api/v1/collection-requests/{request_id}"
+        before = snapshot(
+            client, [parent_path, path, events, captures, records, path + "/quarantine"]
+        )
+        job = before[path]
+        assert (
+            job["job_id"] == before[parent_path]["jobs"][0]["job"]["job_id"] == job_id
+        )
+        assert job["execution_attempt"] == 2
+        assert (job["valid_count"], job["invalid_count"], job["duplicate_count"]) == (
+            2,
+            1,
+            0,
+        )
+        assert [
+            (item["kind"], item["execution_attempt"], item["worker_instance_id"])
+            for item in before[events]
+        ] == [
+            ("JOB_CREATED", 0, None),
+            ("DISPATCHED", 0, None),
+            ("CLAIMED", 1, worker_a),
+            ("WORKER_LOST", 1, worker_a),
+            ("RECOVERY_REQUESTED", 1, worker_a),
+            ("DISPATCHED", 1, None),
+            ("CLAIMED", 2, worker_b),
+            ("PARTIAL", 2, worker_b),
+        ]
+        assert all(event["job_id"] == job_id for event in before[events])
+        assert all(
+            item["execution_origin"] == "worker"
+            for item in before[events]
+            if item["worker_instance_id"]
+        )
+        pages = before[captures]
+        assert [page["capture_kind"] for page in pages] == [
+            "search",
+            "search",
+            "detail",
+            "detail",
+            "detail",
+        ]
+        assert {
+            row["payload"]["title"]: row["evidence_reference"]
+            for row in before[records]
+        } == {
+            "Alpha": pages[2]["evidence_id"],
+            "Beta": pages[3]["evidence_id"],
+        }
+        assert [
+            item["evidence_reference"] for item in before[path + "/quarantine"]
+        ] == [pages[4]["evidence_id"]]
+        compose_command(
+            prefix,
+            "exec",
+            "-T",
+            "dispatcher",
+            "python",
+            "-c",
+            "from sys import argv; from uuid import UUID; "
+            "from backend.queue.dispatcher import publish_job; publish_job(UUID(argv[1]))",
+            job_id,
+        )
+        wait_for(
+            lambda: (
+                f"Collection job {job_id} skipped (job_not_pending)"
+                in docker_command("logs", container_b)
+            )
+        )
+        assert snapshot(client, before) == before
+        check_m20_dashboard(url, "before", request_id, job_id, worker_a, worker_b)
+
+        compose_command(prefix, "restart", "postgres", "redis", "collection-fixture")
+        compose_command(
+            prefix, "up", "-d", "--wait", "postgres", "redis", "collection-fixture"
+        )
+        compose_command(prefix, "restart", "api", "dispatcher")
+        docker_command("restart", container_b)
+        restarted_b = wait_for(
+            lambda: (
+                ids[-1] if (ids := worker_ids(container_b))[-1] != worker_b else None
+            )
+        )
+        assert restarted_b not in {worker_a, worker_b}
+        wait_for(lambda: client.get("/api/v1/health").status_code == 200)
+        assert snapshot(client, before) == before
+        for page in pages:
+            raw = compose_command(
+                prefix,
+                "exec",
+                "-T",
+                "api",
+                "cat",
+                f"/data/evidence/{UUID(page['evidence_id']).hex}/input.bin",
+            )
+            assert hashlib.sha256(raw).hexdigest() == page["content_hash"]
+        check_m20_dashboard(url, "after", request_id, job_id, worker_a, worker_b)
+        print(f"M20 restarted Worker B on {restarted_b}; snapshots identical")
+        print("M20 acceptance snapshot:", json.dumps(before, ensure_ascii=True))
 
 
 def test_compose_revocation_after_search_prevents_next_capture(compose):

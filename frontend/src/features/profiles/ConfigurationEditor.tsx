@@ -118,6 +118,14 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
                   onChange={event => patchSearch({ max_requests: Number(event.target.value) })} />
                 {error('maximum-requests')}
               </label>
+              <label>Request timeout (DNS and transfer)
+                <select value={search.timeout_seconds ?? 2}
+                  onChange={event => patchSearch({ timeout_seconds: Number(event.target.value) })}>
+                  {[1, 2, 3, 4, 5].map(seconds => <option key={seconds} value={seconds}>
+                    {seconds} {seconds === 1 ? 'second' : 'seconds'}
+                  </option>)}
+                </select>
+              </label>
             </>}
             <label>{search ? 'Search next-link selector (optional)' : 'Next-link selector (optional)'}
               <input {...invalid('next-link-selector')} value={draft.nextLinkSelector}

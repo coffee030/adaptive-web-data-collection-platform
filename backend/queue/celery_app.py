@@ -1,6 +1,9 @@
 """Celery transport settings for the collection queue."""
 
-from celery import Celery
+import logging
+from uuid import UUID, uuid4
+
+from celery import Celery, signals
 
 from backend.persistence.database import settings
 
@@ -8,6 +11,8 @@ QUEUE = "collection"
 TASK = "collection.execute_job"
 TASK_TIME_LIMIT = 60
 VISIBILITY_TIMEOUT = 180
+LOGGER = logging.getLogger(__name__)
+_worker_instance_id: UUID | None = None
 
 app = Celery(
     "collection",
@@ -35,3 +40,24 @@ app.conf.update(
         "max_retries": 0,
     },
 )
+
+
+@signals.worker_init.connect
+def _identify_worker(sender, **kwargs) -> None:
+    global _worker_instance_id
+    if sender.app is app:
+        # The node initializes before starting the pool. Prefork children
+        # (including replacements) inherit this value from their parent.
+        _worker_instance_id = uuid4()
+
+
+def worker_instance_id() -> UUID:
+    if _worker_instance_id is None:
+        raise RuntimeError("Collection Worker identity was not initialized")
+    return _worker_instance_id
+
+
+@signals.worker_ready.connect
+def _log_worker_identity(sender, **kwargs) -> None:
+    if sender.app is app:
+        LOGGER.info("Collection Worker instance ID: %s", worker_instance_id())

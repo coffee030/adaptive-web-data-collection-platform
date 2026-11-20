@@ -1,6 +1,7 @@
 """PostgreSQL tests use a disposable schema in an explicitly selected test database."""
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -10,10 +11,12 @@ from alembic.config import Config
 from sqlalchemy import event
 
 from backend.application.inputs import CsvEntry
+from backend.application.jobs import Jobs
 from backend.application.profiles import Profiles
 from backend.core.contracts import CsvMappingConfiguration, Source
 from backend.core.evidence import LocalEvidenceStore
 from backend.persistence.database import make_engine, session_factory
+from backend.persistence.models import EventRow
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -68,6 +71,31 @@ def pg_engine(pg_url, pg_schema, request):
 @pytest.fixture
 def sessions(pg_engine):
     return session_factory(pg_engine)
+
+
+@pytest.fixture
+def legacy_execution_events(monkeypatch):
+    """Seed execution events using the columns available before revision 0010."""
+
+    def write_event(session, job, kind, *, error=None):
+        fields = {
+            "id": uuid4(),
+            "job_id": job.id,
+            "status": job.status,
+            "kind": kind,
+            "execution_attempt": job.execution_attempt,
+            "error": error.model_dump(mode="json") if error else None,
+        }
+        session.execute(EventRow.__table__.insert().values(**fields))
+        return EventRow(**fields)
+
+    @contextmanager
+    def legacy_writer():
+        with monkeypatch.context() as patch:
+            patch.setattr(Jobs, "_add_event", staticmethod(write_event))
+            yield
+
+    return legacy_writer
 
 
 @pytest.fixture

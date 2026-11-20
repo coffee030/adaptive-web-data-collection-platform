@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.contracts import (
@@ -26,7 +26,19 @@ from backend.persistence.profiles import (
 from .inputs import Entry, check_entry
 
 JobStatus = Literal["pending", "running", "succeeded", "partial", "failed"]
+ExecutionOrigin = Literal["worker", "direct"]
 TERMINAL = frozenset({"succeeded", "partial", "failed"})
+ATTEMPT_EVENTS = frozenset(
+    {
+        "CLAIMED",
+        "RETRY_SCHEDULED",
+        "WORKER_LOST",
+        "RECOVERY_REQUESTED",
+        "SUCCEEDED",
+        "PARTIAL",
+        "FAILED",
+    }
+)
 LEASE_DURATION = timedelta(seconds=90)
 MAX_ATTEMPTS = MAX_JOB_ATTEMPTS
 LOGGER = logging.getLogger(__name__)
@@ -58,6 +70,11 @@ class Job(Contract):
     dispatch_error_code: str | None
 
 
+class JobDetail(Job):
+    latest_claim_worker_instance_id: UUID | None = None
+    latest_claim_execution_origin: ExecutionOrigin | None = None
+
+
 class ExecutionEvent(Contract):
     event_id: UUID
     job_id: UUID
@@ -65,6 +82,8 @@ class ExecutionEvent(Contract):
     occurred_at: datetime
     kind: str | None
     execution_attempt: int | None
+    worker_instance_id: UUID | None = None
+    execution_origin: ExecutionOrigin | None = None
     error: CollectionError | None
 
 
@@ -172,6 +191,30 @@ class Jobs:
         with self.sessions() as session:
             return job_from_row(self._get_row(session, job_id))
 
+    def detail(self, job_id: UUID) -> JobDetail:
+        query = (
+            select(JobRow, EventRow.worker_instance_id, EventRow.execution_origin)
+            .outerjoin(
+                EventRow,
+                and_(
+                    EventRow.job_id == JobRow.id,
+                    EventRow.execution_attempt == JobRow.execution_attempt,
+                    EventRow.kind == "CLAIMED",
+                ),
+            )
+            .where(JobRow.id == job_id)
+        )
+        with self.sessions() as session:
+            match = session.execute(query).one_or_none()
+            if match is None:
+                raise ProfileError("job_not_found", "Collection job does not exist")
+            row, worker, origin = match
+            return JobDetail(
+                **job_from_row(row).model_dump(),
+                latest_claim_worker_instance_id=worker,
+                latest_claim_execution_origin=origin,
+            )
+
     def list_jobs(
         self,
         limit: int,
@@ -203,21 +246,35 @@ class Jobs:
                 select(EventRow)
                 .where(EventRow.job_id == job_id)
                 .order_by(EventRow.sequence)
-            )
-            return [
-                ExecutionEvent(
-                    event_id=row.id,
-                    job_id=row.job_id,
-                    status=row.status,
-                    occurred_at=row.occurred_at,
-                    kind=row.kind,
-                    execution_attempt=row.execution_attempt,
-                    error=row.error,
+            ).all()
+            claims = {
+                row.execution_attempt: row for row in rows if row.kind == "CLAIMED"
+            }
+            events = []
+            for row in rows:
+                claim = (
+                    claims.get(row.execution_attempt)
+                    if row.kind in ATTEMPT_EVENTS
+                    else None
                 )
-                for row in rows
-            ]
+                events.append(
+                    ExecutionEvent(
+                        event_id=row.id,
+                        job_id=row.job_id,
+                        status=row.status,
+                        occurred_at=row.occurred_at,
+                        kind=row.kind,
+                        execution_attempt=row.execution_attempt,
+                        worker_instance_id=claim.worker_instance_id if claim else None,
+                        execution_origin=claim.execution_origin if claim else None,
+                        error=row.error,
+                    )
+                )
+            return events
 
-    def claim(self, job_id: UUID) -> tuple[Job, dict]:
+    def claim(
+        self, job_id: UUID, *, worker_instance_id: UUID | None = None
+    ) -> tuple[Job, dict]:
         with self.sessions.begin() as session:
             row = self._get_row(session, job_id, lock=True)
             if row.status != "pending":
@@ -235,7 +292,11 @@ class Jobs:
             row.next_attempt_at = None
             row.error = None
             row.dispatch_error_code = None
-            self._add_event(session, row, "CLAIMED")
+            claim = self._add_event(session, row, "CLAIMED")
+            claim.worker_instance_id = worker_instance_id
+            claim.execution_origin = (
+                "direct" if worker_instance_id is None else "worker"
+            )
             return job_from_row(row), row.input_payload
 
     @staticmethod
@@ -252,17 +313,17 @@ class Jobs:
         kind: str,
         *,
         error: CollectionError | None = None,
-    ) -> None:
-        session.add(
-            EventRow(
-                id=uuid4(),
-                job_id=job.id,
-                status=job.status,
-                kind=kind,
-                execution_attempt=job.execution_attempt,
-                error=error.model_dump(mode="json") if error else None,
-            )
+    ) -> EventRow:
+        event = EventRow(
+            id=uuid4(),
+            job_id=job.id,
+            status=job.status,
+            kind=kind,
+            execution_attempt=job.execution_attempt,
+            error=error.model_dump(mode="json") if error else None,
         )
+        session.add(event)
+        return event
 
     @staticmethod
     def owns_attempt(session: Session, row: JobRow, attempt: int) -> bool:

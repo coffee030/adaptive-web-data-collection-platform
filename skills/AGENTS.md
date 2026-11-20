@@ -4,8 +4,8 @@
 
 - Build the Adaptive Scalable and Observable Web Data Collection Platform. The reusable Core manages approved sources, web collection and controlled CSV imports, jobs, record validation and deduplication, raw evidence and provenance, execution events, REST APIs, and operational monitoring.
 - Use a modular monolith with React and TypeScript, Python with FastAPI and Pydantic, PostgreSQL for durable state, Redis as the Celery broker, separate Celery worker processes, and Docker Compose. Keep development practical on Windows 11 with about 8 GB RAM and a near-zero budget. The platform must run without an external LLM.
-- Celery distributes work. The Core owns job state, retry policy, and shared request limits. Scrapling fetches and parses permitted web content and supersedes the earlier HTTPX and Beautiful Soup collection direction. A second scheduler, including Scrapling Spider scheduling, requires an approved architecture decision record (ADR).
-- Keep application logic behind module boundaries and use documented Core interfaces. IA KOL Discovery and Matching is the main FYP application. Its platforms, sources, campaign inputs, matching criteria, and acceptance criteria are pending. E-commerce Sentiment Analysis is the first planned application and supports the ITP4524 group assignment. Keep model training, comparison, and selected-model integration in that application.
+- Celery distributes work. The Core owns job state, retry policy, and shared request limits. Scrapling parses permitted HTML and fetches controlled HTTP fixtures. The Core uses a separate vetted-address HTTPS transport for public sources. A second scheduler, including Scrapling Spider scheduling, requires an approved architecture decision record (ADR). [System overview](../docs/architecture/System-Overview.md)
+- The downstream industry application remains open. Keep application-specific logic behind module boundaries and use documented Core interfaces. ITP4524 coursework is outside the FYP scope.
 
 ## Source access and data integrity
 

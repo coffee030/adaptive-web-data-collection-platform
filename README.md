@@ -1,12 +1,14 @@
 # Adaptive Scalable and Observable Web Data Collection Platform
 
-A local dashboard for collecting structured records from approved websites and CSV inputs. Organize website searches by category and topic, track each source job, and download validated records with their provenance.
+This final-year project is a reusable web data collection platform. An authorised operator chooses a topic, approved sources and a keyword, and the Core applies a reviewed extraction profile to each source within its access limits. A partner can receive validated records as CSV or JSON and trace each result back to the captured source page.
 
-This is a higher diploma final-year project. The current version runs on a trusted local machine and supports approved HTTPS keyword search, controlled HTML sources, and allowlisted CSV inputs. The repository includes controlled sample data.
+The downstream industry application is open. The Core runs on a trusted local machine and also supports controlled HTML and allowlisted CSV inputs.
+
+[System overview](docs/architecture/System-Overview.md) · [Synthetic Demo](#synthetic-demo) · [Windows Normal-mode setup](docs/setup/Windows-One-Click-Setup.md#get-started) · [Live publisher evidence](docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#timeout-validation-and-final-acceptance-on-20-november-2026-utc)
 
 ## Quick start on Windows
 
-You’ll need Windows 11 with WSL 2, Docker Desktop running in Linux container mode, and Node.js 22.13 or later in the 22.x series.
+Use Windows 11 with WSL 2, Docker Desktop in Linux container mode, and Docker Compose 2.20 or later. Node.js 22.13 or later in the 22.x series is recommended. The commands below start from the published `main` branch. Use the M18 or M19 feature checkout for the M18B-tested configuration and related contracts until that work is merged.
 
 ```powershell
 git clone --branch main https://github.com/coffee030/adaptive-web-data-collection-platform.git
@@ -17,7 +19,7 @@ cd adaptive-web-data-collection-platform
 .\Stop-Platform.bat
 ```
 
-A fresh Normal installation opens an empty Dashboard at [127.0.0.1:5197](http://127.0.0.1:5197/). Stop keeps your settings and data.
+A fresh Normal installation opens an empty Dashboard, usually at `http://127.0.0.1:5197/`. To collect from real sources, a trusted operator must explicitly enable local approval and configure and approve the sources, profile versions and topic bindings. Stop keeps your settings and data. [Windows settings and approval](docs/setup/Windows-One-Click-Setup.md#settings-data-and-the-controlled-demo)
 
 ### Synthetic Demo
 
@@ -34,14 +36,14 @@ The PowerShell commands for operating the same Demo are available as well.
 
 Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The first successful Start prepares three fictional topics with 18 validated Records, verifiable Evidence, Article History and CSV/JSON downloads. Demo has its own settings and Docker volumes. [Presentation walkthrough](docs/evaluation/M16-FYP-Presentation-Runbook.md)
 
-FTC and New York Fed collection is unavailable in this release. Public website review and opt-in eligibility are documented separately. [Real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
+The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B verified successful Jobs and detail evidence for Welsh Government, Scottish Fiscal Commission and Economics Observatory. The FTC and New York Fed candidates were unsupported under the conditions evaluated in M10. [Shared Request evidence trace](docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#record-to-detail-evidence-verification) · [M10 real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
 
 ## Collect by topic
 
 1. **Set up approved sources.** In **Sources**, register and authorize each website. Choose **Keyword search and detail pages** in the profile's **Collection mode**, preview and validate a sample keyword, and approve the profile version. To keep article history, enable **Store article history** in the profile before approval.
 2. **Create a category and topic.** Open **Operations → Topics & bindings**. Create a category and add a topic under it. Select the topic, open **Manage approved bindings**, and approve a binding for each source and profile version you want to use.
 3. **Start a collection request.** From **Overview** or the main navigation, open **New Collection**. Select your category and topic, choose one to four approved sources, and enter a keyword. Select **Review collection**, then **Start topic collection**. Each selected source and profile pair runs as a separate job.
-4. **Review results.** In the collection request, check the child job statuses and select **View request records** to see accepted records from the run. A record links to its lineage and capture evidence. If the profile stores article history, open **Article history** to inspect versions and observations. Use a child job's **Quarantine** link to see rejected records.
+4. **Review results.** In the collection request, check the child job statuses and select **View request records**. Inspect an accepted record, then select **View capture evidence** to see its capture details and SHA-256. If the profile stores article history, open **Article history** to inspect versions and observations. Use a child job's **Quarantine** link to see rejected records.
 5. **Export records.** After the child jobs finish, select **Download CSV** or **Download JSON** on the request page. To export a single source job, open its **Job details** and use the download buttons there.
 
 For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-source collection and CSV import**. The [example data guide](docs/demo/M5.5-dashboard-demo-runbook.md) provides the settings and inputs for the bundled HTML and CSV samples.

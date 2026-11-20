@@ -276,9 +276,12 @@ def test_multiple_sources_refresh_history_and_revocation(
     response(client, "POST", REQUESTS, 409, intent | {"keyword": "different"})
 
     worker = JobExecutor(sessions, LocalEvidenceStore(tmp_path))
-    run_children(worker, original)
+    completed = run_children(worker, original)
     first = response(client, "GET", f"{REQUESTS}/{original['id']}", 200)
     assert first["status"] == "succeeded" and first["finished_at"]
+    assert [child["job"] for child in first["jobs"]] == [
+        job.model_dump(mode="json") for job in completed
+    ]
     articles = response(client, "GET", f"/articles?request_id={original['id']}", 200)
     assert len(articles) == len({article["id"] for article in articles}) == 2
     card_id = next(
@@ -479,12 +482,15 @@ def test_concurrent_publication_and_late_observation(
 
 
 @pytest.mark.parametrize("pg_engine", ["0008"], indirect=True)
-def test_m7_upgrade_with_populated_database(pg_engine, sessions, job_setup, client):
+def test_m7_upgrade_with_populated_database(
+    pg_engine, sessions, job_setup, client, legacy_execution_events
+):
     _, source, version, entry, store = job_setup
     approve_job_profile(job_setup)
     executor = JobExecutor(sessions, store)
-    job, _ = executor.jobs.create(source, version, entry)
-    assert executor.execute(job.job_id).status == "succeeded"
+    with legacy_execution_events():
+        job, _ = executor.jobs.create(source, version, entry)
+        assert executor.execute(job.job_id).status == "succeeded"
     path = f"/collection-jobs/{job.job_id}/evidence-pages"
     [before] = response(client, "GET", path, 200)
     evidence = store.resolve(UUID(before["evidence_id"]).hex)
