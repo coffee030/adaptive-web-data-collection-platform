@@ -1,5 +1,7 @@
 # M22A — Source onboarding feasibility and manual baseline
 
+The [M22B request-attribution addendum](M22B-Bounded-Source-Discovery.md#request-attribution-addendum-to-m22a) records how to count browser, discovery, sample-check and health-probe traffic.
+
 **Technical feasibility passed for two bounded static GET paths and a manual-example path on controlled fixtures. The baseline protocol is frozen and awaits human measurements. M22B decision is CONDITIONAL GO.** A single developer can implement the pre-draft policy and budget context, static form parsing, and draft mapping against the reference routes. Run the two manual tasks before using the assisted feature or exposing its suggestions to the baseline operator. Keep the reserved tasks out of development and leave approval and binding with the operator.
 
 **Starting revision.** `git fetch origin main` resolved to `b8073dad43a72ae5d108d2d8a3f40dcf1706a6a6`, the merge of M18–M21 (PR #7). Its second parent is M21C `b1c5fcffb8e3c3047686fd9a8eb116d5fcd6bce5`. M22A uses an isolated `feature/M22A-source-onboarding` worktree. Production code, Dashboard and infrastructure have no tracked changes.
