@@ -1,0 +1,32 @@
+{
+  "technical_only": true,
+  "profile_version_id": "b242feff60304a01a1822e3e8dc4808d",
+  "revision": 1,
+  "config_hash": "fdc32671879e9b2b1700a205a8dd4960369e3376ae47f932f1d1f1ab8a6800d4",
+  "validation_report_id": "e4708495edfc418d9eebded9d0607954",
+  "core_and_browser_receipts": {
+    "browser": 3,
+    "policy rejection": 0,
+    "discovery": 4,
+    "preview": 3,
+    "validate": 3,
+    "approval": 0
+  },
+  "health_probes_in_window": 7,
+  "denied_before_send": 1,
+  "final_score": {
+    "correct_detail_links": 2,
+    "wrong_detail_links": 0,
+    "missing_detail_links": 0,
+    "correct_required_fields": 4,
+    "core_errors": []
+  },
+  "unedited_proposal_score": {
+    "correct_detail_links": 2,
+    "wrong_detail_links": 0,
+    "missing_detail_links": 0,
+    "correct_required_fields": 4,
+    "core_errors": [],
+    "unresolved_fields": []
+  }
+}

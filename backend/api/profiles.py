@@ -20,6 +20,7 @@ from backend.core.contracts import (
     SourceProfileVersion,
 )
 from backend.core.profiles import ProfileError
+from backend.core.suggestion_models import SuggestionRequest, SuggestionResult
 
 router = APIRouter(prefix="/sources", tags=["sources and profiles"])
 VERSIONS = "/{source_id}/versions"
@@ -105,6 +106,11 @@ def get_source(request: Request, source_id: UUID):
 @router.patch("/{source_id}/authorization", response_model=Source)
 def change_authorization(request: Request, source_id: UUID, body: Authorization):
     return request.app.state.profiles.set_authorization(source_id, body.approval_status)
+
+
+@router.post("/{source_id}/profile-suggestions", response_model=SuggestionResult)
+def suggest_profile(request: Request, source_id: UUID, body: SuggestionRequest):
+    return request.app.state.profiles.suggest(source_id, body)
 
 
 @router.post(VERSIONS, response_model=ProfileSnapshot, status_code=201)

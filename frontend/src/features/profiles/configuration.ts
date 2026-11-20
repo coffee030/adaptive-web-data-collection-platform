@@ -1,5 +1,5 @@
 import type { Adapter } from '../sources/api';
-import { articleFields, type ArticleField, type ArticleMapping, type Configuration, type KeywordSearch, type RecordField, type SelectorType } from './api';
+import { articleFields, type ArticleField, type ArticleMapping, type Configuration, type KeywordSearch, type RecordField, type Schema, type SelectorType, type SuggestedMapping } from './api';
 
 interface Field extends RecordField {
   mapping: string;
@@ -57,6 +57,41 @@ export function draftFrom(configuration?: Configuration): Draft {
         mode: extraction.mode, attribute: extraction.attribute ?? '', resolveUrl: extraction.resolve_url,
       } : base;
     }) ?? [emptyField()],
+  };
+}
+
+export function suggestionSchema(draft: Draft): Schema | undefined {
+  const hasSchema = draft.recordType.trim() || draft.identity !== null || draft.fields.length !== 1
+    || draft.fields.some(field => field.name.trim() || field.value_type !== 'string' || !field.required);
+  if (!hasSchema) return undefined;
+  const { configuration, errors } = compileDraft(draft, 'web');
+  if (errors['record-type'] || Object.keys(errors).some(key => key.startsWith('name-'))) {
+    throw new Error('Complete the record type and field names in the editor before requesting a suggestion.');
+  }
+  return configuration.record_schema;
+}
+
+export function applySuggestion(draft: Draft, proposal: SuggestedMapping, schema?: Schema): Draft {
+  const proposed = draftFrom({
+    adapter_type: 'web',
+    config_schema_version: '1',
+    record_schema: proposal.record_schema,
+    selector_type: 'xpath',
+    item_selector: proposal.item_selector ?? '',
+    search: proposal.search,
+    fields: proposal.fields.flatMap(field => field.mapping ? [field.mapping] : []),
+  });
+  if (!schema) return proposed;
+  const mappings = new Map(proposed.fields.map(field => [field.name, field]));
+  return {
+    ...proposed,
+    article: draft.article,
+    identity: draft.identity,
+    fields: draft.fields.map(field => {
+      const candidate = mappings.get(field.name.trim());
+      if (candidate?.mapping) return candidate;
+      return { ...field, selectorType: field.mapping ? field.selectorType || draft.selectorType : '' };
+    }),
   };
 }
 

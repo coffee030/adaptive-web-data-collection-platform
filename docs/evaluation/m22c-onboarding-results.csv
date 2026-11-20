@@ -1,0 +1,5 @@
+trial_id,pair_id,order,arm,source_name,homepage_path,keyword,max_requests,status,operator_id,dashboard_familiarity,layout_familiarity,started_at,elapsed_seconds,waiting_seconds,saved_config_edits,retries,stop_reason,fallback_used,fallback_reason,seconds_to_fallback,seconds_to_abandonment,profile_version,config_hash,validation_report_id,evidence_reference,correct_detail_links,wrong_detail_links,missing_detail_links,correct_required_fields,unauthorized_requests,scoring_notes
+M22A-01,Cards,1,manual,Cards A,/m22a/cards/a/,spring update,4,planned,,,,,,,,,,,,,,,,,,,,,,,
+M22A-02,Catalog,2,manual,Catalog B,/m22a/catalog/b/,autumn update,5,planned,,,,,,,,,,,,,,,,,,,,,,,
+M22A-03,Cards,3,assisted,Cards B,/m22a/cards/b/,autumn update,4,planned,,,,,,,,,,,,,,,,,,,,,,,
+M22A-04,Catalog,4,assisted,Catalog A,/m22a/catalog/a/,spring update,5,planned,,,,,,,,,,,,,,,,,,,,,,,

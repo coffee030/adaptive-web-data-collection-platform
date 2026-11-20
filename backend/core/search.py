@@ -40,16 +40,26 @@ def initial_input(
         return entry
     if not isinstance(entry, KeywordInput):
         raise InputError("keyword_required", "This profile requires a keyword input")
-    keyword = entry.keyword.strip()
+    search = config.search
+    return keyword_input(
+        source, search.origin, search.path, search.keyword_parameter, entry.keyword
+    )
+
+
+def checked_keyword(value: str) -> str:
+    keyword = value.strip()
     if not 1 <= len(keyword) <= 128 or any(not char.isprintable() for char in keyword):
         raise InputError(
             "invalid_keyword", "Enter a keyword of 1–128 printable characters"
         )
-    search = config.search
-    url = (
-        f"{search.origin}{search.path}?{urlencode({search.keyword_parameter: keyword})}"
-    )
-    return WebInput(checked_url(source, url)[0])
+    return keyword
+
+
+def keyword_input(
+    source: Source, origin: str, path: str, parameter: str, keyword: str
+) -> WebInput:
+    query = urlencode({parameter: checked_keyword(keyword)})
+    return WebInput(checked_url(source, f"{origin}{path}?{query}")[0])
 
 
 class SearchTraversal:

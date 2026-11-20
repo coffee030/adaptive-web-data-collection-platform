@@ -9,7 +9,7 @@ export const paginationLimits = [1, 2, 3, 4, 5] as const;
 type ValueType = typeof valueTypes[number];
 export type SelectorType = typeof selectorTypes[number];
 export interface RecordField { name: string; value_type: ValueType; required: boolean }
-interface Schema { record_type: string; schema_version: '1'; identity_field: string | null; fields: RecordField[] }
+export interface Schema { record_type: string; schema_version: '1'; identity_field: string | null; fields: RecordField[] }
 interface Extraction {
   name: string; selector: string; selector_type: SelectorType | null;
   mode: 'text' | 'attribute'; attribute: string | null; resolve_url: boolean;
@@ -87,3 +87,42 @@ export const approveProfile = (source: string, id: string, report: Report, appro
   apiPost<Profile>(version(source, id) + '/approve', {
     approver, report_id: report.report_id, config_hash: report.config_hash,
   }, signal);
+
+type SuggestionInput = { keyword: string; record_schema?: Schema } & (
+  | { mode: 'homepage'; homepage_url: string }
+  | { mode: 'examples'; results_url: string; detail_url: string }
+);
+export interface SuggestedMapping {
+  search: KeywordSearch;
+  record_schema: Schema;
+  item_selector: string | null;
+  listing_sample: string | null;
+  fields: {
+    name: string; mapping: Extraction | null;
+    sample: string | number | boolean | null; reason: string;
+  }[];
+}
+export interface SuggestionResult {
+  outcome: 'usable' | 'partial' | 'needs_examples' | 'unsupported' | 'denied' | 'budget_exhausted' | 'transient_failure';
+  stage: 'entry' | 'robots' | 'homepage' | 'navigation' | 'results' | 'detail' | 'mapping';
+  code: string;
+  reason: string;
+  limits: {
+    policy: 'controlled_defaults' | 'public_conservative';
+    reviewed_profile_limits: boolean;
+    max_requests: number;
+    max_body_bytes: number;
+    max_total_body_bytes: number;
+    timeout_seconds: number;
+    max_seconds: number;
+    min_request_interval_ms: number;
+  } | null;
+  reserved_requests: number;
+  actual_attempts: number;
+  requests: { stage: SuggestionResult['stage']; state: 'denied_before_send' | 'reserved_unsent' | 'transport_attempt' }[];
+  retry_after_seconds: number | null;
+  proposal: SuggestedMapping | null;
+}
+
+export const suggestProfile = (source: string, input: SuggestionInput, signal: AbortSignal) =>
+  apiPost<SuggestionResult>(sourcePath(source) + '/profile-suggestions', input, signal, 25_000);

@@ -63,6 +63,13 @@
 .profile-options { min-inline-size: 0; }
 .profile-options > summary { cursor: pointer; font-size: 0.9375rem; font-weight: 600; width: fit-content; }
 .profile-options > :is(.profile-form, .profile-grid) { margin-block-start: var(--md); }
+.profile-suggestion { padding: var(--md); border-block-end: 1px solid var(--divider); }
+.profile-suggestion p { margin: 0; }
+.profile-suggestion ol { margin-block-end: 0; }
+.suggestion-mapping { margin: 0; overflow-wrap: anywhere; }
+.suggestion-mapping dt { font-weight: 600; }
+.suggestion-mapping dd { margin: 0 0 var(--sm); }
+.suggestion-mapping p { color: var(--text-secondary); }
 .profile-save-row { border-block-start: 1px solid var(--divider); padding-block-start: var(--md); }
 .profile-workspace { max-inline-size: 960px; }
 .profile-workspace .profile-body { max-inline-size: none; }

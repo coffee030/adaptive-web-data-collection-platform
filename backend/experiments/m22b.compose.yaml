@@ -1,0 +1,22 @@
+# Opt-in override for the controlled reference integration.
+services:
+  api:
+    image: ${M22B_BACKEND_IMAGE:-collection-backend:m22b}
+    volumes:
+      - ./backend:/app/backend:ro
+  collection-fixture:
+    image: ${M22B_BACKEND_IMAGE:-collection-backend:m22b}
+    command: ["python", "-m", "backend.experiments.m22b_reference_server", "0.0.0.0"]
+    volumes:
+      - ./backend:/app/backend:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8001/robots.txt',headers={'User-Agent':'M22B-Compose-Health/1.0'}),timeout=2).close()"]
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${M22B_API_SUBNET:-10.251.88.0/24}
+  fixtures:
+    ipam:
+      config:
+        - subnet: ${M22B_FIXTURE_SUBNET:-10.251.89.0/24}
