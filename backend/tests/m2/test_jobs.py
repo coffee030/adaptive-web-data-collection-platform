@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 import pytest
 from conftest import approve_job_profile
 from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.exc import DBAPIError
 
 from backend.api.app import create_app
 from backend.application.jobs import Jobs
@@ -45,14 +47,19 @@ def test_concurrent_claim_and_protected_terminal_state(sessions, job_setup):
     jobs = Jobs(sessions)
     job, _ = jobs.create(source, version, entry)
 
-    def claim(_):
+    workers = [uuid4(), uuid4()]
+
+    def claim(worker):
         try:
-            return jobs.claim(job.job_id)[0].status
+            jobs.claim(job.job_id, worker_instance_id=worker)
+            return worker
         except ProfileError as error:
-            return error.code
+            assert error.code == "job_not_pending"
+            return None
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        assert sorted(pool.map(claim, range(2))) == ["job_not_pending", "running"]
+        owners = [owner for owner in pool.map(claim, workers) if owner is not None]
+    assert len(owners) == 1
     with sessions.begin() as session:
         row = jobs._get_row(session, job.job_id, lock=True)
         result = jobs._finish(
@@ -63,10 +70,12 @@ def test_concurrent_claim_and_protected_terminal_state(sessions, job_setup):
         )
     assert result.finished_at >= result.started_at
     assert jobs.get(job.job_id) == result
-    assert [event.status for event in jobs.events(job.job_id)] == [
-        "pending",
-        "running",
-        "failed",
+    assert [
+        (event.status, event.worker_instance_id) for event in jobs.events(job.job_id)
+    ] == [
+        ("pending", None),
+        ("running", owners[0]),
+        ("failed", owners[0]),
     ]
     with pytest.raises(ProfileError, match="running job"), sessions.begin() as session:
         row = jobs._get_row(session, job.job_id, lock=True)
@@ -93,7 +102,10 @@ def test_job_api_creates_a_pending_job(pg_engine, tmp_path, job_setup):
         assert "input_payload" not in job
         assert client.post("/api/v1/collection-jobs", json=body).status_code == 200
         url = f"/api/v1/collection-jobs/{job['job_id']}"
-        assert client.get(url).json() == job
+        assert client.get(url).json() == job | {
+            "latest_claim_worker_instance_id": None,
+            "latest_claim_execution_origin": None,
+        }
         assert [event["status"] for event in client.get(url + "/events").json()] == [
             "pending"
         ]
@@ -107,3 +119,26 @@ def test_job_api_creates_a_pending_job(pg_engine, tmp_path, job_setup):
             },
         }
         assert client.post("/api/v1/collection-jobs", json=rejected).status_code == 403
+
+
+def test_rolled_back_claim_leaves_no_owner(pg_engine, sessions, job_setup):
+    approve_job_profile(job_setup)
+    _, source, version, entry, _ = job_setup
+    jobs = Jobs(sessions)
+    job, _ = jobs.create(source, version, entry)
+
+    def reject_commit(connection):
+        connection.exec_driver_sql("SELECT 1 / 0")
+
+    event.listen(pg_engine, "commit", reject_commit)
+    try:
+        with pytest.raises(DBAPIError):
+            jobs.claim(job.job_id, worker_instance_id=uuid4())
+    finally:
+        event.remove(pg_engine, "commit", reject_commit)
+
+    detail = jobs.detail(job.job_id)
+    assert detail.execution_attempt == 0
+    assert detail.latest_claim_worker_instance_id is None
+    assert detail.latest_claim_execution_origin is None
+    assert [event.kind for event in jobs.events(job.job_id)] == ["JOB_CREATED"]

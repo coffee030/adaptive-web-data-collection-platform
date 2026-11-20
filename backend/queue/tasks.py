@@ -16,7 +16,7 @@ from backend.persistence.database import (
     session_factory,
 )
 
-from .celery_app import TASK, app
+from .celery_app import TASK, app, worker_instance_id
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def execute_job(job_id: str) -> None:
         LOGGER.warning("Discarded collection message with an invalid job UUID")
         return
     try:
-        worker_executor().execute(job_uuid)
+        worker_executor().execute(job_uuid, worker_instance_id=worker_instance_id())
     except ProfileError as error:
         if error.code not in {"job_not_found", "job_not_pending", "job_not_due"}:
             raise

@@ -144,6 +144,7 @@
 .job-facts { display: grid; gap: var(--sm) var(--md); }
 .job-facts dt { margin-block-end: 2px; color: var(--text-secondary); }
 .job-facts dd { overflow-wrap: anywhere; }
+.job-worker-id { overflow-wrap: anywhere; }
 .job-facts .timestamp span, .job-evidence-list .timestamp span { display: inline; margin-inline-start: var(--xs); }
 .job-lease-note, .job-stale { color: var(--warning); }
 .job-stale { margin-block-end: var(--md); background: var(--warning-surface); border-radius: var(--radius-compact); }

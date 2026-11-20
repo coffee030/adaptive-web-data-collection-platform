@@ -479,12 +479,15 @@ def test_concurrent_publication_and_late_observation(
 
 
 @pytest.mark.parametrize("pg_engine", ["0008"], indirect=True)
-def test_m7_upgrade_with_populated_database(pg_engine, sessions, job_setup, client):
+def test_m7_upgrade_with_populated_database(
+    pg_engine, sessions, job_setup, client, legacy_execution_events
+):
     _, source, version, entry, store = job_setup
     approve_job_profile(job_setup)
     executor = JobExecutor(sessions, store)
-    job, _ = executor.jobs.create(source, version, entry)
-    assert executor.execute(job.job_id).status == "succeeded"
+    with legacy_execution_events():
+        job, _ = executor.jobs.create(source, version, entry)
+        assert executor.execute(job.job_id).status == "succeeded"
     path = f"/collection-jobs/{job.job_id}/evidence-pages"
     [before] = response(client, "GET", path, 200)
     evidence = store.resolve(UUID(before["evidence_id"]).hex)

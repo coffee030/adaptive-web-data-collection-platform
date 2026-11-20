@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import type { CollectionJob, ExecutionEvent } from '../src/features/collection-jobs/api';
+import type { CollectionJob, ExecutionEvent, JobDetailResponse } from '../src/features/collection-jobs/api';
 import type { GenericRecord } from '../src/features/results/api';
 import type { CollectionRequest } from '../src/features/topic-collections/api';
 import { captureM15, captureM15Zoom } from './m15Capture';
@@ -53,7 +53,7 @@ async function mockList(page: Page, jobs: CollectionJob[] = [partialJob]) {
 const inspect = (page: Page, id = jobId) => page.getByRole('link', { name: 'Inspect Job ' + id.slice(0, 8) });
 const ledger = (page: Page) => page.getByRole('list', { name: 'Jobs on this page' });
 
-async function mockDetail(page: Page, job = partialJob, related = [record], timeline = events) {
+async function mockDetail(page: Page, job: JobDetailResponse = partialJob, related = [record], timeline = events) {
   await page.route(api + jobUrl + '/evidence-pages', route => route.fulfill({ json: [] }));
   await page.route(url => url.pathname === api + jobUrl, route => route.fulfill({ json: job }));
   await page.route(url => url.pathname === api + jobUrl + '/events', route => route.fulfill({ json: timeline }));
@@ -277,12 +277,26 @@ test('partial job shows lineage, UTC times, counts, API-ordered events, and a ge
   const timeline = page.getByRole('list', { name: 'Execution events in API order' });
   await expect(timeline.getByRole('listitem').nth(0)).toContainText('JOB_CREATED');
   await expect(timeline.getByRole('listitem').nth(1)).toContainText('Attempt 1');
+  await expect(timeline.getByRole('listitem').nth(1)).toContainText('Unknown Worker');
   const table = page.getByRole('list', { name: 'Related records preview' });
   await expect(table.getByRole('link', { name: 'Open record ' + record.record_id })).toBeVisible();
   await expect(table.getByRole('link', { name: 'Open evidence ' + record.evidence_reference })).toBeVisible();
   await expect(table.locator('.payload').getByText('Fixture item')).toBeVisible();
   await expect(table.getByText('null')).toBeVisible();
   await expect(table.getByText('+1 more field')).toBeVisible();
+});
+
+test('Job Details distinguishes direct execution and an unclaimed Job', async ({ page }) => {
+  const execution = page.getByRole('region', { name: 'Execution and dispatch' });
+  await mockDetail(page, { ...partialJob, status: 'pending', execution_attempt: 0 }, [], [events[0]!]);
+  await page.goto(jobUrl);
+  await expect(execution.getByText('Awaiting first claim')).toBeVisible();
+  await mockDetail(page, { ...partialJob, latest_claim_execution_origin: 'direct' }, [], [
+    events[0]!, { ...events[1]!, execution_origin: 'direct' },
+  ]);
+  await page.reload();
+  await expect(execution.getByText('Direct execution')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Execution events' })).toContainText('Direct execution');
 });
 
 test('job not found avoids fetching dependent resources', async ({ page }) => {

@@ -23,7 +23,7 @@ from backend.tests.m6_fixture import CONFIGURATION, ROOT_PATH
 
 @pytest.mark.parametrize("pg_engine", ["0006"], indirect=True)
 def test_upgrade_preserves_legacy_evidence_records_and_quarantine(
-    pg_engine, sessions, job_setup
+    pg_engine, sessions, job_setup, legacy_execution_events
 ):
     _, source, version, _, store = job_setup
     approve_job_profile(job_setup)
@@ -33,8 +33,9 @@ def test_upgrade_preserves_legacy_evidence_records_and_quarantine(
         dataset_id="listings",
         content="Name,Count\nAlpha,2\nBad,NaN\n",
     )
-    job, _ = executor.jobs.create(source, version, entry)
-    claim, payload = executor.jobs.claim(job.job_id)
+    with legacy_execution_events():
+        job, _ = executor.jobs.create(source, version, entry)
+        claim, payload = executor.jobs.claim(job.job_id)
     result = executor._run(claim, payload)
     capture = result.evidence
     evidence_id = UUID(capture.evidence_id)
@@ -94,7 +95,8 @@ def test_upgrade_preserves_legacy_evidence_records_and_quarantine(
             },
         )
         row = executor.jobs._get_row(session, job.job_id, lock=True)
-        executor.jobs._finish(session, row, "partial", counts=(1, 1, 0))
+        with legacy_execution_events():
+            executor.jobs._finish(session, row, "partial", counts=(1, 1, 0))
 
     config = Config(ROOT / "alembic.ini")
     with pg_engine.begin() as connection:

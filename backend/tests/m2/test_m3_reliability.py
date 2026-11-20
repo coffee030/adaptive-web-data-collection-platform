@@ -100,7 +100,8 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
     sessions, execution, caplog
 ):
     executor, job_id = execution
-    old, entry = executor.jobs.claim(job_id)
+    worker_a, worker_b = uuid4(), uuid4()
+    old, entry = executor.jobs.claim(job_id, worker_instance_id=worker_a)
     stale_result = executor._run(old, entry)
     expire(sessions, job_id, JobRow.lease_expires_at)
     with caplog.at_level("INFO"):
@@ -109,13 +110,14 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
         with pytest.raises(ProfileError, match="not due"):
             executor.jobs.claim(job_id)
         make_retry_due(sessions, job_id)
-        current, entry = executor.jobs.claim(job_id)
+        current, entry = executor.jobs.claim(job_id, worker_instance_id=worker_b)
         assert current.execution_attempt == 2
         assert executor._publish(old, stale_result) == current
         assert (
             executor._fail(old, CollectionError(code="fixture", message="Stale"))
             == current
         )
+        assert executor.jobs.detail(job_id).latest_claim_worker_instance_id == worker_b
     assert "rejected stale completion from attempt 1" in caplog.text
     with sessions() as session:
         assert session.scalar(select(EvidenceRow)) is None
@@ -127,13 +129,15 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
     assert (
         executor.evidence.root / stale_result.evidence.evidence_id / "input.bin"
     ).is_file()
-    assert [event.kind for event in executor.jobs.events(job_id)] == [
-        "JOB_CREATED",
-        "CLAIMED",
-        "WORKER_LOST",
-        "RECOVERY_REQUESTED",
-        "CLAIMED",
-        "SUCCEEDED",
+    assert [
+        (event.kind, event.worker_instance_id) for event in executor.jobs.events(job_id)
+    ] == [
+        ("JOB_CREATED", None),
+        ("CLAIMED", worker_a),
+        ("WORKER_LOST", worker_a),
+        ("RECOVERY_REQUESTED", worker_a),
+        ("CLAIMED", worker_b),
+        ("SUCCEEDED", worker_b),
     ]
 
 
@@ -172,14 +176,18 @@ def test_worker_wrapper_handles_invalid_missing_and_database_failure(
 
     from backend.queue import tasks
 
+    worker = uuid4()
+
     class Executor:
         failure = ProfileError("job_not_found", "Collection job does not exist")
 
-        def execute(self, job_id):
+        def execute(self, job_id, *, worker_instance_id):
+            assert worker_instance_id == worker
             raise self.failure
 
     executor = Executor()
     monkeypatch.setattr(tasks, "worker_executor", lambda: executor)
+    monkeypatch.setattr(tasks, "worker_instance_id", lambda: worker)
     assert tasks.execute_job.run("invalid") is None
     assert "invalid job UUID" in caplog.text
     assert tasks.execute_job.run(str(uuid4())) is None

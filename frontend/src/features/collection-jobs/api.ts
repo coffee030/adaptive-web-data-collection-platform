@@ -4,6 +4,7 @@ import type { CollectionInput } from '../sources/collectionInput';
 export const jobStatuses = ['pending', 'running', 'succeeded', 'partial', 'failed'] as const;
 export type JobStatus = (typeof jobStatuses)[number];
 export type JobOrder = 'oldest' | 'newest';
+export type ExecutionOrigin = 'worker' | 'direct';
 
 export interface CollectionError {
   code: string;
@@ -34,6 +35,11 @@ export interface CollectionJob {
   dispatch_error_code: string | null;
 }
 
+export interface JobDetailResponse extends CollectionJob {
+  latest_claim_worker_instance_id?: string | null;
+  latest_claim_execution_origin?: ExecutionOrigin | null;
+}
+
 export interface ExecutionEvent {
   event_id: string;
   job_id: string;
@@ -41,6 +47,8 @@ export interface ExecutionEvent {
   occurred_at: string;
   kind: string | null;
   execution_attempt: number | null;
+  worker_instance_id?: string | null;
+  execution_origin?: ExecutionOrigin | null;
   error: CollectionError | null;
 }
 
@@ -83,7 +91,7 @@ export function listJobs(pageSize: number, offset: number, status: JobStatus | '
 }
 
 export function getJob(id: string, signal: AbortSignal) {
-  return apiGet<CollectionJob>(jobPath(id), signal);
+  return apiGet<JobDetailResponse>(jobPath(id), signal);
 }
 
 export function listEvents(id: string, signal: AbortSignal) {

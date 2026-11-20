@@ -199,6 +199,8 @@ class EventRow(Base):
     status: Mapped[str] = mapped_column(sa.String(9))
     kind: Mapped[str | None] = mapped_column(sa.String(32))
     execution_attempt: Mapped[int | None]
+    worker_instance_id: Mapped[UUID | None]
+    execution_origin: Mapped[str | None] = mapped_column(sa.String(6))
     occurred_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now()
     )

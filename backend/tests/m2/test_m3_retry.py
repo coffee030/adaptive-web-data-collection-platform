@@ -155,16 +155,22 @@ def web_job(sessions, tmp_path):
 def test_http_retry_reschedules_then_succeeds(
     web_job, sessions, failure, code, delay, monkeypatch
 ):
+    from uuid import uuid4
+
+    worker_a, worker_b = uuid4(), uuid4()
     with web_job([(200, {}, 0), failure]) as (executor, job_id, requests):
         if code == "timeout":
             monkeypatch.setattr("backend.core.web_adapter.TIMEOUT_SECONDS", 0.1)
-        pending = executor.execute(job_id)
+        pending = executor.execute(job_id, worker_instance_id=worker_a)
         assert pending.status == "pending"
         assert pending.error.code == code
         assert pending.execution_attempt == 1
         assert pending.next_attempt_at >= pending.created_at + timedelta(seconds=delay)
         assert pending.next_attempt_at == pending.dispatch_due_at
-        assert executor.jobs.events(job_id)[-1].kind == "RETRY_SCHEDULED"
+        retry = executor.jobs.events(job_id)[-1]
+        assert retry.kind == "RETRY_SCHEDULED"
+        assert retry.worker_instance_id == worker_a
+        assert executor.jobs.detail(job_id).latest_claim_worker_instance_id == worker_a
         with sessions.begin() as session:
             assert session.scalar(select(EvidenceRow)) is None
             session.execute(
@@ -172,9 +178,10 @@ def test_http_retry_reschedules_then_succeeds(
                 .where(JobRow.id == job_id)
                 .values(next_attempt_at=func.now(), dispatch_due_at=func.now())
             )
-        succeeded = executor.execute(job_id)
+        succeeded = executor.execute(job_id, worker_instance_id=worker_b)
         assert succeeded.status == "succeeded"
         assert succeeded.execution_attempt == 2
+        assert executor.jobs.events(job_id)[-1].worker_instance_id == worker_b
         assert requests == ["/robots.txt", "/table.html"] * 3
         with sessions() as session:
             assert len(session.scalars(select(EvidenceRow)).all()) == 1
