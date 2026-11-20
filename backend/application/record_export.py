@@ -3,19 +3,16 @@
 import csv
 import io
 import json
-import re
 from collections.abc import Iterable
 from typing import Literal
 
 from backend.core.contracts import Contract
+from backend.core.csv_export import protect_csv_text
 from backend.core.profiles import ProfileError
 
 ExportFormat = Literal["csv", "json"]
 MAX_EXPORT_ROWS = 5_000
 MAX_EXPORT_BYTES = 8 * 1024 * 1024
-_FORMULA_PREFIX = re.compile(
-    r"^[\s\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]*[=+\-@＝＋－＠]|^[^\S\t\r\n]*[\t\r\n]"
-)
 
 
 def _json(value) -> str:
@@ -25,8 +22,8 @@ def _json(value) -> str:
 def _csv_cell(value):
     if isinstance(value, dict):
         return _json(value)
-    if isinstance(value, str) and _FORMULA_PREFIX.match(value):
-        return "'" + value
+    if isinstance(value, str):
+        return protect_csv_text(value)
     return value
 
 

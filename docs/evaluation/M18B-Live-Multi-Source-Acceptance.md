@@ -1,5 +1,7 @@
 # M18B live multi-source acceptance
 
+**Current verdict: PARTIAL.** Two of three independent publishers have verified successful Worker Jobs. The CSV reconciliation fix passed. [Closure evaluation on 20 November 2026](#closure-on-20-november-2026-utc)
+
 Evaluation on **20 November 2026 (UTC)** from reviewed baseline `7b16e1a80b136067bf8e8897fb96617900009274`. **Overall PARTIAL.** Two of three real publishers met the full Worker success gate. The shared-topic MCP Request, Dashboard exports and controlled Worker retry comparison passed.
 
 | Acceptance gate | Verdict | Direct evidence |
@@ -120,3 +122,61 @@ Each Job was dispatched and claimed twice under the original Job ID. At pending 
 Current verification ran `python -m pip check` and `python -m pytest -q -p no:cacheprovider mcp_access/tests` in the existing dedicated MCP environment. **14 passed** and requirements were consistent. The focused host fixture test passed. A disposable internal Compose project with PostgreSQL 17 and Redis 7.4 ran `backend/tests/test_m18b_retry_fixture.py` and M2 `test_m3_retry.py`, `test_m7_results.py`, `test_m8_collections.py`, and `test_m9_record_export.py` with `python -m pytest -q -rs -p no:cacheprovider`. **33 passed**. Full external pages, downloads, intent snapshots and credentials stayed out of Git.
 
 No shared collection contract change was needed to verify the two successful publishers or retry parity. The open acceptance gap is an Economics Observatory Worker success with fresh detail Evidence under the approved transport budget.
+
+## Closure on 20 November 2026 (UTC)
+
+Fetched the feature branch and verified that local and remote heads both matched the reviewed closure baseline `d35e197b60b699714a10d473803c24324fdb47b9`. Launcher diagnostics confirmed the existing Windows Normal Dashboard at `http://127.0.0.1:5197/` and API at `http://127.0.0.1:58097/api/v1`. The running API and Worker shared local image `sha256:f2d7301d8be5fac49087a63f53ee284ea1e5582976c4e49745bfcd5b04c1102c`. The Worker's evidence volume was `adaptive-web-core-local-61e8e50ea0c3_evidence_data` at `/data/evidence`.
+
+| Acceptance gate | Closure verdict | Current evidence |
+| --- | --- | --- |
+| 1. Three independent publishers with successful Worker Jobs and verified detail Evidence | **PARTIAL** | Welsh Government and Scottish Fiscal Commission meet the gate. Economics Observatory timed out at search in the Worker diagnostic. Three substitute screens also stopped before a passing qualification. |
+| 2. Shared-topic MCP Request with accepted Records from two origins | **PASS** | The original `inflation` MCP Request remains `partial` with one accepted Record per origin. Its scoped REST records replayed successfully. |
+| 3. Dashboard access and scoped CSV/JSON reconciliation | **PASS** | The saved Dashboard downloads for the original MCP and Dashboard Requests each reconciled to two live REST rows with the corrected verifier. |
+| 4. Comparable Worker retry through Dashboard and MCP | **PASS** | The original Demo Jobs each succeeded on attempt 2 after HTTP 503. Both saved export pairs reconciled against the Demo REST API. |
+| CSV reconciliation correction | **PASS** | The regression reproduced the false positive on `-123`. The corrected verifier accepted the production CSV spelling and detected missing protection, changed values, extra apostrophes and ID discrepancies. |
+
+### Third-publisher check
+
+The Normal REST reads confirmed active Topic `8637186a-2dda-4593-8ed0-04e19958edd1`, authorised Economics Observatory Source `3ac6a0c7-57cd-4ca2-b815-9f000fafe620` and eligible binding `eb9a9f08-3392-40c8-bceb-8f085c1a43cb` pinned to approved version `3d65cca7-9854-4903-a217-d1adb6cd3e97` with SHA-256 `2fb6d6d804bd5a473bbac5aa4a4fcadbde5f380377aa842e48680f2c3f27b0c5`.
+
+At 10:57:24.569 UTC one diagnostic ran in the Normal Worker container against exactly `Can higher inflation expectations ever stimulate the economy`. It loaded the authorised Source and approved snapshot from PostgreSQL and used Core `SearchTraversal.documents`, the shared Redis origin limiter, and the same robots, destination and transfer checks as a Job. The two-second combined DNS/transfer cap, two-second minimum origin interval, 15-second traversal deadline, three-request budget, one-detail limit, zero redirects and one attempt were all confirmed.
+
+| Stage | Actual outcome | Measured elapsed |
+| --- | --- | ---: |
+| Canonical `/robots.txt` | HTTP 200, 1,248 bytes, policy accepted | 1.900 s |
+| `/search?keyword=Can+higher+inflation+expectations+ever+stimulate+the+economy` | Core `timeout`, no HTTP status, after robots allowed the route | 4.006 s including origin pacing |
+| Detail and extraction | Unreached, zero candidates | — |
+| Total | Stopped at the search error | 5.907 s |
+
+The earlier M18B Job `b7e66621-64fd-4879-89e6-aec74ad59c5e` still reports `failed/timeout` with zero accepted Records. The historical M18A Job `afc943ad-c1cc-401b-9c97-0e1b8fe28835` remains a partial pilot. A separate read-only REST and Worker-volume check at 11:01:44 UTC linked Record `a6c66510-5c05-5e8b-aec8-dfa9c7d151e7` to its HTTP 200 detail Evidence `4b76bfdc-a0be-42e4-b811-d2fcc53b52a1`. The stored bytes independently hashed to `d1ab295228e5ab878a2d251d6c8fdcd4890f44cfde445e291aac78d2d478a9f7`.
+
+The substitution screens reused prior M18A research. Each stayed within the existing budgets and stopped at its first error.
+
+| Candidate and route | Closure observation |
+| --- | --- |
+| Resolution Foundation, an independent think tank. Existing authorised origin with root search `/?s=…` and `/publications/` detail selector. Credit the Foundation and authors under CC BY-NC-ND 4.0 for covered work. [Independence](https://www.resolutionfoundation.org/about-us/mission/) · [Copyright](https://www.resolutionfoundation.org/privacy/copyright/) | Normal API Preview at 10:58:58.339 UTC, Draft `fc8a48b5-9734-46bd-904a-e7aba69ed5c1` revision 2, keyword `What a ratchet!`. HTTP 400 `timeout` after 5.140 s. The error omitted the failing stage. |
+| LSE Business Review, the London School of Economics publishing unit. Existing authorised origin with direct `/search/?swps=…` and scoped `/businessreview/` detail links. Credit the author, original article and licence for covered CC BY 4.0 articles. [Terms](https://blogs.lse.ac.uk/terms-of-use/) · [Republishing policy](https://blogs.lse.ac.uk/republishing-policy/) | Normal API Preview at 10:59:29.452 UTC, Draft `00dffb13-7f25-4a9f-b032-46f17671ac15` revision 1, keyword `Does raising public sector pay above inflation risk further inflation`. HTTP 400 `timeout` after 4.604 s. The error omitted the failing stage. |
+| Bank for International Settlements, a separate international organisation. Proposed bare `/search?keywords=…` and `/publications/` working-paper detail scope. Covered material is available for non-commercial download, with BIS attribution and an original link for excerpts. [Terms](https://www.bis.org/about/terms-conditions) · [Robots](https://www.bis.org/robots.txt) · [Relevant working paper](https://www.bis.org/publications/working-paper-1082-public-debt-and-household-inflation-expectations) | Worker screening at 11:01:12.913 UTC, keyword `Public debt and household inflation expectations`. Robots returned HTTP 200 in 0.911 s and permitted the published bare search route. Search timed out after 4.005 s including pacing. Detail eligibility was unresolved and no Source was registered. |
+
+No fresh Request was submitted because none of the closure searches established an eligible third-publisher sample. The existing two drafts remain unapproved. The counts below exclude the historical M18A pilot, diagnostics and Demo fixture Jobs.
+
+| Publisher | Reviewed M18B Jobs (succeeded / partial / failed) | Closure Jobs (succeeded / partial / failed) | Cumulative accepted Records | Formal origin result |
+| --- | ---: | ---: | ---: | --- |
+| Welsh Government | 2 / 0 / 0 | 0 / 0 / 0 | 2 | **PASS** |
+| Scottish Fiscal Commission | 1 / 2 / 0 | 0 / 0 / 0 | 3 | **PASS** |
+| Economics Observatory | 0 / 0 / 1 | 0 / 0 / 0 | 0 | **BLOCKED** at the Worker search stage |
+| Total | **3 / 2 / 1** | **0 / 0 / 0** | **5** | **2 of 3** |
+
+### CSV verifier and export replay
+
+The original verifier parsed the CSV cell `'-123` and compared it with the raw REST `source_record_key` of `-123`. It reported a field difference for an intact export. The exporter and verifier now share the same [text protection rule](../../backend/core/csv_export.py). The verifier applies that rule to the REST string before comparison. A legitimate leading apostrophe stays in place, nulls compare to empty cells, and nested objects are still parsed and compared structurally. Production CSV and JSON serialization retain their existing representation.
+
+The [offline regression tests](../../backend/tests/test_m18b_reconcile.py) generated actual production CSV and JSON, parsed both, and asserted the expected apostrophes independently. They also checked missing protection, an altered string, extra apostrophes, a changed nested value and missing, extra and repeated Record IDs. A separate offline comparison loaded the reviewed implementations from Git and reproduced the false positive with the actual serialized CSV. Representative export bytes matched the reviewed implementation in both formats. From the checked-out backend mounted read-only in a disposable internal Compose environment with PostgreSQL 17 and Redis 7.4, `python -m pytest -q -rs -p no:cacheprovider backend/tests/test_m18b_reconcile.py backend/tests/m2/test_m9_record_export.py` returned **12 passed in 4.99 s**.
+
+Replayed all five saved Dashboard download pairs with `python -m backend.experiments.m18b_reconcile --port <api-port> <request-id> <download.csv> <download.json>` from the existing dedicated Windows Python environment. Each Request used its original running Normal or Demo API as the paginated reference. The MCP pair and Dashboard pair each matched two Records. The narrower Scottish Request and the two fixture Requests each matched one. All ten files had zero missing, extra or repeated IDs and zero field differences. Every file SHA-256 matched the digest in the [initial download comparison](#download-reconciliation-and-entry-point-comparison).
+
+### Reproduction and resumption
+
+1. Run the Normal launcher diagnostic and confirm the approved Topic binding and evidence mount. After a measured change in search availability, repeat the one bounded Core preflight from the Worker and require one eligible link and successful detail extraction. A passing robots check alone only verifies robots.
+2. When that preflight passes, use the Normal MCP stdio procedure above with the same keyword and single binding. Save the prepared key before `start_collection` and poll to a terminal state. Require `succeeded` with an accepted publication. Read the exact Request, Job, Record and detail Evidence through the Dashboard and API, independently rehash the original bytes in the Worker, then download both Request exports and run the corrected verifier.
+3. To reproduce the CSV correction independently, run the focused test and existing export suite with the disposable PostgreSQL and Redis setup above. Replay the five original download pairs with their Request IDs and API ports.

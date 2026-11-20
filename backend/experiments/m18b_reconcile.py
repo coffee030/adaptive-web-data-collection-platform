@@ -10,6 +10,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 from uuid import UUID
 
+from backend.core.csv_export import protect_csv_text
+
 
 def get_json(port: int, path: str):
     connection = HTTPConnection("127.0.0.1", port, timeout=5)
@@ -46,6 +48,8 @@ def csv_value(cell, expected):
 def expected_csv(expected):
     if expected is None:
         return ""
+    if isinstance(expected, str):
+        return protect_csv_text(expected)
     return expected if isinstance(expected, dict) else str(expected)
 
 
