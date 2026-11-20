@@ -8,29 +8,53 @@ project="collection-m3-test-rc-$id"
 output="$(mktemp -d)"
 export POSTGRES_USER=collection POSTGRES_DB=collection_release_check
 export POSTGRES_PASSWORD="$(python -c 'from secrets import token_hex; print(token_hex(24))')"
-export POSTGRES_PORT=0 API_PORT=0 FRONTEND_PORT=0 LOCAL_PROFILE_APPROVAL=1
+if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+    printf '::add-mask::%s\n' "$POSTGRES_PASSWORD"
+fi
+# Existing recovery tests restart or recreate containers and retain the same URLs.
+# Reserve distinct loopback ports together so Docker can rebind them on restart.
+ports="$(python - <<'PY'
+import socket
+
+sockets = [socket.socket() for _ in range(9)]
+for listener in sockets:
+    listener.bind(("127.0.0.1", 0))
+print(*(listener.getsockname()[1] for listener in sockets))
+PY
+)"
+read -r POSTGRES_PORT API_PORT FRONTEND_PORT ref_pg ref_api ref_web normal_pg normal_api normal_web <<< "$ports"
+export POSTGRES_PORT API_PORT FRONTEND_PORT LOCAL_PROFILE_APPROVAL=1
 export COLLECTION_BACKEND_IMAGE="$project-backend:local"
 export LAUNCHER_OWNER="$id"
 base=(--env-file /dev/null -f compose.yaml -f compose.fixture.yaml)
 demo=("${base[@]}" -p "$project" -f scripts/windows/compose.demo.yaml)
 reference=("${base[@]}" -p "$project-reference" -f backend/experiments/m22b.compose.yaml)
+normal_stack=(--env-file /dev/null -f compose.yaml -p "$project-normal")
 export M22B_BACKEND_IMAGE="$COLLECTION_BACKEND_IMAGE"
 
 dc() { docker compose "${demo[@]}" "$@"; }
-ref() { docker compose "${reference[@]}" "$@"; }
+ref() {
+    POSTGRES_PORT="$ref_pg" API_PORT="$ref_api" FRONTEND_PORT="$ref_web" docker compose "${reference[@]}" "$@"
+}
+normal() {
+    POSTGRES_PORT="$normal_pg" API_PORT="$normal_api" FRONTEND_PORT="$normal_web" LOCAL_PROFILE_APPROVAL=0 \
+        docker compose "${normal_stack[@]}" "$@"
+}
 cleanup() {
     rc=$?
     if (( rc != 0 )); then
         dc ps -a || true
         ref ps -a || true
+        normal ps -a || true
     fi
+    normal down --volumes --timeout 75 || rc=1
     ref down --volumes --timeout 75 || rc=1
     dc down --volumes --timeout 75 || rc=1
-    rm -f "$output/stats.jsonl" "$output/stage"
+    rm -f "$output/stats.jsonl" "$output/m20.yaml"
     rmdir "$output"
     exit "$rc"
 }
-for candidate in "$project" "$project-reference"; do
+for candidate in "$project" "$project-reference" "$project-normal"; do
     filter="label=com.docker.compose.project=$candidate"
     for kind in container network volume; do
         args=()
@@ -58,7 +82,7 @@ api="$(dc port api 8000)"
 [[ "$frontend" == 127.0.0.1:* && "$api" == 127.0.0.1:* ]]
 url="http://$frontend"
 api_url="http://$api/api/v1"
-curl --fail --silent --show-error --max-time 10 "$url/overview" | grep -q 'id="root"'
+curl --fail --silent --show-error --max-time 10 "$url/sources" | grep -q 'id="root"'
 curl --fail --silent --show-error --max-time 10 "$url/api/v1/health"
 status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$@"; }
 [[ "$(status -H 'Host: external.invalid' "$url/")" == 403 ]]
@@ -105,6 +129,7 @@ dc stop
 [[ -z "$(dc ps -q)" ]]
 dc up -d --no-build --wait --wait-timeout 90
 echo "Stop and restart: ${SECONDS}s"
+[[ "$(dc port api 8000)" == "$api" && "$(dc port frontend 8080)" == "$frontend" ]]
 dc exec -T api python -m backend.experiments.demo_provision --check
 SECONDS=0
 dc up -d --no-build --wait --wait-timeout 90
@@ -119,6 +144,16 @@ python -m pytest -p scripts.require_pytest_pass -q backend/tests/m2/test_m3_comp
         topic-collections.integration.ts --workers=1
 )
 
+cat > "$output/m20.yaml" <<'YAML'
+services:
+  worker:
+    command: ["python", "-m", "celery", "-A", "backend.queue.celery_app:app", "worker", "--loglevel=INFO", "--pool=prefork", "--without-gossip", "--without-mingle", "--max-tasks-per-child=1"]
+YAML
+docker compose "${demo[@]}" -f "$output/m20.yaml" up -d --no-build --no-deps --scale worker=1 worker
+M20_TEST_WORKER_IDENTITY=1 M20_DASHBOARD_DIR="$PWD/frontend/test-results/m20" \
+    M3_TEST_COMPOSE_EXTRA_ARGS="-f scripts/windows/compose.demo.yaml -f $output/m20.yaml" \
+    python -m pytest -p scripts.require_pytest_pass -q backend/tests/m2/test_m3_compose.py -k m20_worker_attempt_identity
+
 ref build frontend
 ref up -d --wait --wait-timeout 90 postgres redis
 ref run --rm -T --no-deps api python -m alembic upgrade head
@@ -128,4 +163,17 @@ export M4_FRONTEND_PORT="${ref_frontend##*:}"
 (
     cd frontend
     npm test -- profile-suggestion.integration.ts --workers=1
+)
+
+normal build frontend
+normal up -d --wait --wait-timeout 90 postgres redis
+normal run --rm -T --no-deps api python -m alembic upgrade head
+normal up -d --no-build --wait --wait-timeout 90
+normal_url="http://$(normal port frontend 8080)"
+[[ "$(status -H "Origin: $normal_url" -X POST "$normal_url/api/v1/sources/test/versions/test/approve")" == 403 ]]
+[[ "$(normal config --services | grep -c 'collection-fixture' || true)" == 0 ]]
+(
+    cd frontend
+    M4_FRONTEND_PORT="$normal_web" M14_EMPTY_NORMAL=1 M15_EMPTY_NORMAL=1 M12_EMPTY_NORMAL=1 \
+        npm test -- jobs.integration.ts operator.integration.ts topic-collections.integration.ts -g 'fresh Normal database|isolated empty Normal' --workers=1
 )

@@ -10,7 +10,7 @@ Docker packages each service with the software it needs. Docker Desktop runs tho
 
 ## Start and stop
 
-1. Extract the full release ZIP or clone the release checkout. Double-click `Start-FYP-Demo.bat` to start with example data, or `Start-Platform.bat` for Normal mode.
+1. Extract the full release ZIP or clone the release checkout. If Windows blocks an unsigned script from a downloaded ZIP, verify that you obtained it from the project repository. When your device policy allows it, open the verified ZIP's **Properties**, select **Unblock**, and extract it again. Double-click `Start-FYP-Demo.bat` to start with example data, or `Start-Platform.bat` for Normal mode.
 2. Review the WSL and signed Docker Desktop installation prompts if they appear. Approve Windows prompts if you have permission. Accept Docker Desktop's terms in its window. If Windows requires a restart, double-click the same launcher afterward.
 3. Wait for the first build and health checks. Copy the printed `http://127.0.0.1:…` URL if your browser does not open. Start again from the same folder to reopen the same workspace.
 4. Use `Stop-Platform.bat` for Normal. For Demo, open PowerShell in the checkout and run `.\Stop-Platform.bat -Demo`. You can also leave the services running and close the browser.

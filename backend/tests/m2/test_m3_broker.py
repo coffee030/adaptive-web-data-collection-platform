@@ -354,22 +354,22 @@ def test_real_worker_killed_during_collection_is_recovered(
     # Hold a PostgreSQL lock that the worker will encounter at result publication.
     with server(env, tmp_path / "api.log") as (_, client):
         job_id = csv_submission(client, config)["job_id"]
-        with (
-            worker(env, first_log) as first,
-            dispatcher(env, tmp_path / "dispatcher.log"),
-            sessions.begin() as lock,
-        ):
+        with sessions.begin() as lock:
             lock.connection().exec_driver_sql(
                 "LOCK TABLE raw_evidence IN ACCESS EXCLUSIVE MODE"
             )
-            wait_for(
-                lambda: list(tmp_path.glob("*/input.bin")),
-                first,
-                "Worker did not capture evidence",
-                first_log,
-            )
-            # The result transaction holds the Job row and is blocked on evidence.
-            kill_worker(first)
+            # Acquire the publication lock before the dispatcher can claim the job.
+            with (
+                worker(env, first_log) as first,
+                dispatcher(env, tmp_path / "dispatcher.log"),
+            ):
+                wait_for(
+                    lambda: list(tmp_path.glob("*/input.bin")),
+                    first,
+                    "Worker did not capture evidence",
+                    first_log,
+                )
+                kill_worker(first)
         running = job_status(client, job_id)
         assert running["status"] == "running"
         assert running["execution_attempt"] == 1

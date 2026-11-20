@@ -39,7 +39,7 @@ function Invoke-DemoLauncher([string]$Task) {
     if ($LASTEXITCODE -ne 0) { throw "$Task failed with exit $LASTEXITCODE. See logs/launcher/demo/latest.log." }
 }
 function Read-DemoApi([string]$Path) {
-    Invoke-RestMethod -Uri "http://127.0.0.1:$($Config.FRONTEND_PORT)/api/v1$Path" -TimeoutSec 15
+    return (Invoke-RestMethod -Uri "http://127.0.0.1:$($Config.FRONTEND_PORT)/api/v1$Path" -TimeoutSec 15)
 }
 
 Measure-Stage setup { Invoke-DemoLauncher Setup }
@@ -62,6 +62,7 @@ $sampler = Start-Job -ArgumentList @($Docker.CLI, $DockerHost, $Config.COMPOSE_P
     }
 }
 
+$stopped = $false
 try {
     if ($NoCache) {
         Measure-Stage no-cache-build {
@@ -109,10 +110,21 @@ try {
     if ($result.Code -ne 0) { throw 'Demo persistence check failed.' }
     Measure-Stage repeated-start { Invoke-DemoLauncher Start }
     Measure-Stage diagnose { Invoke-DemoLauncher Diagnose }
+    $disk = Invoke-Compose @('exec', '-T', 'api', 'du', '-sk', '/data/evidence', '/data/demo-state')
+    if ($disk.Code -ne 0) { throw 'Application data disk usage could not be measured.' }
+    $disk.Out | Set-Content -LiteralPath (Join-Path $report 'volumes-kib.txt')
+    $disk = Invoke-Compose @('exec', '-T', 'postgres', 'du', '-sk', '/var/lib/postgresql/data')
+    if ($disk.Code -ne 0) { throw 'PostgreSQL disk usage could not be measured.' }
+    $disk.Out | Add-Content -LiteralPath (Join-Path $report 'volumes-kib.txt')
     Measure-Stage clean-shutdown { Invoke-DemoLauncher Stop }
+    $stopped = $true
     Write-Host "PASS Windows Demo automation. Evidence saved in $report. Complete the manual acceptance checklist."
 }
 finally {
     Stop-Job -Job $sampler
     Remove-Job -Job $sampler
+    if (!$stopped) {
+        try { Invoke-DemoLauncher Stop }
+        catch { Write-Warning 'Run Stop-Platform.bat -Demo from this disposable checkout to verify shutdown.' }
+    }
 }

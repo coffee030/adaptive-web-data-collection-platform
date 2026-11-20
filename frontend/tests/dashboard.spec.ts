@@ -92,6 +92,7 @@ test('Overview preserves request outcomes and offers scoped results and running 
 
   await ledger.getByRole('link', { name: /2 records for Listings/ }).click();
   await expect(page).toHaveURL('/records?request_id=' + requestId);
+  await expect(page.getByRole('heading', { name: 'Data Explorer', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('main')).toBeFocused();
   await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toBeVisible();
