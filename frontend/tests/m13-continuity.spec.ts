@@ -225,7 +225,9 @@ test('Article pagination preserves version and observation positions through det
   await page.getByRole('button', { name: 'Next versions page' }).click();
   await page.getByRole('button', { name: 'View version 1', exact: true }).click();
   await page.getByRole('button', { name: 'Next observations page' }).click();
-  await page.getByRole('button', { name: 'Inspect observation' }).click();
+  const observationList = page.getByRole('list', { name: 'Observation list' });
+  await expect(observationList.getByRole('listitem')).toHaveCount(1);
+  await observationList.getByRole('button', { name: 'Inspect observation' }).click();
   await expect(page.getByRole('list', { name: 'Content version list' }).getByRole('listitem')).toHaveCount(1);
   await expect(page.getByRole('list', { name: 'Observation list' }).getByRole('listitem')).toHaveCount(1);
   const before = page.url();

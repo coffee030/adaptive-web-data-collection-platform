@@ -65,11 +65,31 @@ Test-Case 'Log generation, English error structure and no secrets' {
     $log = [IO.File]::ReadAllText($LogFile)
     Assert ($log.Contains('TST-001 English Error') -and !$log.Contains($ConfigSecret) -and !$log.Contains('postgresql://')) 'The log was missing or contained secrets.'
 }
-Test-Case 'Missing Node is diagnosed without installing' {
-    function Get-NodeTools { return @{ State = 'missing' } }
-    function Find-Application { return $null }
-    Expect-Error 'ENV-009' { Initialize-Node }
+Test-Case 'Ordinary Start never invokes host Node and gates browser on Docker health' {
+    $Config = @{ FRONTEND_PORT = '5197' }
+    $calls = [Collections.Generic.List[string]]::new()
+    function Get-SystemFacts { return @{ Build = 26200; Architecture = 'AMD64'; FreeGB = 15; DockerGB = 20; RAM = 8GB } }
+    function Get-WSLStatus { return @{ Available = $true } }
+    function Initialize-Docker { return @{} }
+    function Initialize-Node { throw 'Host Node was called.' }
+    function Initialize-FrontendDependencies { throw 'Host npm was called.' }
+    function Get-LauncherConfig { return $Config }
+    function Invoke-Compose { return $ok }
+    function Assert-OwnedDocker {}
+    function Stop-OwnedFrontend { $calls.Add('legacy-stop') }
+    function Assert-LauncherPorts {}
+    function Update-PlatformImage($Service) { $calls.Add("build-$Service") }
+    function Start-StorageServices { $calls.Add('storage') }
+    function Update-DatabaseSchema { $calls.Add('migration') }
+    function Start-BackendServices { $calls.Add('backend') }
+    function Stop-DisabledFixture {}
+    function Start-ContainerFrontend { $calls.Add('frontend') }
+    function Open-PlatformBrowser { $calls.Add('browser') }
+    $savedConfig = $script:Config
+    try { Start-Platform } finally { $script:Config = $savedConfig }
+    Assert (($calls -join ',') -ceq 'legacy-stop,build-api,build-frontend,storage,migration,backend,frontend,browser') 'Unexpected startup sequence.'
 }
+
 Test-Case 'Missing Docker offers consent without installing' {
     function Get-DockerTools { return @{} }
     function Confirm-Change { return $false }
@@ -101,18 +121,28 @@ Test-Case 'Disabled virtualization reports BIOS guidance' {
     function Get-DockerTools { return @{} }
     Expect-Error 'ENV-003' { Initialize-Docker @{ Virtualization = 'disabled' } }
 }
-Test-Case 'Missing frontend dependencies are installed and rechecked once' {
-    $calls = @{ Checked = 0; Installed = 0 }
-    function Test-FrontendDependencies { return (++$calls.Checked -gt 1) }
-    function Invoke-Npm($Node, $Arguments) {
-        Assert ($Arguments[0] -eq 'ci') 'Expected npm ci.'
-        $calls.Installed++
+Test-Case 'Failed frontend build leaves no success stamp and can resume' {
+    $Config = @{ COMPOSE_PROJECT_NAME = 'test-project'; LOCAL_PROFILE_APPROVAL = '1' }
+    $state = @{ Built = 0 }
+    function Get-ImageFingerprint { return 'fingerprint' }
+    function Invoke-Docker {
+        if ($state.Built -lt 2) { return $fail }
+        return @{ Code = 0; Out = 'image-id' }
+    }
+    function Invoke-Compose($Arguments) {
+        Assert (($Arguments -join ' ') -ceq 'build frontend') 'Unexpected frontend build arguments.'
+        if (++$state.Built -eq 1) { return $fail }
         return $ok
     }
-    Initialize-FrontendDependencies @{}
-    Initialize-FrontendDependencies @{}
-    Assert ($calls.Installed -eq 1 -and $calls.Checked -eq 3) 'Dependencies were not reused.'
+    $stamp = Join-Path $Local 'frontend-image.txt'
+    Expect-Error 'SVC-001' { Update-PlatformImage frontend }
+    Assert (!(Test-Path -LiteralPath $stamp)) 'A failed build was marked complete.'
+    Update-PlatformImage frontend
+    Update-PlatformImage frontend
+    Assert ($state.Built -eq 2 -and [IO.File]::ReadAllText($stamp) -ceq 'fingerprint image-id') 'Successful build was not reused.'
+    [IO.File]::Delete($stamp)
 }
+
 Test-Case 'API port conflict leaves other listener bound' { Test-PortConflict 'NET-001' 'API' }
 Test-Case 'Frontend port conflict leaves other listener bound' { Test-PortConflict 'NET-002' 'Frontend' }
 Test-Case 'PostgreSQL startup failure halts storage startup' {
@@ -168,7 +198,7 @@ Test-Case 'Migration failure stops consumers and does not downgrade the schema' 
         return $fail
     }
     Expect-Error 'DB-006' { Update-DatabaseSchema }
-    Assert (($calls -join '|') -ceq 'current --check-heads|stop dispatcher worker api|upgrade head') 'Unexpected migration sequence.'
+    Assert (($calls -join '|') -ceq 'current --check-heads|stop frontend dispatcher worker api|upgrade head') 'Unexpected migration sequence.'
 }
 Test-Case 'Up-to-date database skips upgrade on repeated start' {
     function Invoke-Compose($Arguments) {
@@ -177,27 +207,25 @@ Test-Case 'Up-to-date database skips upgrade on repeated start' {
     }
     Update-DatabaseSchema
 }
-Test-Case 'Frontend startup fails when readiness does not pass' {
-    function Get-FrontendState { return $null }
-    function Test-FrontendReady { return $false }
-    function Test-FrontendProcess($State) { return [bool]$State }
-    function Assert-PortAvailable {}
-    function Start-Process { return @{ Id = 123; StartTime = [DateTime]::Now } }
-    function Wait-Until($Check) { return (& $Check) }
-    function Stop-OwnedFrontend {}
-    Expect-Error 'WEB-003' { Start-Frontend @{ Node = 'node.exe' } }
+Test-Case 'Frontend startup fails when proxy readiness does not pass' {
+    function Invoke-Compose { return $ok }
+    function Test-ApiHealth { return $false }
+    function Write-ServiceDiagnosis { return 'running/unhealthy/0/false' }
+    Expect-Error 'WEB-003' { Start-ContainerFrontend }
 }
-Test-Case 'Existing frontend is reused without another Node process' {
-    function Get-FrontendState { return @{ Port = 5197; ApiPort = 58097; Approval = '0' } }
-    function Test-FrontendReady { return $true }
-    function Test-FrontendProcess { return $true }
-    function Start-Process { throw 'A duplicate frontend was started.' }
-    $configBefore = $script:Config.LOCAL_PROFILE_APPROVAL
-    try {
-        $script:Config.LOCAL_PROFILE_APPROVAL = '0'
-        Assert (!(Start-Frontend @{})) 'Existing frontend was not reused.'
-    } finally { $script:Config.LOCAL_PROFILE_APPROVAL = $configBefore }
+
+Test-Case 'Repeated frontend startup uses the same scoped Compose service' {
+    $calls = [Collections.Generic.List[string]]::new()
+    function Invoke-Compose($Arguments) { $calls.Add(($Arguments -join ' ')); return $ok }
+    function Test-ApiHealth($Url) {
+        Assert ($Url -ceq 'http://127.0.0.1:5197/api/v1/health') 'The configured proxy URL was ignored.'
+        return $true
+    }
+    Start-ContainerFrontend
+    Start-ContainerFrontend
+    Assert ($calls.Count -eq 2 -and $calls[0] -ceq $calls[1] -and $calls[0] -match '^up .*--no-build .*--wait .*frontend$') 'Expected idempotent Compose startup.'
 }
+
 Test-Case 'Opening browser failure reports an actionable error' {
     function Start-Process { throw 'test error' }
     Open-PlatformBrowser 'http://127.0.0.1:5197/collection-jobs'
@@ -213,22 +241,17 @@ Test-Case 'Graceful frontend shutdown writes only the owned stop marker' {
     Stop-OwnedFrontend
     Assert (!(Test-Path -LiteralPath $stop)) 'The stop signal was not cleaned up.'
 }
-Test-Case 'Relaunch after shutdown starts a new frontend with the saved ports' {
-    $calls = @{ Starts = 0 }
-    function Get-FrontendState { return $null }
-    function Assert-PortAvailable($Port) { Assert ($Port -eq '5197') 'Saved frontend port was not used.' }
-    function Start-Process {
-        $calls.Starts++
-        return @{ Id = 456; StartTime = [DateTime]::Now }
+Test-Case 'Configured frontend port is checked against the owned container' {
+    $calls = [Collections.Generic.List[string]]::new()
+    function Test-BackendPort($Service, $InternalPort, $HostPort) {
+        $calls.Add("$Service/$InternalPort/$HostPort")
+        return $true
     }
-    function Test-FrontendProcess { return $true }
-    function Test-FrontendReady($State) { return $State.Port -eq 5197 -and $State.ApiPort -eq 58097 }
-    function Wait-Until($Check) { return (& $Check) }
-    Assert (Start-Frontend @{ Node = 'node.exe' }) 'Frontend was not started.'
-    $state = [IO.File]::ReadAllText((Join-Path $Local 'frontend.json')) | ConvertFrom-Json
-    Assert ($calls.Starts -eq 1 -and $state.Pid -eq 456) 'New frontend identity was not saved.'
-    [IO.File]::Delete((Join-Path $Local 'frontend.json'))
+    function Assert-PortAvailable($Port, $Code, $Name, [switch]$Owned) { Assert $Owned 'Owned port was not recognized.' }
+    Assert-LauncherPorts
+    Assert ($calls[0] -ceq 'frontend/8080/5197') 'Frontend port did not use the Compose binding.'
 }
+
 Test-Case 'Compose stop preserves volumes and checks for remaining project containers' {
     $calls = @{ Stop = 0; Inspect = 0 }
     function Stop-OwnedFrontend {}
@@ -290,14 +313,16 @@ Test-Case 'Demo settings use a distinct identity, credentials, flags and ports' 
         $script:Local = $previousLocal
     }
 }
-Test-Case 'Demo setup only installs frontend dependencies from the local npm cache' {
-    function Test-FrontendDependencies { return $false }
-    function Invoke-Npm($Node, $Arguments) {
-        Assert ('--offline' -in $Arguments -and '--ignore-scripts' -in $Arguments) 'Offline flags were missing.'
-        return $fail
-    }
-    Expect-Error 'WEB-001' { Initialize-FrontendDependencies @{} -Offline }
+Test-Case 'Missing WSL stops before Docker installation' {
+    $script:WSL = @{ Available = $false }
+    try {
+        function Get-DockerTools { return @{} }
+        function Confirm-Change { return $false }
+        function Install-DockerDesktop { throw 'Docker install ran before WSL was available.' }
+        Expect-Error 'ENV-004' { Initialize-Docker $system }
+    } finally { $script:WSL = @{ Available = $true } }
 }
+
 Test-Case 'Demo check diagnoses via a read-only command and failed provisioning blocks readiness' {
     function Invoke-Compose($Arguments, $Seconds) {
         $script:demoTestArguments = $Arguments

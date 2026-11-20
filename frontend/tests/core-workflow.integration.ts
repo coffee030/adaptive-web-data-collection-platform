@@ -436,7 +436,7 @@ for (const adapter of ['web', 'csv'] as const) {
           .toContain('DISPATCH_FAILED');
         await captureM15(page, 'persisted-dispatch-failure');
       } finally {
-        compose('start', '--wait', 'redis');
+        compose('up', '-d', '--no-build', '--no-recreate', '--wait', 'redis');
       }
       await expect(page.getByRole('region', { name: 'Run overview' }).locator('.status')).toHaveText('Partial', { timeout: 40_000 });
       const recoveredDispatch = await get<CollectionJob>(request, jobs + '/' + dispatchCase!.job_id);
@@ -462,7 +462,7 @@ for (const adapter of ['web', 'csv'] as const) {
         await expect(page.getByRole('heading', { name: 'Job Details' })).toHaveCount(0);
       } finally {
         compose('stop', 'api');
-        compose('start', '--wait', 'postgres', 'api');
+        compose('up', '-d', '--no-build', '--no-recreate', '--wait', 'postgres', 'api');
       }
       await expect.poll(async () => (await request.get(api + '/health')).ok(), { timeout: 20_000 }).toBe(true);
       expect(await Promise.all(before.map(route => get(request, route)))).toEqual(snapshot);

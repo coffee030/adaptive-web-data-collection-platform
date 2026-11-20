@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const integration = process.env.M4_REAL_API === '1';
+const deployed = integration && process.env.M4_DEPLOYED_FRONTEND === '1';
 const port = Number(process.env.M4_FRONTEND_PORT || 5173);
 const baseURL = `http://127.0.0.1:${port}`;
 const browserName = process.env.PLAYWRIGHT_BROWSER ?? 'chromium';
@@ -19,7 +20,7 @@ export default defineConfig({
     channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
     trace: 'retain-on-failure',
   },
-  webServer: {
+  webServer: deployed ? undefined : {
     env: { LOCAL_PROFILE_APPROVAL: integration ? process.env.LOCAL_PROFILE_APPROVAL ?? '0' : '1' },
     command: `npm run dev -- --port ${port} --strictPort`,
     url: baseURL,

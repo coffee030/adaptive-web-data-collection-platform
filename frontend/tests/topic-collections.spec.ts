@@ -338,6 +338,7 @@ test('inspect Source and Profile, then return to a revalidated draft', async ({ 
   const profileLink = page.getByRole('link', { name: 'Profile version 1 for Authorized fixture 1', exact: true });
   await profileLink.click();
   await expect(page).toHaveURL('/sources/' + source.source_id + '/profiles/' + source.profile_version_id);
+  await expect(page.getByRole('button', { name: 'Back to collection' })).toBeVisible();
   available.shift();
   await page.goBack();
   await expect(page.getByRole('alert')).toContainText('Authorized fixture 1 is no longer available');

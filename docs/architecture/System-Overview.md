@@ -24,12 +24,12 @@ flowchart TB
         Worker -->|Store captures| Volume
     end
 
-    Dashboard <-->|REST via Vite proxy| API
+    Dashboard <-->|REST via same-origin Nginx proxy| API
     MCP <-->|Loopback REST| API
     Worker <-->|Bounded HTTPS| Publisher["External public publisher"]
 ```
 
-The Windows launcher runs the React Dashboard through Vite and starts the backend services in Compose. The Dispatcher polls PostgreSQL for due work and recovers expired execution leases. Redis carries task messages. PostgreSQL holds durable state and lineage, and the local Evidence volume holds original capture bytes. Standard collection works without an external LLM. An optional AI host runs `python -m mcp_access.server` over stdio for discovery, controlled submission and status or lineage reads through the same API. [Compose services](../../compose.yaml) · [Worker contract](../contracts/M3-job-execution-contract.md) · [Windows setup](../setup/Windows-One-Click-Setup.md) · [MCP setup and walkthrough](../setup/Windows-MCP-Access.md)
+Compose starts the backend and serves the React production build through Nginx. The frontend proxies same-origin API traffic to FastAPI and keeps the trusted local approval boundary. The direct API is also available on loopback for tools such as MCP. The launcher verifies PostgreSQL, Redis, the Alembic head, Worker task registration, and browser-facing health. The Dispatcher polls PostgreSQL for due work and recovers expired execution leases. Redis carries task messages with a 64 MiB memory budget. The default Worker uses one replica, concurrency one and prefetch one. PostgreSQL holds durable state and lineage, and the Evidence volume holds original capture bytes. Collection runs without an external LLM. An optional AI host runs `python -m mcp_access.server` over stdio. [Compose services](../../compose.yaml) · [Worker contract](../contracts/M3-job-execution-contract.md) · [Windows setup](../setup/Windows-One-Click-Setup.md) · [MCP setup and walkthrough](../setup/Windows-MCP-Access.md)
 
 ## From an approved source to an export
 
@@ -48,4 +48,4 @@ The Windows launcher runs the React Dashboard through Vite and starts the backen
 
 On 20 November 2026, the M18B MCP Request for `inflation` retained one accepted Record each from Welsh Government and Scottish Fiscal Commission. The parent was partial because the Scottish Job reached its detail limit. A separate successful Request supplied the Economics Observatory result. Across the live M18B evaluation, three independent publishers produced four succeeded Jobs, two partial Jobs, two failed Jobs and six accepted Records. The report reconciles the Request exports and verifies the stored detail bytes by SHA-256. These results came from a configured Normal environment. The Synthetic Demo seeds reproducible fixture Records, and fresh Normal mode starts empty. [Shared Request and Jobs](../evaluation/M18B-Live-Multi-Source-Acceptance.md#real-requests-and-worker-results) · [Final live results](../evaluation/M18B-Live-Multi-Source-Acceptance.md#timeout-validation-and-final-acceptance-on-20-november-2026-utc) · [Synthetic Demo](../evaluation/M16-FYP-Presentation-Runbook.md)
 
-The system is for trusted local operation and bounded, approved access. Publisher availability, site structure and access rules can change. Final integrated release verification and a cold start on a physical 8 GB Windows host remain open. [M21 follow-up](../evaluation/M18-Real-Source-and-Follow-Up-Plan.md#m21-verify-the-integrated-release) · [Physical 8 GB acceptance](../evaluation/M10-Deployment-Verification.md#physical-8-gb-acceptance)
+The system is for trusted local operation and bounded, approved access. Publisher availability, site structure and access rules can change. The release matrix distinguishes current test evidence from clean-machine, physical 8 GB and human pilot acceptance. [Core release verification](../evaluation/Final-Core-Readiness.md)

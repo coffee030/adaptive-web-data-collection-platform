@@ -1,4 +1,8 @@
 services:
+  frontend:
+    build:
+      args:
+        PLATFORM_SYNTHETIC_DEMO: "1"
   api:
     environment:
       PLATFORM_SYNTHETIC_DEMO: "1"

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { CollectionJob, ExecutionEvent } from '../src/features/collection-jobs/api';
+import type { CollectionJob, ExecutionEvent, JobDetailResponse } from '../src/features/collection-jobs/api';
 import type { GenericRecord } from '../src/features/results/api';
 import type { CollectionRequest } from '../src/features/topic-collections/api';
 import { captureM15 } from './m15Capture';
@@ -88,8 +88,17 @@ test('lists PostgreSQL-backed jobs and follows one through events and records', 
     page.waitForResponse(url => new URL(url.url()).pathname === api + '/records' && url.ok()),
     link.click(),
   ]);
-  expect(await detailResponse.json()).toEqual(job);
   const events: ExecutionEvent[] = await eventResponse.json();
+  const {
+    latest_claim_execution_origin,
+    latest_claim_worker_instance_id,
+    ...detail
+  }: JobDetailResponse = await detailResponse.json();
+  expect(detail).toEqual(job);
+  const latestClaim = events.filter(event => event.kind === 'CLAIMED').at(-1);
+  expect(latestClaim).toBeDefined();
+  expect(latest_claim_execution_origin).toBe(latestClaim?.execution_origin ?? null);
+  expect(latest_claim_worker_instance_id).toBe(latestClaim?.worker_instance_id ?? null);
   const records: GenericRecord[] = await recordsResponse.json();
   expect(new URL(recordsResponse.url()).searchParams.get('job_id')).toBe(jobId);
   expect(events.at(-1)?.status).toBe('partial');

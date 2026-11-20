@@ -12,7 +12,8 @@ const dashboard = process.env.M22C_DASHBOARD ?? 'http://127.0.0.1:5224';
 const mirror = process.env.M22C_MIRROR ?? 'http://127.0.0.1:58197';
 const origin = 'http://collection-fixture:8001';
 const evidence = resolve('.local/m22c');
-const productSha = '5fcff7a2ac4283cfba69ce6f43e6380be6c8094a';
+const productSha = process.env.M22C_PRODUCT_SHA ?? '5fcff7a2ac4283cfba69ce6f43e6380be6c8094a';
+const resultsCsv = resolve(evidence, 'onboarding-results.csv');
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const reference = { id: 'reference', name: 'M22C Reference', path: '/m22a/cards/reference/', keyword: 'C++ & tea', limit: 4 };
 const assignments = [
@@ -141,7 +142,7 @@ async function trial(id) {
   for (const previous of assignments.slice(0, index)) {
     const attempt = assignedAttempt(previous);
     assert(attempt.events.some(row => row.event === 'start'), 'Previous assignment has no start record');
-    const result = readFileSync('docs/evaluation/m22c-onboarding-results.csv', 'utf8').split(/\r?\n/)
+    const result = readFileSync(resultsCsv, 'utf8').split(/\r?\n/)
       .find(line => line.split(',')[0].replace(/^"|"$/g, '') === previous.id);
     requireRecordedResult(adjudicate(attempt.events, attempt.versions, attempt), result?.split(',')[8]?.replace(/^"|"$/g, ''));
   }
@@ -394,10 +395,14 @@ async function rehearse(id = 'reference', timing = 'verified') {
 
 const [action, trialId, timing] = process.argv.slice(2);
 mkdirSync(evidence, { recursive: true });
+assert.match(productSha, /^[a-f0-9]{40}$/, 'Use a full reviewed product commit SHA');
 assert.deepEqual(git('diff', '--name-only', productSha, '--', 'backend', 'frontend', 'compose.yaml', 'compose.fixture.yaml', 'alembic.ini')
   .split('\n').filter(path => path && !path.startsWith('backend/experiments/m22c')), [],
   'Product files differ from the pinned revision');
 if (action === 'provision') {
+  if (!existsSync(resultsCsv)) {
+    writeFileSync(resultsCsv, readFileSync('docs/evaluation/m22c-onboarding-results.csv'), { flag: 'wx' });
+  }
   const prepared = [];
   for (const task of assignments) prepared.push({ trial_id: task.id, source: await getSource(task, true), versions: 0 });
   writeFileSync(resolve(evidence, 'sources.json'), JSON.stringify(prepared, null, 2), { flag: 'wx' });

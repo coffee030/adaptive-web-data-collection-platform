@@ -13,6 +13,9 @@ services:
   api: *backend
   worker: *backend
   dispatcher: *backend
+  frontend:
+    image: "${COMPOSE_PROJECT_NAME}-frontend:local"
+    labels: *owner
 
 networks:
   default:

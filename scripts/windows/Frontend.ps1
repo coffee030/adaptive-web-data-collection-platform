@@ -19,20 +19,6 @@ function Test-FrontendProcess($State) {
     } catch { return $false }
 }
 
-function Test-FrontendMarker($State) {
-    $probe = Get-HttpStatus "http://127.0.0.1:$($State.Port)/__launcher_ready"
-    return $probe.Code -eq 0 -and $probe.Out -match ('\A' + [regex]::Escape($State.Marker) + '\s+200\z')
-}
-
-function Test-FrontendReady($State) {
-    if (!(Test-FrontendProcess $State) -or !(Test-FrontendMarker $State)) { return $false }
-    $url = "http://127.0.0.1:$($State.Port)"
-    $page = Get-HttpStatus "$url/"
-    $entry = Get-HttpStatus "$url/src/main.tsx"
-    return $page.Code -eq 0 -and $page.Out -match '(?s)<!doctype html>.*id="root".*\s200$' -and
-        $entry.Code -eq 0 -and $entry.Out -match '\s200$' -and (Test-ApiHealth "$url/api/v1/health")
-}
-
 function Stop-OwnedFrontend {
     $state = Get-FrontendState
     if (!$state) { return }
@@ -50,67 +36,15 @@ function Stop-OwnedFrontend {
     [IO.File]::Delete((Join-Path $Local 'frontend.json'))
 }
 
-function Start-Frontend($Node) {
-    $state = Get-FrontendState
-    if (Test-FrontendProcess $state) {
-        if ($state.Port -eq [int]$Config.FRONTEND_PORT -and $state.ApiPort -eq [int]$Config.API_PORT -and
-            $state.Approval -eq $Config.LOCAL_PROFILE_APPROVAL -and (Test-FrontendReady $state)) {
-            Write-Step '[PASS] Existing launcher frontend and API proxy are ready.'
-            return $false
-        }
-        Stop-OwnedFrontend
+function Start-ContainerFrontend {
+    $result = Invoke-Compose @('up', '-d', '--no-deps', '--no-build', '--wait', '--wait-timeout', '65', 'frontend') 100
+    $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)"
+    if ($result.Code -ne 0 -or !(Test-ApiHealth "$url/api/v1/health")) {
+        $details = Write-ServiceDiagnosis frontend
+        Stop-WithError 'WEB-003' 'Frontend Startup Failed' 'The container or its API proxy did not become ready.' `
+            "$($result.Reason); $details." @('Run Diagnose-Platform.bat and check Docker Desktop and the configured frontend port.')
     }
-    Assert-PortAvailable $Config.FRONTEND_PORT 'NET-002' 'Frontend'
-    $marker = [Guid]::NewGuid().ToString('N')
-    $stopFile = Join-Path $Local "frontend-$marker.stop"
-    $envChanges = @{
-        API_PROXY_TARGET = "http://127.0.0.1:$($Config.API_PORT)"
-        VITE_API_BASE_URL = '/api/v1'
-        LOCAL_PROFILE_APPROVAL = $Config.LOCAL_PROFILE_APPROVAL
-        PLATFORM_SYNTHETIC_DEMO = if ($DemoMode) { '1' } else { '0' }
-        NODE_OPTIONS = $null
-        NODE_PATH = $null
-    }
-    $previous = @{}
-    try {
-        foreach ($key in $envChanges.Keys) {
-            $previous[$key] = [Environment]::GetEnvironmentVariable($key)
-            [Environment]::SetEnvironmentVariable($key, $envChanges[$key], 'Process')
-        }
-        $arguments = ConvertTo-NativeArguments @((Join-Path $PSScriptRoot 'frontend.mjs'), $Config.FRONTEND_PORT, $stopFile, $marker)
-        $process = Start-Process -FilePath $Node.Node -ArgumentList $arguments -WorkingDirectory $Frontend -WindowStyle Hidden -PassThru
-        $state = @{
-            Pid = $process.Id; StartTicks = "$($process.StartTime.ToUniversalTime().Ticks)"; Executable = $Node.Node
-            Marker = $marker; Port = [int]$Config.FRONTEND_PORT; ApiPort = [int]$Config.API_PORT; Approval = $Config.LOCAL_PROFILE_APPROVAL
-        }
-        try { Write-AtomicFile (Join-Path $Local 'frontend.json') ($state | ConvertTo-Json -Compress) }
-        catch {
-            Write-AtomicFile $stopFile 'stop'
-            throw
-        }
-    }
-    finally {
-        foreach ($key in $previous.Keys) { [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process') }
-    }
-
-    $ready = @{ Value = $false }
-    $null = Wait-Until {
-        if (!(Test-FrontendProcess $state)) { return $true }
-        $ready.Value = Test-FrontendReady $state
-        return $ready.Value
-    } 45
-    if (!$ready.Value) {
-        $phase = 'readiness or API proxy check'
-        if (Test-Path -LiteralPath ($stopFile + '.error')) {
-            $stage = [IO.File]::ReadAllText($stopFile + '.error')
-            if ($stage -in @('load-vite', 'configure-vite', 'listen')) { $phase = $stage }
-        }
-        Stop-OwnedFrontend
-        Stop-WithError 'WEB-003' 'Frontend Startup Failed' 'Vite could not serve the Overview route, its entry module, and the API proxy.' `
-            "Failed stage: $phase." @('Run Setup-Platform.bat and check the saved port settings.', 'Check your local Vite settings and run Diagnose-Platform.bat.')
-    }
-    Write-Step '[PASS] React route, entry module, and API proxy are responding.'
-    return $true
+    Write-Step '[PASS] The containerized frontend and its API proxy are ready.'
 }
 
 function Open-PlatformBrowser($Url, [switch]$Required) {
