@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 id="$(python -c 'from uuid import uuid4; print(uuid4().hex[:12])')"
-project="collection-m3-test-rc-$id"
+project="collection-m3-test-m10-m13-rc-$id"
 output="$(mktemp -d)"
 export POSTGRES_USER=collection POSTGRES_DB=collection_release_check
 export POSTGRES_PASSWORD="$(python -c 'from secrets import token_hex; print(token_hex(24))')"
@@ -136,6 +136,11 @@ dc up -d --no-build --wait --wait-timeout 90
 echo "Repeated startup: ${SECONDS}s"
 sample restart
 export M2_TEST_DATABASE_URL="postgresql+psycopg://$POSTGRES_USER:$POSTGRES_PASSWORD@$(dc port postgres 5432)/$POSTGRES_DB"
+(
+    cd frontend
+    M13_QA_DEMO_URL="$url" M13_QA_FIXTURE="$project-collection-fixture-1" \
+        npm test -- m13-continuity.integration.ts --workers=1
+)
 python -m pytest -p scripts.require_pytest_pass -q backend/tests/m2/test_m3_compose.py -k 'not m20_worker_attempt_identity'
 (
     cd frontend
