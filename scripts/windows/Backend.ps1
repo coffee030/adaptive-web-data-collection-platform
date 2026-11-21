@@ -1,6 +1,8 @@
 function Invoke-Docker([string[]]$Arguments, $Seconds = 20, $Environment = @{}) {
     $base = @{ DOCKER_CONTEXT = $null; DOCKER_HOST = $null; DOCKER_TLS_VERIFY = $null; DOCKER_CERT_PATH = $null }
     foreach ($key in $Environment.Keys) { $base[$key] = $Environment[$key] }
+    # A Desktop install updates PATH for future shells. Image pulls in this shell still need its credential helper.
+    $base.Path = "$(Split-Path -Parent $script:Docker.CLI);$env:Path"
     $result = Invoke-Tool $script:Docker.CLI (@('--host', $DockerHost) + $Arguments) $Seconds -Environment $base
     Write-LauncherLog INFO "Docker $($Arguments[0]): exit $($result.Code), details: $($result.Reason)."
     return $result

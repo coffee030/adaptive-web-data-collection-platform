@@ -109,6 +109,21 @@ Test-Case 'Docker installed but stopped attempts Desktop startup and recovers' {
     $docker = Initialize-Docker $system
     Assert ($docker.CLI -eq 'docker.exe' -and $calls.Started -eq 1) 'Desktop recovery was not verified.'
 }
+Test-Case 'Docker subprocess can find the credential helper after a per-user install' {
+    $directory = Join-Path $testRoot 'Docker Desktop/bin'
+    $savedDocker = $script:Docker
+    $inheritedPath = $env:Path
+    $script:Docker = @{ CLI = (Join-Path $directory 'docker.exe') }
+    function Invoke-Tool($File, $Arguments, $Seconds, $Environment) {
+        Assert ($File -ceq $script:Docker.CLI) 'Docker was not invoked by its discovered path.'
+        Assert ($Environment.Path -ceq "$directory;$inheritedPath") 'Docker directory was not prepended to the subprocess PATH.'
+        Assert ($Arguments[0] -eq '--host' -and $Arguments[1] -ceq $DockerHost) 'Docker did not use the local Linux engine.'
+        return $ok
+    }
+    try { $null = Invoke-Docker @('compose', 'build', 'api') }
+    finally { $script:Docker = $savedDocker }
+    Assert ($env:Path -ceq $inheritedPath) 'The launcher changed its own PATH.'
+}
 Test-Case 'Docker Linux Engine unavailable after bounded startup' {
     function Get-DockerTools { return @{ Desktop = 'desktop.exe'; CLI = 'docker.exe' } }
     function Get-LinuxEngine { return $fail }
