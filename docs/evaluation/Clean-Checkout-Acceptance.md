@@ -27,11 +27,15 @@ The [final matrix](Final-Core-Readiness.md) records the observed release results
 
 ## Observed outcome
 
-The [hosted run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44793217466) passed all three Compose projects. It verified both exports and the persisted Demo after Stop and restart, exercised approved Reference onboarding, and checked the empty Normal Dashboard without the fixture service. The same run verified controlled MCP submission and Worker recovery. In the original fresh Windows ZIP check, Diagnose completed and Setup reported `ENV-004` before any Docker services could start.
+The final verified Core product commit is `6c8087ed11b5b4ddb174e745d40acc7ac0bb631c`. All seven jobs passed. [Final GitHub Actions run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44884280877)
+
+The [earlier pre-maintenance hosted run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44793217466) passed all three Compose projects. It verified both exports and the persisted Demo after Stop and restart, exercised approved Reference onboarding, and checked the empty Normal Dashboard without the fixture service. The same run verified controlled MCP submission and Worker recovery. In the original fresh Windows ZIP check, Diagnose completed and Setup reported `ENV-004` before any Docker services could start.
 
 ### Post-merge Windows check
 
 On 21 November 2026, a fresh archive of `2f9ae4e` ran the no-cache Demo acceptance from a writable NTFS path with spaces and Unicode. The x64 Windows 11 Pro 25H2 host (build 26200.9974) had hardware virtualization, 15.82 GiB RAM and 198.7 GiB free on the drive shared by the checkout and Docker. WSL 3.0.5 was already installed with WSL 2 as the default. Docker Desktop 4.99.0 was installed per user and ran Linux Engine 29.9.3 with Compose 5.7.0. Node.js and npm were absent from the launcher's `PATH`.
+
+Fresh Normal and Demo application checkouts passed acceptance on this host. First-time WSL installation was not tested because WSL 2 was already configured. Physical 8 GB acceptance was not tested.
 
 The original first build could find `docker.exe` but failed to find its credential helper in the same shell. After the launcher added the CLI directory to the Docker subprocess's `PATH`, the no-cache build, migration, health checks, Demo verification, Stop, restart, repeated Start and Diagnose passed. The three baselines yielded six Jobs, 18 accepted Records and 28 verified Evidence captures. CSV and JSON matched the persisted Records, and the Evidence checks passed again after restart.
 

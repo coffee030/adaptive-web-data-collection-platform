@@ -1,6 +1,6 @@
 # Serve the local Dashboard from Compose
 
-Implemented in the release candidate on 21 November 2026. Teammate review is pending.
+Implemented in the release candidate on 21 November 2026. [Merged deployment change](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/8)
 
 ## Context
 
@@ -22,4 +22,4 @@ The selected approach introduces a small static server and a separately testable
 
 ## Scope and approval
 
-The release request authorizes the deployment change. Teammate review belongs to PR #8. The formal Proposal file was absent from the checkout, so a direct comparison is pending. The current approved scope remains a reusable Core, with the downstream application and major visual redesign deferred. [Current product scope](../../PRODUCT.md)
+The release request authorizes the deployment change. The formal Proposal file was absent from the checkout, so a direct comparison is pending. The current approved scope remains a reusable Core, with the downstream application and major visual redesign deferred. [Current product scope](../../PRODUCT.md)
