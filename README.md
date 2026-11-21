@@ -10,7 +10,7 @@ The downstream industry application is open. The Core runs on a trusted local ma
 
 Extract the release ZIP into a writable local NTFS folder, or clone the release checkout. Double-click `Start-Platform.bat` for Normal mode or `Start-FYP-Demo.bat` for the bundled Demo. Start handles the same prerequisite checks as Setup. If Windows requires a restart, run the same launcher afterward.
 
-Use Windows 11 x64 supported by Docker Desktop, hardware virtualization, WSL 2.1.5 or newer, Docker Desktop with Linux containers and Compose 2.20 or later, and a modern browser. The target is about 8 GB of installed RAM. Allow at least 10 GB free on the Docker data drive and 5 GB on the checkout drive as a starting budget, and allow internet access and installation permission for first use. Docker builds the frontend with Node.js and serves the static result. Host Node.js, npm, Python, PostgreSQL and Redis are optional developer or integration tools. [Beginner setup](docs/setup/Beginner-Windows-Setup.md)
+Use Windows 11 x64 supported by Docker Desktop, hardware virtualization, WSL 2.1.5 or newer, Docker Desktop with Linux containers and Compose 2.20 or later, and a modern browser. The target minimum is 8 GB of installed RAM. Physical 8 GB acceptance remains pending. Allow at least 10 GB free on the Docker data drive and 5 GB on the checkout drive as a starting budget, and allow internet access and installation permission for first use. Docker builds the frontend with Node.js and serves the static result. Host Node.js, npm, Python, PostgreSQL and Redis are optional developer or integration tools. [Beginner setup](docs/setup/Beginner-Windows-Setup.md)
 
 ```powershell
 .\Setup-Platform.bat
@@ -61,6 +61,6 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 - [Example data and manual Docker Compose setup](docs/demo/M5.5-dashboard-demo-runbook.md)
 - [Development and testing](docs/demo/M5-core-demo-runbook.md)
 - [MVP release readiness](docs/evaluation/M16-Release-Readiness.md)
-- [Core release candidate verification matrix](docs/evaluation/Final-Core-Readiness.md)
+- [Core release verification matrix](docs/evaluation/Final-Core-Readiness.md)
 - [FYP presentation runbook](docs/evaluation/M16-FYP-Presentation-Runbook.md)
 - [Local Codex MCP setup and presenter walkthrough](docs/setup/Windows-MCP-Access.md#four-minute-presenter-walkthrough)
