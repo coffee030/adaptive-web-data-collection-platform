@@ -65,7 +65,7 @@ The [earlier pre-final stable-Chrome run](https://github.com/coffee030/adaptive-
 Branch protection for `main` remains blocked because it requires repository administrator permission. The authenticated account has repository **WRITE** permission. GitHub reported `main` as unprotected and returned no applicable rules, and the classic protection endpoint returned HTTP 404.
 
 1. With repository administrator access, open **Settings → Rulesets → New branch ruleset**. Name it `main-release-gate`, choose **Active**, and target the default branch `main`.
-2. Enable **Require a pull request before merging**, set **Required approvals** to **1**, and enable **Restrict deletions** and **Block force pushes**.
+2. Enable **Require a pull request before merging**. Leave **Required approvals** at **0** unless the team later decides to require human review. Enable **Restrict deletions** and **Block force pushes**.
 3. Enable **Require status checks to pass** and **Require branches to be up to date before merging**. Select the GitHub Actions checks listed below and save the ruleset. Confirm it applies to `main` and verify the PR merge requirements. [GitHub ruleset setup](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository) · [Available rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)
 
 - Frontend build and type check
