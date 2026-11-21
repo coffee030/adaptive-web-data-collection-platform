@@ -142,10 +142,12 @@ test('Records fetches one extra, filters on the API and preserves the list page 
   await page.getByRole('textbox', { name: 'Job ID' }).fill(jobId);
   await page.getByRole('textbox', { name: 'Job ID' }).press('Enter');
   await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId);
-  await expect(page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem')).toHaveCount(10);
+  const recordRows = page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem');
+  await expect(recordRows).toHaveCount(10);
   expect(seen.at(-1)?.toString()).toBe(`limit=11&offset=0&order=oldest&job_id=${jobId}`);
   await page.getByRole('button', { name: 'Next records page' }).click();
   await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId + '&offset=10');
+  await expect(recordRows).toHaveCount(1);
   const trigger = page.getByRole('button', { name: 'Inspect North Trail' });
   await expect(trigger).toBeVisible();
   expect(seen.at(-1)?.get('offset')).toBe('10');
@@ -158,7 +160,7 @@ test('Records fetches one extra, filters on the API and preserves the list page 
   await expect(page).toHaveURL(recordsPath + '?job_id=' + jobId + '&offset=10');
   await expect(trigger).toBeVisible();
   await page.getByRole('button', { name: 'Previous records page' }).click();
-  await expect(page.getByRole('list', { name: 'Persisted generic records' }).getByRole('listitem')).toHaveCount(10);
+  await expect(recordRows).toHaveCount(10);
 });
 
 test('Records explains a rejected Job ID without exposing response messages', async ({ page }) => {
