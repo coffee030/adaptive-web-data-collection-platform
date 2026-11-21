@@ -27,7 +27,7 @@ The [final matrix](Final-Core-Readiness.md) records the observed release results
 
 ## Observed outcome
 
-The final verified `main` commit is `6c8087ed11b5b4ddb174e745d40acc7ac0bb631c`. All seven jobs passed. [Final GitHub Actions run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44884280877)
+The final verified Core product commit is `6c8087ed11b5b4ddb174e745d40acc7ac0bb631c`. All seven jobs passed. [Final GitHub Actions run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44884280877)
 
 The [earlier pre-maintenance hosted run](https://github.com/coffee030/adaptive-web-data-collection-platform/actions/runs/44793217466) passed all three Compose projects. It verified both exports and the persisted Demo after Stop and restart, exercised approved Reference onboarding, and checked the empty Normal Dashboard without the fixture service. The same run verified controlled MCP submission and Worker recovery. In the original fresh Windows ZIP check, Diagnose completed and Setup reported `ENV-004` before any Docker services could start.
 
