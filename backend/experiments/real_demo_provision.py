@@ -16,7 +16,8 @@ API = "http://127.0.0.1:8000/api/v1"
 SOURCE_NAME = "Quick Real Demo - Welsh Government Statement"
 PERMISSION_REFERENCE = "https://www.gov.wales/copyright-statement"
 ORIGIN = "https://www.gov.wales"
-DETAIL_PATH = "/written-statement-implications-uk-autumn-budget"\nALLOWED_PATHS = ("/search", DETAIL_PATH)
+DETAIL_PATH = "/written-statement-implications-uk-autumn-budget"
+ALLOWED_PATHS = ("/search", DETAIL_PATH)
 CATEGORY_NAME = "Real Website Demo"
 TOPIC_NAME = "Welsh Government Publications"
 KEYWORD = "inflation"
