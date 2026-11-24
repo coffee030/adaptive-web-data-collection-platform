@@ -10,19 +10,22 @@ On Windows 11 x64, with the normal platform prerequisites available, double-clic
 Start-Real-Website-Demo.bat
 ```
 
-The launcher first starts Normal mode. It then uses the running API container to:
+On the first run, the launcher keeps the two approval decisions separate:
 
-1. create or reuse **Quick Real Demo - Welsh Government**;
-2. authorize only `https://www.gov.wales` with `/search` and `/written-statement-` path prefixes;
-3. create or reuse a reviewed keyword-search Profile;
-4. validate the Profile against the live publisher with keyword `inflation` before approving it;
-5. create **Real Website Demo → Welsh Government Publications** and its binding;
-6. submit a fresh live Collection Request;
-7. wait for the Job to finish and open that Request in the Dashboard.
+1. it creates the Source as Pending and shows the exact origin, path prefixes and permission reference;
+2. type `YES` only if you approve that Source scope;
+3. it creates the reviewed Profile as Draft and validates it against the live publisher;
+4. after validation passes, it shows the exact configuration hash and validation report ID;
+5. type `APPROVE` only if you approve that exact validated Profile;
+6. it creates **Real Website Demo → Welsh Government Publications**, binds the approved Profile, submits `inflation`, waits for the Job and opens the Request page.
 
-The Profile stores `title`, canonical `publication_url`, and optional `published_at`. It allows one detail page, three requests, no redirects, a 512,000-byte response cap, a five-second per-request timeout, a 25-second collection budget, one execution attempt and a two-second Source interval.
+Later runs reuse the already approved Source/Profile/Topic and submit a fresh live Request without repeating those approvals unless the saved state changed.
 
-The permission reference is the Welsh Government copyright statement. This helper does not bypass robots, authentication, blocking, CAPTCHA, paywalls or any other access control.
+The Source is restricted to `https://www.gov.wales` with `/search` and `/written-statement-` path prefixes and a two-second minimum request interval. The permission reference is the Welsh Government copyright statement.
+
+The Profile stores `title`, canonical `publication_url`, and optional `published_at`. It allows one detail page, three requests, no redirects, a 512,000-byte response cap, a five-second per-request timeout, a 25-second collection budget and one execution attempt.
+
+This helper does not bypass robots, authentication, blocking, CAPTCHA, paywalls or any other access control.
 
 ## What to show
 
@@ -32,9 +35,8 @@ When the Request page opens:
 2. open **View request records**;
 3. inspect the accepted publication Record;
 4. open **View capture evidence** and show the source URL, capture metadata and SHA-256;
-5. return to the Request and download CSV or JSON.
-
-Use **Sources** to show that the live Source and its approved Profile are normal Core objects, not Synthetic Demo fixtures.
+5. return to the Request and download CSV or JSON;
+6. open **Sources** to show that the live Source and approved Profile are normal Core objects, not Synthetic Demo fixtures.
 
 ## If it fails
 
@@ -42,4 +44,4 @@ This demo depends on a third-party live website. Publisher availability, robots 
 
 Run `Diagnose-Platform.bat`, then inspect the Source, Profile validation result and Job error in the Dashboard. For a presentation where deterministic operation matters more than live access, use `Start-FYP-Demo.bat` instead.
 
-Normal-mode data is retained after `Stop-Platform.bat`. Re-running `Start-Real-Website-Demo.bat` reuses the Source/Profile/Topic when their saved configuration still matches, but submits a new live Request.
+Normal-mode data is retained after `Stop-Platform.bat`. Re-running `Start-Real-Website-Demo.bat` reuses matching saved setup and submits a new live Request.
