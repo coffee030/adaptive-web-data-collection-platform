@@ -53,6 +53,7 @@ jobs:
           backend/tests/test_m0_http.py backend/tests/test_m0_extraction.py backend/tests/m1
           backend/tests/test_m18b_retry_fixture.py backend/tests/test_m18b_reconcile.py
           backend/experiments/test_m22a_onboarding.py backend/experiments/test_m22b_suggestions.py
+          backend/tests/test_real_demo_provision.py
 
   data:
     name: PostgreSQL, migrations, Redis and queue integration
