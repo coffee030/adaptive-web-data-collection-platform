@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from time import monotonic, sleep
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from backend.core.contracts import ExtractionConfiguration
 
@@ -19,7 +20,7 @@ ALLOWED_PATHS = ("/search", "/written-statement-")
 CATEGORY_NAME = "Real Website Demo"
 TOPIC_NAME = "Welsh Government Publications"
 KEYWORD = "inflation"
-OPERATOR = "Quick Real Demo"
+OPERATOR = "Quick Real Demo user"
 
 CONFIGURATION = {
     "adapter_type": "web",
@@ -113,7 +114,7 @@ def one(rows, predicate, label):
     return matches[0] if matches else None
 
 
-def ensure_source():
+def ensure_source(*, authorize: bool = False):
     expected = {
         "source_name": SOURCE_NAME,
         "adapter_type": "web",
@@ -122,54 +123,103 @@ def ensure_source():
         "allowed_paths": {ORIGIN: list(ALLOWED_PATHS)},
         "min_request_interval_ms": 2000,
     }
-    source = one(api("/sources"), lambda row: row["source_name"] == SOURCE_NAME, SOURCE_NAME)
+    source = one(
+        api("/sources"),
+        lambda row: row["source_name"] == SOURCE_NAME,
+        SOURCE_NAME,
+    )
     if source is None:
         source = post("/sources", **expected)
-        print("Created the bounded Welsh Government Source.", flush=True)
+        print("Created the bounded Welsh Government Source as Pending.", flush=True)
     for key, value in expected.items():
         require(source.get(key) == value, f"Existing Source conflicts on {key}.")
-    require(source["approval_status"] != "revoked", "The Real Demo Source was revoked; review it manually.")
-    if source["approval_status"] == "pending":
+    require(
+        source["approval_status"] != "revoked",
+        "The Real Demo Source was revoked; review it manually.",
+    )
+    if authorize and source["approval_status"] == "pending":
         source = api(
             f"/sources/{source['source_id']}/authorization",
             method="PATCH",
             body={"approval_status": "approved"},
         )
-        print("Authorized the Source for this trusted local demo.", flush=True)
+    print(f"REAL_DEMO_SOURCE_ID={source['source_id']}", flush=True)
+    print(f"REAL_DEMO_SOURCE_STATUS={source['approval_status']}", flush=True)
     return source
 
-
-def ensure_profile(source):
+def matching_profile(source):
     configuration = ExtractionConfiguration.model_validate(CONFIGURATION)
     expected_hash = configuration.config_hash()
     base = f"/sources/{source['source_id']}/versions"
     profile = one(
         api(base),
-        lambda row: row["config_hash"] == expected_hash and row["approval_status"] != "retired",
+        lambda row: row["config_hash"] == expected_hash
+        and row["approval_status"] != "retired",
         "the Real Demo Profile",
     )
+    return base, configuration, expected_hash, profile
+
+
+def prepare_profile(source):
+    require(
+        source["approval_status"] == "approved",
+        "Authorize the Real Demo Source before preparing its Profile.",
+    )
+    base, configuration, expected_hash, profile = matching_profile(source)
     if profile is None:
         profile = post(base, configuration=configuration.model_dump(mode="json"))
-        print("Created the reviewed extraction Profile.", flush=True)
-    require(profile["config_hash"] == expected_hash, "Profile configuration hash changed unexpectedly.")
-    if profile["approval_status"] == "draft":
-        version = f"{base}/{profile['profile_version_id']}"
-        print("Validating the live publisher sample...", flush=True)
-        report = post(version + "/validate", adapter_type="web", keyword=KEYWORD)
-        require(
-            report["passed"],
-            "Live Profile validation did not pass. The publisher may have changed or be temporarily unavailable.",
-        )
-        profile = post(
-            version + "/approve",
-            approver=OPERATOR,
-            report_id=report["report_id"],
-            config_hash=expected_hash,
-        )
-        print("Approved the validated Profile Version.", flush=True)
-    require(profile["approval_status"] == "approved", "The Real Demo Profile is not approved.")
-    return profile
+        print("Created the reviewed extraction Profile as Draft.", flush=True)
+    require(
+        profile["config_hash"] == expected_hash,
+        "Profile configuration hash changed unexpectedly.",
+    )
+    print(f"REAL_DEMO_PROFILE_ID={profile['profile_version_id']}", flush=True)
+    print(f"REAL_DEMO_CONFIG_HASH={expected_hash}", flush=True)
+    if profile["approval_status"] == "approved":
+        print("REAL_DEMO_PROFILE_APPROVED=1", flush=True)
+        return profile, None
+    require(
+        profile["approval_status"] == "draft",
+        "The matching Real Demo Profile is not an approvable Draft.",
+    )
+    version = f"{base}/{profile['profile_version_id']}"
+    print("Validating the live publisher sample...", flush=True)
+    report = post(version + "/validate", adapter_type="web", keyword=KEYWORD)
+    require(
+        report["passed"],
+        "Live Profile validation did not pass. The publisher may have changed or be temporarily unavailable.",
+    )
+    print("REAL_DEMO_PROFILE_APPROVED=0", flush=True)
+    print(f"REAL_DEMO_REPORT_ID={report['report_id']}", flush=True)
+    print("REAL_DEMO_VALIDATION=PASS", flush=True)
+    return profile, report
 
+
+def approve_profile(source, report_id: str, config_hash: str):
+    base, _, expected_hash, profile = matching_profile(source)
+    require(profile is not None, "The Real Demo Profile does not exist.")
+    if profile["approval_status"] == "approved":
+        return profile
+    require(
+        profile["approval_status"] == "draft",
+        "The Real Demo Profile is not a Draft.",
+    )
+    require(
+        config_hash == expected_hash,
+        "The approved configuration hash does not match the current Draft.",
+    )
+    UUID(report_id)
+    profile = post(
+        f"{base}/{profile['profile_version_id']}/approve",
+        approver=OPERATOR,
+        report_id=report_id,
+        config_hash=expected_hash,
+    )
+    require(
+        profile["approval_status"] == "approved",
+        "Profile approval did not persist.",
+    )
+    return profile
 
 def ensure_category():
     category = one(api("/categories?limit=100&offset=0"), lambda row: row["name"] == CATEGORY_NAME, CATEGORY_NAME)
@@ -242,10 +292,43 @@ def run_collection(topic, binding):
     return identity
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="action", required=True)
+    source = sub.add_parser("source")
+    source.add_argument("--authorize", action="store_true")
+    sub.add_parser("profile")
+    run = sub.add_parser("run")
+    run.add_argument("--report-id")
+    run.add_argument("--config-hash")
+    return parser.parse_args()
+
+
 def main() -> int:
     try:
+        args = parse_args()
+        if args.action == "source":
+            ensure_source(authorize=args.authorize)
+            return 0
         source = ensure_source()
-        profile = ensure_profile(source)
+        require(
+            source["approval_status"] == "approved",
+            "Source authorization is still pending.",
+        )
+        if args.action == "profile":
+            prepare_profile(source)
+            return 0
+        _, _, _, profile = matching_profile(source)
+        require(
+            profile is not None,
+            "Prepare and validate the Real Demo Profile before running.",
+        )
+        if profile["approval_status"] != "approved":
+            require(
+                args.report_id and args.config_hash,
+                "Profile approval requires the explicit validation report and configuration hash.",
+            )
+            profile = approve_profile(source, args.report_id, args.config_hash)
         category = ensure_category()
         topic = ensure_topic(category)
         binding = ensure_binding(topic, source, profile)
