@@ -82,7 +82,7 @@ try {
         Write-Host ''
         Write-Host 'Source authorization review:'
         Write-Host '  Origin: https://www.gov.wales'
-        Write-Host '  Paths:  /search and /written-statement-'
+        Write-Host '  Paths:  /search and /written-statement-implications-uk-autumn-budget'
         Write-Host '  Permission reference: https://www.gov.wales/copyright-statement'
         $answer = Read-Host 'Type YES to authorize this Source scope'
         if ($answer -cne 'YES') { Write-Host '[INFO] Source authorization was not approved.'; exit 2 }
