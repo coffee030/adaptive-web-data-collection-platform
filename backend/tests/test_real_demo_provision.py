@@ -5,7 +5,7 @@ from backend.core.inputs import InputError
 from backend.core.web_adapter import checked_url
 from backend.experiments.real_demo_provision import (
     ALLOWED_PATHS,
-    DETAIL_PATH,
+    DETAIL_PATH,\n    SEARCH_PATH,
     CONFIGURATION,
     KEYWORD,
     ORIGIN,
@@ -18,15 +18,15 @@ def test_real_demo_profile_is_bounded_and_valid():
     configuration = ExtractionConfiguration.model_validate(CONFIGURATION)
     search = configuration.search
     assert search is not None
-    assert SOURCE_NAME == "Quick Real Demo - Welsh Government Statement"
+    assert SOURCE_NAME == "Quick Real Demo - GOV.WALES Announcements"
     assert PERMISSION_REFERENCE == "https://www.gov.wales/copyright-statement"
     assert ORIGIN == "https://www.gov.wales"
     assert DETAIL_PATH == "/written-statement-implications-uk-autumn-budget"
-    assert ALLOWED_PATHS == ("/search", DETAIL_PATH)
-    assert KEYWORD == "inflation"
+    assert SEARCH_PATH == "/announcements/search"\n    assert ALLOWED_PATHS == (SEARCH_PATH, DETAIL_PATH)
+    assert KEYWORD == "Autumn Budget"
     assert search.origin == ORIGIN
-    assert search.path == "/search"
-    assert search.keyword_parameter == "globalkeywords"
+    assert search.path == SEARCH_PATH
+    assert search.keyword_parameter == "keywords"
     assert search.max_detail_pages == 1
     assert search.max_requests == 3
     assert search.max_redirects == 0
