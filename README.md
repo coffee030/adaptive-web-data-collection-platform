@@ -40,7 +40,7 @@ The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B
 
 ### Optional live website demo
 
-Double-click `Start-Real-Website-Demo.bat` to run one bounded live collection against the public Welsh Government website using the Normal platform. On the first run, review and explicitly authorize the shown Source scope, then approve the exact Profile only after its live validation passes. The helper creates the Topic binding, submits `inflation`, and opens the resulting Request. Later runs reuse the approved setup. Live publisher availability and markup can change, so keep the Synthetic Demo for deterministic presentations. [Real website demo guide](docs/demo/Real-Website-Demo.md)
+Double-click `Start-Real-Website-Demo.bat` to run one bounded live collection against the public Welsh Government website using the Normal platform. On the first run, review and explicitly authorize the shown Source scope, then approve the exact Profile only after its live validation passes. The helper creates the Topic binding, submits `Autumn Budget`, and opens the resulting Request. Later runs reuse the approved setup. Live publisher availability and markup can change, so keep the Synthetic Demo for deterministic presentations. [Real website demo guide](docs/demo/Real-Website-Demo.md)
 
 ## Collect by topic
 
