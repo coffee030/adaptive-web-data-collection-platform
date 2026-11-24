@@ -38,6 +38,10 @@ Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The fir
 
 The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B verified successful Jobs and detail evidence for Welsh Government, Scottish Fiscal Commission and Economics Observatory. The FTC and New York Fed candidates were unsupported under the conditions evaluated in M10. [Shared Request evidence trace](docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#record-to-detail-evidence-verification) · [M10 real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
 
+### Optional live website demo
+
+Double-click `Start-Real-Website-Demo.bat` to run one bounded live collection against the public Welsh Government website using the Normal platform. It automatically provisions a dedicated Source, validates and approves its Profile, creates a Topic binding, submits `inflation`, and opens the resulting Request. Live publisher availability and markup can change, so keep the Synthetic Demo for deterministic presentations. [Real website demo guide](docs/demo/Real-Website-Demo.md)
+
 ## Collect by topic
 
 1. **Set up approved sources.** In **Sources**, register and authorize each website. Choose **Keyword search and detail pages** in the profile's **Collection mode**, preview and validate a sample keyword, and approve the profile version. To keep article history, enable **Store article history** in the profile before approval.
