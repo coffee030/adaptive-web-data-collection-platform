@@ -5,7 +5,8 @@ from backend.core.inputs import InputError
 from backend.core.web_adapter import checked_url
 from backend.experiments.real_demo_provision import (
     ALLOWED_PATHS,
-    DETAIL_PATH,\n    SEARCH_PATH,
+    DETAIL_PATH,
+    SEARCH_PATH,
     CONFIGURATION,
     KEYWORD,
     ORIGIN,
@@ -22,7 +23,8 @@ def test_real_demo_profile_is_bounded_and_valid():
     assert PERMISSION_REFERENCE == "https://www.gov.wales/copyright-statement"
     assert ORIGIN == "https://www.gov.wales"
     assert DETAIL_PATH == "/written-statement-implications-uk-autumn-budget"
-    assert SEARCH_PATH == "/announcements/search"\n    assert ALLOWED_PATHS == (SEARCH_PATH, DETAIL_PATH)
+    assert SEARCH_PATH == "/announcements/search"
+    assert ALLOWED_PATHS == (SEARCH_PATH, DETAIL_PATH)
     assert KEYWORD == "Autumn Budget"
     assert search.origin == ORIGIN
     assert search.path == SEARCH_PATH
@@ -56,8 +58,8 @@ def test_real_demo_source_policy_accepts_only_the_reviewed_detail():
         min_request_interval_ms=2000,
     )
     assert checked_url(source, ORIGIN + DETAIL_PATH)[0] == ORIGIN + DETAIL_PATH
-    assert checked_url(source, ORIGIN + "/search?globalkeywords=inflation")[0].startswith(
-        ORIGIN + "/search?"
+    assert checked_url(source, ORIGIN + SEARCH_PATH + "?keywords=Autumn%20Budget")[0].startswith(
+        ORIGIN + SEARCH_PATH + "?"
     )
     with pytest.raises(InputError):
         checked_url(source, ORIGIN + "/written-statement-draft-budget-2027-28-2029-30")
