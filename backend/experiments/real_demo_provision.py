@@ -38,7 +38,7 @@ CONFIGURATION = {
         ],
     },
     "fields": [
-        {"name": "title", "selector_type": "css", "selector": "h1.page-header__title"},
+        {"name": "title", "selector_type": "css", "selector": "h1"},
         {
             "name": "publication_url",
             "selector_type": "css",
@@ -58,8 +58,8 @@ CONFIGURATION = {
         "path": "/search",
         "keyword_parameter": "globalkeywords",
         "result_item_selector": (
-            '//h3/a[starts-with(@href,"https://www.gov.wales/written-statement-") '
-            'and contains(@href,"budget")]'
+            '//a[(starts-with(@href,"https://www.gov.wales/written-statement-") '
+            'or starts-with(@href,"/written-statement-")) and contains(@href,"budget")]'
         ),
         "detail_link_selector": "self::a",
         "max_detail_pages": 1,
@@ -185,10 +185,27 @@ def prepare_profile(source):
     version = f"{base}/{profile['profile_version_id']}"
     print("Validating the live publisher sample...", flush=True)
     report = post(version + "/validate", adapter_type="web", keyword=KEYWORD)
-    require(
-        report["passed"],
-        "Live Profile validation did not pass. The publisher may have changed or be temporarily unavailable.",
-    )
+    if not report["passed"]:
+        print(f"REAL_DEMO_VALID_COUNT={report.get('valid_count', 0)}", flush=True)
+        print(f"REAL_DEMO_INVALID_COUNT={report.get('invalid_count', 0)}", flush=True)
+        print(f"REAL_DEMO_DUPLICATE_COUNT={report.get('duplicate_count', 0)}", flush=True)
+        if report.get("sample_location"):
+            print(f"REAL_DEMO_SAMPLE_LOCATION={report['sample_location']}", flush=True)
+        if report.get("error"):
+            print(
+                "REAL_DEMO_VALIDATION_ERROR="
+                + json.dumps(report["error"], sort_keys=True, separators=(",", ":")),
+                flush=True,
+            )
+        if report.get("invalid"):
+            print(
+                "REAL_DEMO_INVALID="
+                + json.dumps(report["invalid"], sort_keys=True, separators=(",", ":")),
+                flush=True,
+            )
+        raise RealDemoError(
+            "Live Profile validation did not pass. The diagnostic lines above show the Core result."
+        )
     print("REAL_DEMO_PROFILE_APPROVED=0", flush=True)
     print(f"REAL_DEMO_REPORT_ID={report['report_id']}", flush=True)
     print("REAL_DEMO_VALIDATION=PASS", flush=True)
