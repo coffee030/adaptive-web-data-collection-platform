@@ -21,7 +21,7 @@ On the first run, the launcher keeps the two approval decisions separate:
 
 Later runs reuse the already approved Source/Profile/Topic and submit a fresh live Request without repeating those approvals unless the saved state changed.
 
-The Source is restricted to `https://www.gov.wales` with `/search` and `/written-statement-` path prefixes and a two-second minimum request interval. The permission reference is the Welsh Government copyright statement.
+The Source is restricted to `https://www.gov.wales` with `/search` and the exact `/written-statement-implications-uk-autumn-budget` detail path, plus a two-second minimum request interval. The permission reference is the Welsh Government copyright statement.
 
 The Profile stores `title`, canonical `publication_url`, and optional `published_at`. It allows one detail page, three requests, no redirects, a 512,000-byte response cap, a five-second per-request timeout, a 25-second collection budget and one execution attempt.
 
