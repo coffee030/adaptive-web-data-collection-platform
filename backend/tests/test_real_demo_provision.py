@@ -29,6 +29,8 @@ def test_real_demo_profile_is_bounded_and_valid():
     assert search.max_seconds == 25
     assert search.max_attempts == 1
     assert configuration.record_schema.identity_field == "publication_url"
+    assert configuration.fields[0].selector == "h1"
+    assert "/written-statement-" in configuration.search.result_item_selector
     assert [field.name for field in configuration.record_schema.fields] == [
         "title",
         "publication_url",
