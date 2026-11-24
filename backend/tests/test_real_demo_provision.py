@@ -4,7 +4,8 @@ from backend.core.contracts import ExtractionConfiguration, Source
 from backend.core.inputs import InputError
 from backend.core.web_adapter import checked_url
 from backend.experiments.real_demo_provision import (
-    ALLOWED_PATHS,\n    DETAIL_PATH,
+    ALLOWED_PATHS,
+    DETAIL_PATH,
     CONFIGURATION,
     KEYWORD,
     ORIGIN,
@@ -20,7 +21,8 @@ def test_real_demo_profile_is_bounded_and_valid():
     assert SOURCE_NAME == "Quick Real Demo - Welsh Government Statement"
     assert PERMISSION_REFERENCE == "https://www.gov.wales/copyright-statement"
     assert ORIGIN == "https://www.gov.wales"
-    assert DETAIL_PATH == "/written-statement-implications-uk-autumn-budget"\n    assert ALLOWED_PATHS == ("/search", DETAIL_PATH)
+    assert DETAIL_PATH == "/written-statement-implications-uk-autumn-budget"
+    assert ALLOWED_PATHS == ("/search", DETAIL_PATH)
     assert KEYWORD == "inflation"
     assert search.origin == ORIGIN
     assert search.path == "/search"
