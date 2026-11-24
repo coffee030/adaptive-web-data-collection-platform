@@ -17,11 +17,11 @@ On the first run, the launcher keeps the two approval decisions separate:
 3. it creates the reviewed Profile as Draft and validates it against the live publisher;
 4. after validation passes, it shows the exact configuration hash and validation report ID;
 5. type `APPROVE` only if you approve that exact validated Profile;
-6. it creates **Real Website Demo → Welsh Government Publications**, binds the approved Profile, submits `inflation`, waits for the Job and opens the Request page.
+6. it creates **Real Website Demo → Welsh Government Publications**, binds the approved Profile, submits `Autumn Budget`, waits for the Job and opens the Request page.
 
 Later runs reuse the already approved Source/Profile/Topic and submit a fresh live Request without repeating those approvals unless the saved state changed.
 
-The Source is restricted to `https://www.gov.wales` with `/search` and the exact `/written-statement-implications-uk-autumn-budget` detail path, plus a two-second minimum request interval. The permission reference is the Welsh Government copyright statement.
+The Source is restricted to `https://www.gov.wales` with `/announcements/search` and the exact `/written-statement-implications-uk-autumn-budget` detail path, plus a two-second minimum request interval. The permission reference is the Welsh Government copyright statement.
 
 The Profile stores `title`, canonical `publication_url`, and optional `published_at`. It allows one detail page, three requests, no redirects, a 512,000-byte response cap, a five-second per-request timeout, a 25-second collection budget and one execution attempt.
 
