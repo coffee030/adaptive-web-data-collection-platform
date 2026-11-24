@@ -13,10 +13,10 @@ from uuid import UUID, uuid4
 from backend.core.contracts import ExtractionConfiguration
 
 API = "http://127.0.0.1:8000/api/v1"
-SOURCE_NAME = "Quick Real Demo - Welsh Government"
+SOURCE_NAME = "Quick Real Demo - Welsh Government Statement"
 PERMISSION_REFERENCE = "https://www.gov.wales/copyright-statement"
 ORIGIN = "https://www.gov.wales"
-ALLOWED_PATHS = ("/search", "/written-statement-")
+DETAIL_PATH = "/written-statement-implications-uk-autumn-budget"\nALLOWED_PATHS = ("/search", DETAIL_PATH)
 CATEGORY_NAME = "Real Website Demo"
 TOPIC_NAME = "Welsh Government Publications"
 KEYWORD = "inflation"
@@ -58,8 +58,8 @@ CONFIGURATION = {
         "path": "/search",
         "keyword_parameter": "globalkeywords",
         "result_item_selector": (
-            '//a[(starts-with(@href,"https://www.gov.wales/written-statement-") '
-            'or starts-with(@href,"/written-statement-")) and contains(@href,"budget")]'
+            '//a[@href="https://www.gov.wales/written-statement-implications-uk-autumn-budget" '
+            'or @href="/written-statement-implications-uk-autumn-budget"]'
         ),
         "detail_link_selector": "self::a",
         "max_detail_pages": 1,
