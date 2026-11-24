@@ -14,6 +14,23 @@ function Read-LauncherValue([string]$Name) {
     return $line.Substring($line.IndexOf('=') + 1)
 }
 
+function Read-OutputValue($Result, [string]$Name) {
+    foreach ($line in @($Result.Out -split "`r?`n")) {
+        if ($line -match "^$([regex]::Escape($Name))=(.*)$") { return $Matches[1] }
+    }
+    return $null
+}
+
+function Invoke-RealDemo([string[]]$Arguments) {
+    $result = Invoke-Tool $Docker.CLI (@(
+        '--host', $DockerHost, 'exec', $script:ApiContainer,
+        'python', '-m', 'backend.experiments.real_demo_provision'
+    ) + $Arguments) 210 -Environment $script:DockerEnvironment
+    if ($result.Out) { Write-Host $result.Out }
+    if ($result.Code -ne 0) { throw "Real demo command failed: $($Arguments -join ' ')" }
+    return $result
+}
+
 Write-Host 'Quick Real Website Demo | Welsh Government'
 Write-Host '[INFO] This uses the public GOV.WALES website. Live publisher availability and markup can change.'
 Write-Host '[INFO] Starting the existing Normal platform first...'
@@ -38,7 +55,7 @@ if (!$Docker.CLI) {
     exit 1
 }
 
-$environment = @{
+$script:DockerEnvironment = @{
     DOCKER_HOST = $null
     DOCKER_CONTEXT = $null
     DOCKER_TLS_VERIFY = $null
@@ -50,42 +67,61 @@ $container = Invoke-Tool $Docker.CLI @(
     '--filter', "label=com.docker.compose.project=$project",
     '--filter', 'label=com.docker.compose.service=api',
     '--format', '{{.ID}}'
-) 15 -Environment $environment
-
+) 15 -Environment $DockerEnvironment
 $ids = @($container.Out -split "`r?`n" | Where-Object { $_ })
 if ($container.Code -ne 0 -or $ids.Count -ne 1) {
     Write-Host '[ERROR] Could not identify exactly one owned API container.'
-    Write-Host $container.Reason
     exit 1
 }
+$script:ApiContainer = $ids[0]
 
-Write-Host '[INFO] Provisioning the bounded Source/Profile and running a fresh live collection...'
-$result = Invoke-Tool $Docker.CLI @(
-    '--host', $DockerHost, 'exec', $ids[0],
-    'python', '-m', 'backend.experiments.real_demo_provision'
-) 210 -Environment $environment
+try {
+    $source = Invoke-RealDemo @('source')
+    $sourceStatus = Read-OutputValue $source 'REAL_DEMO_SOURCE_STATUS'
+    if ($sourceStatus -eq 'pending') {
+        Write-Host ''
+        Write-Host 'Source authorization review:'
+        Write-Host '  Origin: https://www.gov.wales'
+        Write-Host '  Paths:  /search and /written-statement-'
+        Write-Host '  Permission reference: https://www.gov.wales/copyright-statement'
+        $answer = Read-Host 'Type YES to authorize this Source scope'
+        if ($answer -cne 'YES') { Write-Host '[INFO] Source authorization was not approved.'; exit 2 }
+        $source = Invoke-RealDemo @('source', '--authorize')
+        if ((Read-OutputValue $source 'REAL_DEMO_SOURCE_STATUS') -ne 'approved') { throw 'Source authorization did not persist.' }
+    }
 
-if ($result.Out) { Write-Host $result.Out }
-if ($result.Code -ne 0) {
-    Write-Host '[ERROR] The live demo did not complete. The Normal platform is still running.'
-    Write-Host '[INFO] This can happen if GOV.WALES changes, is slow, or is temporarily unavailable.'
-    Write-Host "[INFO] Open http://127.0.0.1:$frontendPort/ to inspect Sources, Profiles and Jobs."
-    exit $result.Code
+    $profile = Invoke-RealDemo @('profile')
+    $approved = Read-OutputValue $profile 'REAL_DEMO_PROFILE_APPROVED'
+    $runArgs = @('run')
+    if ($approved -eq '0') {
+        $reportId = Read-OutputValue $profile 'REAL_DEMO_REPORT_ID'
+        $configHash = Read-OutputValue $profile 'REAL_DEMO_CONFIG_HASH'
+        if (!$reportId -or !$configHash) { throw 'Validation passed but approval references were missing.' }
+        Write-Host ''
+        Write-Host 'Profile approval review:'
+        Write-Host '  Live validation: PASS'
+        Write-Host "  Config hash: $configHash"
+        Write-Host "  Report ID:   $reportId"
+        $answer = Read-Host 'Type APPROVE to approve this exact validated Profile and run the collection'
+        if ($answer -cne 'APPROVE') { Write-Host '[INFO] Profile approval was not granted.'; exit 2 }
+        $runArgs += @('--report-id', $reportId, '--config-hash', $configHash)
+    }
+
+    $result = Invoke-RealDemo $runArgs
+    $requestId = Read-OutputValue $result 'REAL_DEMO_REQUEST_ID'
+    if (!$requestId) { throw 'Live collection finished but its Request ID was not reported.' }
+    $url = "http://127.0.0.1:$frontendPort/collection-requests/$requestId"
+    Write-Host '[SUCCESS] Live website collection completed.'
+    Write-Host "URL: $url"
+    if (!$NoBrowser) {
+        try { Start-Process $url }
+        catch { Write-Host '[WARN] Browser did not open automatically. Copy the URL above.' }
+    }
 }
-
-$requestId = $null
-foreach ($line in @($result.Out -split "`r?`n")) {
-    if ($line -match '^REAL_DEMO_REQUEST_ID=([0-9a-fA-F-]{36})$') { $requestId = $Matches[1] }
-}
-if (!$requestId) {
-    Write-Host '[ERROR] Live collection finished but its Request ID was not reported.'
+catch {
+    Write-Host "[ERROR] $($_.Exception.Message)"
+    Write-Host '[INFO] The Normal platform is still running.'
+    Write-Host '[INFO] A live publisher can fail because of changed markup, robots policy, latency or availability.'
+    Write-Host "[INFO] Open http://127.0.0.1:$frontendPort/ to inspect the Source, Profile and Jobs."
     exit 1
-}
-
-$url = "http://127.0.0.1:$frontendPort/collection-requests/$requestId"
-Write-Host '[SUCCESS] Live website collection completed.'
-Write-Host "URL: $url"
-if (!$NoBrowser) {
-    try { Start-Process $url }
-    catch { Write-Host '[WARN] Browser did not open automatically. Copy the URL above.' }
 }
