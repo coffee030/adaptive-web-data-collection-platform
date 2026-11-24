@@ -1,4 +1,8 @@
-from backend.core.contracts import ExtractionConfiguration
+import pytest
+
+from backend.core.contracts import ExtractionConfiguration, Source
+from backend.core.inputs import InputError
+from backend.core.web_adapter import checked_url
 from backend.experiments.real_demo_provision import (
     ALLOWED_PATHS,\n    DETAIL_PATH,
     CONFIGURATION,
@@ -36,3 +40,22 @@ def test_real_demo_profile_is_bounded_and_valid():
         "publication_url",
         "published_at",
     ]
+
+
+def test_real_demo_source_policy_accepts_only_the_reviewed_detail():
+    source = Source(
+        source_id="real-demo-test",
+        source_name=SOURCE_NAME,
+        adapter_type="web",
+        permission_reference=PERMISSION_REFERENCE,
+        approval_status="approved",
+        allowed_origins=(ORIGIN,),
+        allowed_paths={ORIGIN: ALLOWED_PATHS},
+        min_request_interval_ms=2000,
+    )
+    assert checked_url(source, ORIGIN + DETAIL_PATH)[0] == ORIGIN + DETAIL_PATH
+    assert checked_url(source, ORIGIN + "/search?globalkeywords=inflation")[0].startswith(
+        ORIGIN + "/search?"
+    )
+    with pytest.raises(InputError):
+        checked_url(source, ORIGIN + "/written-statement-draft-budget-2027-28-2029-30")
