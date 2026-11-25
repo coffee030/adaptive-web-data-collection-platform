@@ -1,6 +1,7 @@
 import hashlib
 import socket
 from contextlib import contextmanager
+from datetime import timedelta
 from http.server import ThreadingHTTPServer
 from threading import Thread
 from typing import ClassVar
@@ -424,17 +425,22 @@ def test_public_robots_denial_or_unavailable_never_fetches_search(
 
 
 @pytest.mark.parametrize(
-    ("at_robots", "status", "challenge", "expected"),
+    ("at_robots", "status", "challenge", "retry_after", "expected", "delay"),
     [
-        (True, 403, False, "access_blocked"),
-        (False, 401, False, "access_blocked"),
-        (False, 403, False, "access_blocked"),
-        (False, 503, True, "access_blocked"),
-        (False, 200, False, "origin_rate_unavailable"),
+        (True, 403, False, None, "access_blocked", None),
+        (False, 401, False, None, "access_blocked", None),
+        (False, 403, False, None, "access_blocked", None),
+        (False, 503, True, 120, "access_blocked", None),
+        (True, 429, False, 120, "robots_unavailable", 120),
+        (False, 429, False, 120, "rate_limited", 120),
+        (False, 429, False, None, "rate_limited", 30),
+        (True, 503, False, 120, "robots_unavailable", 120),
+        (False, 503, False, 120, "http_error", 120),
+        (False, 200, False, None, "origin_rate_unavailable", 10),
     ],
 )
-def test_origin_release_failure_preserves_explicit_blocking(
-    monkeypatch, at_robots, status, challenge, expected
+def test_origin_release_failure_preserves_publisher_denial_and_retry_delay(
+    monkeypatch, at_robots, status, challenge, retry_after, expected, delay
 ):
     origin = "http://127.0.0.1:5217"
     approved = source(origin)
@@ -447,7 +453,12 @@ def test_origin_release_failure_preserves_explicit_blocking(
         if url.endswith("/robots.txt") and not at_robots:
             return CapturedInput(b"", url, http_status=404), None, False
         return (
-            CapturedInput(b"fixture response", url, http_status=status),
+            CapturedInput(
+                b"fixture response",
+                url,
+                http_status=status,
+                retry_after_seconds=retry_after,
+            ),
             None,
             challenge,
         )
@@ -468,15 +479,16 @@ def test_origin_release_failure_preserves_explicit_blocking(
 
     assert failed.value.error.code == expected
     assert failed.value.error.http_status == status
-    if expected == "access_blocked":
-        assert retry_delay(failed.value.error, 1) is None
+    assert retry_delay(failed.value.error, 1) == (
+        timedelta(seconds=delay) if delay is not None else None
+    )
     if at_robots:
         assert calls == [origin + "/robots.txt"]
         assert failed.value.capture is None
     else:
         assert calls == [origin + "/robots.txt", entry.url]
         assert failed.value.capture.body == b"fixture response"
-        if expected == "access_blocked":
+        if expected != "origin_rate_unavailable":
             assert failed.value.capture.requested_location == entry.url
 
 

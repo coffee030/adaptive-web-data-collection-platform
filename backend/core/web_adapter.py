@@ -207,6 +207,24 @@ def _is_access_block(document: CapturedInput, challenged: bool) -> bool:
     return challenged or document.http_status in (401, 403)
 
 
+def _has_publisher_backoff(document: CapturedInput) -> bool:
+    status = document.http_status
+    return status == 429 or (
+        status is not None
+        and 500 <= status <= 599
+        and document.retry_after_seconds is not None
+    )
+
+
+def _unavailable_robots(document: CapturedInput) -> InputError:
+    return InputError(
+        "robots_unavailable",
+        "Could not obtain a supported robots.txt policy",
+        http_status=document.http_status,
+        retry_after_seconds=document.retry_after_seconds,
+    )
+
+
 def _same_origin_link(source: Source, current: str, reference: str) -> str:
     if (
         not reference
@@ -408,12 +426,18 @@ class SearchRequests:
                     self.interval_ms = max(self.interval_ms, self.policy.interval_ms)
                     cooldown.interval_ms = self.interval_ms
         except InputError as error:
-            if not blocked or error.error.code != "origin_rate_unavailable":
+            if (
+                error.error.code != "origin_rate_unavailable"
+                or document is None
+                or not (blocked or _has_publisher_backoff(document))
+            ):
                 if document is not None and not robots and error.capture is None:
                     raise InputError(
                         error.error.code, str(error), capture=document
                     ) from error
                 raise
+            if robots and not blocked:
+                raise _unavailable_robots(document) from error
         if robots and blocked:
             raise InputError(
                 "access_blocked",
@@ -437,12 +461,7 @@ class SearchRequests:
             document.http_status != 200
             or _parse_content_type(document).get_content_type() != "text/plain"
         ):
-            raise InputError(
-                "robots_unavailable",
-                "Could not obtain a supported robots.txt policy",
-                http_status=document.http_status,
-                retry_after_seconds=document.retry_after_seconds,
-            )
+            raise _unavailable_robots(document)
         return parse_policy(document.body, USER_AGENT.split("/", 1)[0])
 
 
