@@ -13,7 +13,14 @@ import httpx2
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import AfterValidator, BaseModel, Field, JsonValue, StringConstraints, ValidationError
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    JsonValue,
+    StringConstraints,
+    ValidationError,
+)
 
 from backend.core.contracts import Name
 
@@ -35,7 +42,10 @@ PREPARE = ToolAnnotations(
 )
 START = ToolAnnotations(
     # The dispatched jobs may contact approved external sources.
-    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
 )
 JOB_ERRORS = {
     "http_error": "The source returned an HTTP error.",
@@ -149,7 +159,9 @@ class RecordPage(Page):
 
 
 def api_base(value: str) -> str:
-    match = re.fullmatch(r"http://(?:127\.0\.0\.1|\[::1\]):([0-9]{1,5})/api/v1/?", value)
+    match = re.fullmatch(
+        r"http://(?:127\.0\.0\.1|\[::1\]):([0-9]{1,5})/api/v1/?", value
+    )
     if not match or not 1 <= int(match[1]) <= 65535:
         raise ValueError(
             "Set FYP_MCP_API_BASE to http://127.0.0.1:<API port>/api/v1 "
@@ -190,7 +202,9 @@ async def read_json(url: str, params: dict, missing: str | None):
             return await response_json(response)
 
 
-async def post_collection(base: str, submission: Submission) -> Receipt | SubmissionFailure:
+async def post_collection(
+    base: str, submission: Submission
+) -> Receipt | SubmissionFailure:
     key = submission.request_key
     async with rest_client() as client:
         async with client.stream(
@@ -221,7 +235,8 @@ async def post_collection(base: str, submission: Submission) -> Receipt | Submis
                     ]
                     if (
                         len(jobs) != len(submission.binding_ids)
-                        or {job.binding_id for job in jobs} != set(submission.binding_ids)
+                        or {job.binding_id for job in jobs}
+                        != set(submission.binding_ids)
                         or len({job.job_id for job in jobs}) != len(jobs)
                     ):
                         return unknown_submission(key, status)
@@ -246,7 +261,9 @@ async def post_collection(base: str, submission: Submission) -> Receipt | Submis
                 outcome="conflict" if conflict else "rejected",
                 code=code,
                 http_status=status,
-                message=SUBMISSION_ERRORS.get(code, "The FYP API rejected the collection."),
+                message=SUBMISSION_ERRORS.get(
+                    code, "The FYP API rejected the collection."
+                ),
             )
 
 
@@ -269,12 +286,18 @@ def row(value) -> Row:
 def public_job(value: JsonValue) -> Row:
     job = row(value)
     result = fields(job, "job_id status source_id profile_version_id")
-    for name in ("valid_count", "invalid_count", "duplicate_count", "execution_attempt"):
+    for name in (
+        "valid_count",
+        "invalid_count",
+        "duplicate_count",
+        "execution_attempt",
+    ):
         count = job.get(name)
         result[name] = count if type(count) is int and count >= 0 else None
     retry_at = job.get("next_attempt_at")
     result["next_attempt_at"] = (
-        retry_at if isinstance(retry_at, str) and re.fullmatch(r"[0-9T:Z+.-]{1,40}", retry_at)
+        retry_at
+        if isinstance(retry_at, str) and re.fullmatch(r"[0-9T:Z+.-]{1,40}", retry_at)
         else None
     )
     error = job.get("error")
@@ -286,8 +309,12 @@ def public_job(value: JsonValue) -> Row:
         status = error.get("http_status")
         result["error"] = {
             "code": code,
-            "http_status": status if type(status) is int and 100 <= status <= 599 else None,
-            "summary": JOB_ERRORS.get(code, "See the Dashboard execution events for this job."),
+            "http_status": status
+            if type(status) is int and 100 <= status <= 599
+            else None,
+            "summary": JOB_ERRORS.get(
+                code, "See the Dashboard execution events for this job."
+            ),
         }
     return result
 
@@ -339,7 +366,6 @@ def create_server(base: str) -> MCPServer:
     async def page(
         path: str, limit: int, offset: int, project: Callable[[Row], Row], **filters
     ) -> Page:
-        # Fetch a lookahead row to distinguish the final page without inventing a total.
         items = rows(await get(path, limit=limit + 1, offset=offset, **filters))
         has_more = len(items) > limit
         next_offset = offset + limit
@@ -378,14 +404,17 @@ def create_server(base: str) -> MCPServer:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def list_topic_sources(topic_id: UUID, limit: Limit = 10, offset: Offset = 0) -> Page:
+    async def list_topic_sources(
+        topic_id: UUID, limit: Limit = 10, offset: Offset = 0
+    ) -> Page:
         """List the topic's eligible bindings and pinned source and profile versions."""
         return await page(
             f"/topics/{topic_id}/bindings",
             limit,
             offset,
             lambda item: fields(
-                item, "id topic_id source_id source_name profile_version_id profile_version eligible"
+                item,
+                "id topic_id source_id source_name profile_version_id profile_version eligible",
             ),
             eligible_only="true",
             missing="Topic",
@@ -398,7 +427,10 @@ def create_server(base: str) -> MCPServer:
         """Prepare arguments and a fresh retry key for a requested collection. Submits nothing."""
         return PreparedCollection(
             submission=Submission(
-                request_key=uuid4(), topic_id=topic_id, keyword=keyword, binding_ids=binding_ids
+                request_key=uuid4(),
+                topic_id=topic_id,
+                keyword=keyword,
+                binding_ids=binding_ids,
             )
         )
 
@@ -412,10 +444,15 @@ def create_server(base: str) -> MCPServer:
         same key and intent. Poll get_collection_status with the receipt's request_id.
         """
         submission = Submission(
-            request_key=request_key, topic_id=topic_id, keyword=keyword, binding_ids=binding_ids
+            request_key=request_key,
+            topic_id=topic_id,
+            keyword=keyword,
+            binding_ids=binding_ids,
         )
         try:
-            result = await asyncio.wait_for(post_collection(base, submission), TIMEOUT_SECONDS)
+            result = await asyncio.wait_for(
+                post_collection(base, submission), TIMEOUT_SECONDS
+            )
         except (httpx2.RequestError, TimeoutError):
             result = unknown_submission(request_key)
         return submission_result(result)
@@ -423,9 +460,14 @@ def create_server(base: str) -> MCPServer:
     @server.tool(annotations=READ_ONLY)
     async def get_collection_status(request_id: UUID) -> Row:
         """Read an existing request's status and child jobs, including partial or failed outcomes."""
-        request = row(await get(f"/collection-requests/{request_id}", missing="Collection request"))
+        request = row(
+            await get(
+                f"/collection-requests/{request_id}", missing="Collection request"
+            )
+        )
         result = fields(
-            request, "id topic_id topic_name keyword status created_at finished_at refresh_of"
+            request,
+            "id topic_id topic_name keyword status created_at finished_at refresh_of",
         )
         result["jobs"] = [
             {
@@ -455,7 +497,9 @@ def create_server(base: str) -> MCPServer:
     @server.tool(annotations=READ_ONLY)
     async def get_record_lineage(record_id: UUID) -> Row:
         """Trace a record to its job, source, profile version, and evidence reference."""
-        record = await get(f"/records/{record_id}", include_lineage="true", missing="Record")
+        record = await get(
+            f"/records/{record_id}", include_lineage="true", missing="Record"
+        )
         return record_links(row(record))
 
     @server.tool(annotations=READ_ONLY)

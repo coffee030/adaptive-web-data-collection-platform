@@ -44,14 +44,15 @@ jobs:
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
-            backend/experiments/scrapling_spike/requirements.txt
+            backend/requirements-runtime.txt
       - run: python -m pip install -r backend/requirements.txt
       - run: python -m pip check
-      - name: M0, M1, M22A and M22B
+      - run: python -m ruff check --config ruff.toml backend mcp_access scripts
+      - run: python -m ruff format --config ruff.toml --check backend mcp_access scripts
+      - name: Backend unit, Source policy and onboarding tests
         run: >-
           python -m pytest -p scripts.require_pytest_pass -q -ra
-          backend/tests/test_m0_http.py backend/tests/test_m0_extraction.py backend/tests/m1
-          backend/tests/test_m18b_retry_fixture.py backend/tests/test_m18b_reconcile.py
+          backend/tests --ignore=backend/tests/m2
           backend/experiments/test_m22a_onboarding.py backend/experiments/test_m22b_suggestions.py
 
   data:
@@ -89,7 +90,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
-            backend/experiments/scrapling_spike/requirements.txt
+            backend/requirements-runtime.txt
       - run: python -m pip install -r backend/requirements.txt
       - run: python -m pip check
       - name: API, migrations, Evidence and persistence against PostgreSQL and Redis
@@ -136,7 +137,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
-            backend/experiments/scrapling_spike/requirements.txt
+            backend/requirements-runtime.txt
             mcp_access/requirements.txt
       - run: npm ci --prefix frontend
       - run: google-chrome --version
@@ -168,7 +169,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
-            backend/experiments/scrapling_spike/requirements.txt
+            backend/requirements-runtime.txt
       - run: python -m pip install -r backend/requirements.txt
       - run: node --test backend/experiments/m22c_completion.test.mjs
       - run: python -m pytest -p scripts.require_pytest_pass -q backend/experiments/m22c_score_test.py

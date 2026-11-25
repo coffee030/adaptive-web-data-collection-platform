@@ -114,7 +114,11 @@ class Profiles:
                     if config.search:
                         reviewed.append(config.search)
         return SuggestionAttempt(
-            source, lambda: self.get_source(source_id), self.rate, reviewed, started=started
+            source,
+            lambda: self.get_source(source_id),
+            self.rate,
+            reviewed,
+            started=started,
         ).run(request)
 
     def create_draft(self, source_id: UUID, configuration: Configuration):

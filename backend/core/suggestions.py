@@ -334,7 +334,6 @@ class SuggestionAttempt:
             raise InputError(
                 "ambiguous_results", "The selected detail URL repeats an earlier stage."
             )
-        # Use the listing's actual href, checked against the explicit example.
         detail = self._fetch("detail", link.url, 1)
         self.stage = "mapping"
         schema = request.record_schema or DEFAULT_SCHEMA

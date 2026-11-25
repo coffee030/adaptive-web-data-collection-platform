@@ -158,7 +158,9 @@ def test_examples_on_restricted_source(spaces, replay):
     calls, _ = replay
     source = make_source(CATALOG + "/search", CATALOG + "/detail")
     body = examples()
-    body = body.model_copy(update={"results_url": body.results_url.replace("+", spaces)})
+    body = body.model_copy(
+        update={"results_url": body.results_url.replace("+", spaces)}
+    )
     result = suggest(source, body)
     assert result.outcome == "usable", result
     assert calls == [
@@ -269,7 +271,9 @@ def test_conflicting_count_metadata_is_unresolved(detail, replay):
 def test_labelled_count_can_have_the_same_value_as_a_year(meaning, other, replay):
     _, overrides = replay
     path = CATALOG + "/detail/alpha"
-    detail = f"<main>{other}<dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
+    detail = (
+        f"<main>{other}<dl><dt>Alpha outlook</dt><dd {meaning}>2026</dd></dl></main>"
+    )
     overrides[path] = detail
     source = make_source(CATALOG)
     result = suggest(source, examples())

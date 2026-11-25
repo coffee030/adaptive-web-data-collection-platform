@@ -43,7 +43,11 @@ async def call(client, name, *, expect_error=False, **arguments):
 
 async def prepare(client, topic_id, binding_ids, keyword):
     prepared = await call(
-        client, "prepare_collection", topic_id=topic_id, keyword=keyword, binding_ids=binding_ids
+        client,
+        "prepare_collection",
+        topic_id=topic_id,
+        keyword=keyword,
+        binding_ids=binding_ids,
     )
     assert prepared["submitted"] is False
     return prepared["submission"]
@@ -55,7 +59,9 @@ def job_ids(request):
 
 def assert_delta(before, after, request_id, jobs):
     assert after[0] == before[0] | {request_id} and request_id not in before[0]
-    assert after[1] == before[1] | jobs and len(jobs) == 2 and before[1].isdisjoint(jobs)
+    assert (
+        after[1] == before[1] | jobs and len(jobs) == 2 and before[1].isdisjoint(jobs)
+    )
 
 
 def totals(snapshot):
@@ -73,11 +79,17 @@ def drop_committed_reply(base):
 
         def do_POST(self):
             size = int(self.headers.get("Content-Length", "0"))
-            if self.path != "/api/v1" + REQUESTS or not 0 < size <= 2048 or not replies.empty():
+            if (
+                self.path != "/api/v1" + REQUESTS
+                or not 0 < size <= 2048
+                or not replies.empty()
+            ):
                 self.send_error(400)
                 return
             self.connection.settimeout(5)
-            with httpx2.Client(timeout=4, trust_env=False, follow_redirects=False) as upstream:
+            with httpx2.Client(
+                timeout=4, trust_env=False, follow_redirects=False
+            ) as upstream:
                 response = upstream.post(
                     base + REQUESTS,
                     content=self.rfile.read(size),
@@ -110,7 +122,9 @@ async def verify_terminal(client, api, receipt, expected):
     rest_jobs = {child["job"]["job_id"]: child for child in rest["jobs"]}
     assert rest["status"] == expected and set(rest_jobs) == job_ids(status)
 
-    records = (await call(client, "get_collection_records", request_id=request_id))["items"]
+    records = (await call(client, "get_collection_records", request_id=request_id))[
+        "items"
+    ]
     assert len(records) == 2 and {item["job_id"] for item in records} == job_ids(status)
     evidence_rows = []
     for child in status["jobs"]:
@@ -120,12 +134,28 @@ async def verify_terminal(client, api, receipt, expected):
             assert child[key] == rest_child[key]
         for key in ("status", "valid_count", "invalid_count", "duplicate_count"):
             assert job[key] == rest_child["job"][key]
-        assert (job["status"], job["valid_count"], job["invalid_count"], job["duplicate_count"]) == (
-            expected, 1, 0, 0,
+        assert (
+            job["status"],
+            job["valid_count"],
+            job["invalid_count"],
+            job["duplicate_count"],
+        ) == (
+            expected,
+            1,
+            0,
+            0,
         )
         if expected == "partial":
-            assert job["error"]["code"] == rest_child["job"]["error"]["code"] == "http_error"
-            assert job["error"]["http_status"] == rest_child["job"]["error"]["http_status"] == 404
+            assert (
+                job["error"]["code"]
+                == rest_child["job"]["error"]["code"]
+                == "http_error"
+            )
+            assert (
+                job["error"]["http_status"]
+                == rest_child["job"]["error"]["http_status"]
+                == 404
+            )
         else:
             assert job["error"] is rest_child["job"]["error"] is None
 
@@ -135,22 +165,34 @@ async def verify_terminal(client, api, receipt, expected):
         lineage = await call(client, "get_record_lineage", record_id=record_id)
         rest_record = read_api(api, f"/records/{record_id}", include_lineage="true")
         evidence_id = lineage["evidence_reference"]
-        assert evidence_id == rest_record["evidence_reference"] == record["evidence_reference"]
+        assert (
+            evidence_id
+            == rest_record["evidence_reference"]
+            == record["evidence_reference"]
+        )
         evidence = await call(client, "get_evidence_metadata", evidence_id=evidence_id)
         rest_evidence = read_api(api, f"/evidence/{evidence_id}")
         assert evidence_id == evidence["evidence_id"] == rest_evidence["evidence_id"]
         assert lineage["request_id"] == rest_record["request_id"] == request_id
         for key in ("job_id", "source_id", "profile_version_id"):
-            assert lineage[key] == rest_record[key] == evidence[key] == rest_evidence[key] == job[key]
+            assert (
+                lineage[key]
+                == rest_record[key]
+                == evidence[key]
+                == rest_evidence[key]
+                == job[key]
+            )
         assert evidence["content_hash"] == rest_evidence["content_hash"]
         assert len(evidence["content_hash"]) == 64
-        evidence_rows.append({
-            "headline": record["payload"]["headline"],
-            "record_id": record_id,
-            "job_id": job["job_id"],
-            "evidence_id": evidence_id,
-            "stored_sha256": evidence["content_hash"],
-        })
+        evidence_rows.append(
+            {
+                "headline": record["payload"]["headline"],
+                "record_id": record_id,
+                "job_id": job["job_id"],
+                "evidence_id": evidence_id,
+                "stored_sha256": evidence["content_hash"],
+            }
+        )
     return {"receipt": receipt, "terminal": status, "evidence": evidence_rows}
 
 
@@ -168,10 +210,15 @@ async def verify_eligibility(client, api, category, bindings):
     try:
         binding_path = topic_path + "/bindings"
         for binding in bindings:
-            write("POST", binding_path, {
-                "source_id": binding["source_id"], "profile_version_id": binding["profile_version_id"],
-                "approved_by": "M17B isolated verification",
-            })
+            write(
+                "POST",
+                binding_path,
+                {
+                    "source_id": binding["source_id"],
+                    "profile_version_id": binding["profile_version_id"],
+                    "approved_by": "M17B isolated verification",
+                },
+            )
         discovery = await call(client, "list_topic_sources", topic_id=topic["id"])
         ids = [item["id"] for item in discovery["items"]]
         assert len(ids) == 2
@@ -187,15 +234,23 @@ async def verify_eligibility(client, api, category, bindings):
         assert fresh["request_key"] != original["request_key"]
         rejected = await call(client, "start_collection", expect_error=True, **fresh)
         assert (rejected["http_status"], rejected["outcome"], rejected["code"]) == (
-            409, "rejected", "binding_ineligible",
+            409,
+            "rejected",
+            "binding_ineligible",
         )
         assert inventory(api) == accepted
         replay = await call(client, "start_collection", **original)
-        assert replay["http_status"] == 200 and replay["request_id"] == created["request_id"]
+        assert (
+            replay["http_status"] == 200
+            and replay["request_id"] == created["request_id"]
+        )
         assert job_ids(replay) == job_ids(created) and inventory(api) == accepted
         return {
-            "created": created, "disabled_binding_id": ids[0], "fresh_rejected": rejected,
-            "historical_replay": replay, "inventory_after_all_checks": totals(accepted),
+            "created": created,
+            "disabled_binding_id": ids[0],
+            "fresh_rejected": rejected,
+            "historical_replay": replay,
+            "inventory_after_all_checks": totals(accepted),
         }
     finally:
         write("PUT", topic_path, {"name": name, "active": False})
@@ -205,15 +260,24 @@ async def verify(api, base):
     before = inventory(api)
     async with connect(base) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        assert {name for name, tool in tools.items() if not tool.annotations.read_only_hint} == {
-            "start_collection"
-        }
+        assert {
+            name for name, tool in tools.items() if not tool.annotations.read_only_hint
+        } == {"start_collection"}
         categories = (await call(client, "list_categories"))["items"]
-        category = next(item for item in categories if item["name"] == "Core Demonstration")
-        topics = (await call(client, "list_topics", category_id=category["id"]))["items"]
+        category = next(
+            item for item in categories if item["name"] == "Core Demonstration"
+        )
+        topics = (await call(client, "list_topics", category_id=category["id"]))[
+            "items"
+        ]
         topic = next(item for item in topics if item["name"] == "Fixture Listings")
-        bindings = (await call(client, "list_topic_sources", topic_id=topic["id"]))["items"]
-        assert {item["source_name"] for item in bindings} == {"Demo Cards", "Demo Catalog"}
+        bindings = (await call(client, "list_topic_sources", topic_id=topic["id"]))[
+            "items"
+        ]
+        assert {item["source_name"] for item in bindings} == {
+            "Demo Cards",
+            "Demo Catalog",
+        }
         prep = partial(prepare, client, topic["id"], [item["id"] for item in bindings])
         quick = await prep("quick")
         assert inventory(api) == before
@@ -225,13 +289,20 @@ async def verify(api, base):
         reordered = quick | {"binding_ids": quick["binding_ids"][::-1]}
         replayed = await call(client, "start_collection", **reordered)
         assert (replayed["outcome"], replayed["http_status"]) == ("replayed", 200)
-        assert replayed["request_id"] == created["request_id"] and job_ids(replayed) == job_ids(created)
+        assert replayed["request_id"] == created["request_id"] and job_ids(
+            replayed
+        ) == job_ids(created)
         assert inventory(api) == after_normal
         conflict = await call(
-            client, "start_collection", expect_error=True, **(quick | {"keyword": "detail404"})
+            client,
+            "start_collection",
+            expect_error=True,
+            **(quick | {"keyword": "detail404"}),
         )
         assert (conflict["outcome"], conflict["http_status"], conflict["code"]) == (
-            "conflict", 409, "collection_request_conflict",
+            "conflict",
+            409,
+            "collection_request_conflict",
         )
         assert inventory(api) == after_normal
         lost_intent = await prep("quick")
@@ -240,7 +311,9 @@ async def verify(api, base):
 
     with drop_committed_reply(base) as (proxy_base, replies):
         async with connect(proxy_base) as client:
-            lost = await call(client, "start_collection", expect_error=True, **lost_intent)
+            lost = await call(
+                client, "start_collection", expect_error=True, **lost_intent
+            )
         code, committed = replies.get(timeout=5)
     assert code == 201 and committed["id"] != created["request_id"]
     assert lost["outcome"] == "unknown" and lost["retry_same_key"]
@@ -251,21 +324,38 @@ async def verify(api, base):
     async with connect(base) as fresh_client:
         recovered = await call(fresh_client, "start_collection", **lost_intent)
         assert (recovered["outcome"], recovered["http_status"]) == ("replayed", 200)
-        assert recovered["request_id"] == committed["id"] and job_ids(recovered) == job_ids(committed)
+        assert recovered["request_id"] == committed["id"] and job_ids(
+            recovered
+        ) == job_ids(committed)
         assert inventory(api) == after_commit
         recovery = await verify_terminal(fresh_client, api, recovered, "succeeded")
-        partial_intent = await prepare(fresh_client, topic["id"], quick["binding_ids"], "detail404")
+        partial_intent = await prepare(
+            fresh_client, topic["id"], quick["binding_ids"], "detail404"
+        )
         partial_receipt = await call(fresh_client, "start_collection", **partial_intent)
         assert partial_receipt["http_status"] == 201
-        partial_result = await verify_terminal(fresh_client, api, partial_receipt, "partial")
+        partial_result = await verify_terminal(
+            fresh_client, api, partial_receipt, "partial"
+        )
         after_partial = inventory(api)
-        assert_delta(after_commit, after_partial, partial_receipt["request_id"], job_ids(partial_receipt))
+        assert_delta(
+            after_commit,
+            after_partial,
+            partial_receipt["request_id"],
+            job_ids(partial_receipt),
+        )
         eligibility = await verify_eligibility(fresh_client, api, category, bindings)
 
     return {
-        "topic": topic, "normal": normal, "reordered_replay": replayed, "conflict": conflict,
-        "lost_reply": lost, "lost_upstream_http_status": code, "recovery": recovery,
-        "partial": partial_result, "eligibility": eligibility,
+        "topic": topic,
+        "normal": normal,
+        "reordered_replay": replayed,
+        "conflict": conflict,
+        "lost_reply": lost,
+        "lost_upstream_http_status": code,
+        "recovery": recovery,
+        "partial": partial_result,
+        "eligibility": eligibility,
         "inventory": {
             "initial_and_after_prepare": totals(before),
             "normal_after_replay_and_conflict": totals(after_normal),
@@ -277,7 +367,9 @@ async def verify(api, base):
 
 def main():
     base = api_base(os.environ.get("FYP_MCP_API_BASE", ""))
-    with httpx2.Client(base_url=base, timeout=5, trust_env=False, follow_redirects=False) as api:
+    with httpx2.Client(
+        base_url=base, timeout=5, trust_env=False, follow_redirects=False
+    ) as api:
         print(json.dumps(asyncio.run(verify(api, base)), indent=2))
 
 

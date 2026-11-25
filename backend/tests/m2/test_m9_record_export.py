@@ -108,7 +108,6 @@ def test_export_empty_missing_invalid_and_row_limit(client, sessions, job_setup)
         assert missing.status_code == 404
 
     _, _, _, entry, evidence = job_setup
-    # Reuse the approved pin from the empty export.
     created, _ = submit_job(
         client,
         {
