@@ -78,6 +78,7 @@ trap cleanup EXIT
 echo "Isolated release project $project"
 dc config --quiet
 ref config --quiet
+python -m scripts.check_build_contexts
 SECONDS=0
 dc build --no-cache api frontend
 echo "No-cache application build: ${SECONDS}s"
