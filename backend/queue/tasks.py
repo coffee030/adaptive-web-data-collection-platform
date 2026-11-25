@@ -4,19 +4,23 @@ import logging
 from functools import lru_cache
 from uuid import UUID
 
+import httpx2
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.application.execution import JobExecutor
 from backend.core.evidence import LocalEvidenceStore
 from backend.core.profiles import ProfileError
+from backend.marketing.pipeline import Pipeline
+from backend.marketing.store import ResearchSettings
 from backend.persistence.database import (
     database_url,
     evidence_path,
     make_engine,
     session_factory,
+    settings,
 )
 
-from .celery_app import TASK, app, worker_instance_id
+from .celery_app import MARKETING_TASK, TASK, app, worker_instance_id
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,3 +52,33 @@ def execute_job(job_id: str) -> None:
             "Collection job %s database error (%s)", job_uuid, type(error).__name__
         )
         raise RuntimeError("Collection job state could not be confirmed") from None
+
+
+@lru_cache(maxsize=1)
+def marketing_pipeline() -> Pipeline:
+    return Pipeline(
+        session_factory(make_engine(database_url())), ResearchSettings.load()
+    )
+
+
+@app.task(name=MARKETING_TASK)
+def execute_youtube_run(run_id: str) -> None:
+    try:
+        run_uuid = UUID(run_id)
+    except (ValueError, TypeError, AttributeError):
+        LOGGER.warning("Discarded marketing message with an invalid run UUID")
+        return
+    try:
+        logging.getLogger("httpx2").setLevel(logging.WARNING)
+        logging.getLogger("httpcore2").setLevel(logging.WARNING)
+        with httpx2.Client(
+            timeout=httpx2.Timeout(8, connect=4), trust_env=False
+        ) as client:
+            marketing_pipeline().execute(
+                run_uuid, settings().get("YOUTUBE_API_KEY") or "", client
+            )
+    except SQLAlchemyError as error:
+        LOGGER.warning(
+            "Marketing run %s database error (%s)", run_uuid, type(error).__name__
+        )
+        raise RuntimeError("Marketing run state could not be confirmed") from None

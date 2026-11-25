@@ -5,6 +5,7 @@
 !backend/api/**/*.py
 !backend/application/**/*.py
 !backend/core/**/*.py
+!backend/marketing/**/*.py
 !backend/migrations/**/*.py
 !backend/migrations/script.py.mako
 !backend/persistence/**/*.py

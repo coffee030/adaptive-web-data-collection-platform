@@ -8,7 +8,7 @@ x-backend: &backend
   build: .
   image: ${COLLECTION_BACKEND_IMAGE:-collection-backend:local}
   logging: *logging
-  environment:
+  environment: &backend-environment
     POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
@@ -16,6 +16,8 @@ x-backend: &backend
     POSTGRES_PORT: "5432"
     CELERY_BROKER_URL: redis://redis:6379/0
     EVIDENCE_ROOT: /data/evidence
+    MARKETING_YOUTUBE_RESEARCH: ${MARKETING_YOUTUBE_RESEARCH:-0}
+    MARKETING_YOUTUBE_DISCOVERY: ${MARKETING_YOUTUBE_DISCOVERY:-0}
 
 services:
   postgres:
@@ -49,6 +51,9 @@ services:
 
   api:
     <<: *backend
+    environment:
+      <<: *backend-environment
+      MARKETING_OPERATOR_TOKEN: ${MARKETING_OPERATOR_TOKEN:-}
     command: ["python", "-m", "uvicorn", "backend.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       postgres:
@@ -87,6 +92,9 @@ services:
 
   worker:
     <<: *backend
+    environment:
+      <<: *backend-environment
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
     command: ["python", "-m", "celery", "-A", "backend.queue.celery_app:app", "worker", "--loglevel=INFO", "--pool=prefork", "--without-gossip", "--without-mingle"]
     depends_on:
       postgres:
