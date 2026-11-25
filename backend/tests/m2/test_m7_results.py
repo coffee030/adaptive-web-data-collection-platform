@@ -12,8 +12,10 @@ from test_vertical_slice import create_approved_source, submit_job
 
 from backend.api.app import create_app
 from backend.application.execution import JobExecutor
+from backend.core import web_adapter
+from backend.core.contracts import Source
 from backend.core.evidence import LocalEvidenceStore
-from backend.core.inputs import InputError
+from backend.core.inputs import InputError, WebInput
 from backend.core.origin_rate import OriginRate
 from backend.tests.m3_fixture_site import FixtureHandler
 from backend.tests.m7_fixture import KEYWORD, search_config
@@ -50,6 +52,53 @@ def test_redis_retry_after_shared_and_unavailable_is_fail_closed(rate_url):
         ):
             pytest.fail("A rate failure must prevent the request")
     assert unavailable.value.error.code == "origin_rate_unavailable"
+
+
+@pytest.mark.parametrize("at_robots", [False, True])
+def test_publisher_503_retry_after_is_shared_across_clients(rate_url, at_robots):
+    class Handler(FixtureHandler):
+        def do_GET(self):
+            if at_robots or self.path != "/robots.txt":
+                self.send_response(503)
+                self.send_header("Retry-After", "30")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            super().do_GET()
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            origin = f"http://127.0.0.1:{server.server_port}"
+            source = Source(
+                source_id="retry-after",
+                source_name="Controlled retry fixture",
+                adapter_type="web",
+                permission_reference="Controlled test",
+                approval_status="approved",
+                allowed_origins=(origin,),
+            )
+            limits = web_adapter.RequestLimits(3, 0, 512_000, 2, 5)
+            requests = web_adapter.SearchRequests(
+                source, limits, OriginRate(rate_url), lambda: None
+            )
+            url = origin + "/m7/cards/search?q=quick"
+            with pytest.raises(InputError) as publisher:
+                web_adapter.capture_html(source, WebInput(url), requests=requests)
+            assert publisher.value.error.http_status == 503
+            assert publisher.value.error.retry_after_seconds == 30
+
+            with (
+                pytest.raises(InputError) as blocked,
+                OriginRate(rate_url).request(origin, 1000, monotonic() + 2),
+            ):
+                pytest.fail("A separate client acquired the origin before Retry-After")
+            assert blocked.value.error.code == "origin_rate_busy"
+            assert blocked.value.error.retry_after_seconds in (29, 30)
+        finally:
+            server.shutdown()
+            thread.join()
 
 
 @pytest.mark.parametrize("attempt_limit", [1, 2])

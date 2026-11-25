@@ -143,10 +143,15 @@ def capture_html(
             requests.get(origin, current) if requests is not None else _get(current)
         )
         document = replace(document, requested_location=requested)
-        if challenged:
+        if _is_access_block(document, challenged):
+            message = (
+                "Controlled site declared a challenge"
+                if challenged
+                else "Controlled site returned an unsuccessful status"
+            )
             raise InputError(
                 "access_blocked",
-                "Controlled site declared a challenge",
+                message,
                 capture=document,
             )
         if document.http_status not in REDIRECTS:
@@ -184,9 +189,7 @@ def capture_html(
         current = target
 
     if document.http_status != 200:
-        code = {401: "access_blocked", 403: "access_blocked", 429: "rate_limited"}.get(
-            document.http_status, "http_error"
-        )
+        code = "rate_limited" if document.http_status == 429 else "http_error"
         raise InputError(
             code, "Controlled site returned an unsuccessful status", capture=document
         )
@@ -198,6 +201,28 @@ def capture_html(
             capture=document,
         )
     return document
+
+
+def _is_access_block(document: CapturedInput, challenged: bool) -> bool:
+    return challenged or document.http_status in (401, 403)
+
+
+def _has_publisher_backoff(document: CapturedInput) -> bool:
+    status = document.http_status
+    return status == 429 or (
+        status is not None
+        and 500 <= status <= 599
+        and document.retry_after_seconds is not None
+    )
+
+
+def _unavailable_robots(document: CapturedInput) -> InputError:
+    return InputError(
+        "robots_unavailable",
+        "Could not obtain a supported robots.txt policy",
+        http_status=document.http_status,
+        retry_after_seconds=document.retry_after_seconds,
+    )
 
 
 def _same_origin_link(source: Source, current: str, reference: str) -> str:
@@ -372,6 +397,7 @@ class SearchRequests:
                 "collection_deadline", "Collection exhausted its approved time budget"
             )
         document = None
+        blocked = False
         try:
             with self.rate.request(origin, self.interval_ms, self.deadline) as cooldown:
                 self.check_access()
@@ -390,20 +416,36 @@ class SearchRequests:
                     max_body=self.config.max_body_bytes,
                     addresses=addresses,
                 )
+                blocked = _is_access_block(document, challenge)
                 if document.http_status == 429:
                     cooldown.retry_after_ms = (
                         max(30, document.retry_after_seconds or 0) * 1000
                     )
-                if robots:
-                    self.policy = self._read_policy(document, challenge)
+                elif _has_publisher_backoff(document):
+                    cooldown.retry_after_ms = (document.retry_after_seconds or 0) * 1000
+                if robots and not blocked:
+                    self.policy = self._read_policy(document)
                     self.interval_ms = max(self.interval_ms, self.policy.interval_ms)
                     cooldown.interval_ms = self.interval_ms
         except InputError as error:
-            if document is not None and not robots and error.capture is None:
-                raise InputError(
-                    error.error.code, str(error), capture=document
-                ) from error
-            raise
+            if (
+                error.error.code != "origin_rate_unavailable"
+                or document is None
+                or not (blocked or _has_publisher_backoff(document))
+            ):
+                if document is not None and not robots and error.capture is None:
+                    raise InputError(
+                        error.error.code, str(error), capture=document
+                    ) from error
+                raise
+            if robots and not blocked:
+                raise _unavailable_robots(document) from error
+        if robots and blocked:
+            raise InputError(
+                "access_blocked",
+                "Site blocked access to robots.txt",
+                http_status=document.http_status,
+            )
         return document, location, challenge
 
     @staticmethod
@@ -414,25 +456,14 @@ class SearchRequests:
         return remaining
 
     @staticmethod
-    def _read_policy(document: CapturedInput, challenge: bool) -> RobotsPolicy:
-        if challenge or document.http_status in (401, 403):
-            raise InputError(
-                "access_blocked",
-                "Site blocked access to robots.txt",
-                http_status=document.http_status,
-            )
+    def _read_policy(document: CapturedInput) -> RobotsPolicy:
         if document.http_status in (404, 410):
             return RobotsPolicy()
         if (
             document.http_status != 200
             or _parse_content_type(document).get_content_type() != "text/plain"
         ):
-            raise InputError(
-                "robots_unavailable",
-                "Could not obtain a supported robots.txt policy",
-                http_status=document.http_status,
-                retry_after_seconds=document.retry_after_seconds,
-            )
+            raise _unavailable_robots(document)
         return parse_policy(document.body, USER_AGENT.split("/", 1)[0])
 
 

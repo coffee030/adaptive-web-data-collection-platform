@@ -94,7 +94,9 @@ def main():
     args = parser.parse_args()
     request = get_json(args.port, f"/collection-requests/{args.request_id}")
     jobs = {child["job"]["job_id"]: child["job"] for child in request["jobs"]}
-    if any(job["status"] not in {"succeeded", "partial", "failed"} for job in jobs.values()):
+    if any(
+        job["status"] not in {"succeeded", "partial", "failed"} for job in jobs.values()
+    ):
         raise RuntimeError("Wait for all Jobs to finish before comparison")
     expected = list(records_for_request(args.port, args.request_id))
     counts = Counter(row["job_id"] for row in expected)
@@ -103,15 +105,24 @@ def main():
         raise RuntimeError("REST Record counts differ from the Request's Job counts")
     for row in expected:
         job = jobs[row["job_id"]]
-        if any(row[field] != job[field] for field in ("source_id", "profile_version_id")):
+        if any(
+            row[field] != job[field] for field in ("source_id", "profile_version_id")
+        ):
             raise RuntimeError("REST Record lineage does not match the Request's Jobs")
     with args.csv_path.open(encoding="utf-8", newline="") as stream:
         csv_rows = list(csv.DictReader(stream, strict=True))
     json_rows = json.loads(args.json_path.read_text(encoding="utf-8"))
-    reports = {"csv": compare(csv_rows, expected, as_csv=True), "json": compare(json_rows, expected)}
+    reports = {
+        "csv": compare(csv_rows, expected, as_csv=True),
+        "json": compare(json_rows, expected),
+    }
     for name, path in (("csv", args.csv_path), ("json", args.json_path)):
         reports[name]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
-    summary = {"request_id": str(args.request_id), "reference_rows": len(expected), **reports}
+    summary = {
+        "request_id": str(args.request_id),
+        "reference_rows": len(expected),
+        **reports,
+    }
     print(json.dumps(summary, indent=2))
     differences = ("missing", "extra", "repeated", "field_differences")
     return int(any(report[key] for report in reports.values() for key in differences))

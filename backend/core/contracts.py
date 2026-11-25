@@ -18,11 +18,18 @@ from pydantic import (
     model_validator,
 )
 
+NO_NUL = r"^[^\x00]*$"
 Name = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=128, pattern=NO_NUL
+    ),
 ]
 SelectorText = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1024)
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=1024, pattern=NO_NUL
+    ),
 ]
 Positive = Annotated[int, Field(strict=True, ge=1)]
 Count = Annotated[int, Field(strict=True, ge=0)]

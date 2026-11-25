@@ -101,6 +101,15 @@ def ingest(
                             )
                         )
                     continue
+                if isinstance(raw, str) and "\x00" in raw:
+                    problems.append(
+                        RecordProblem(
+                            code="invalid_row",
+                            field=field.name,
+                            message="Text contains a null character",
+                        )
+                    )
+                    continue
                 try:
                     payload[field.name] = _normalize(raw, field.value_type)
                 except (ValueError, OverflowError):

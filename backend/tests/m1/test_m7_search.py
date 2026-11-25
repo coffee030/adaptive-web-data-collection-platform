@@ -1,6 +1,7 @@
 import hashlib
 import socket
 from contextlib import contextmanager
+from datetime import timedelta
 from http.server import ThreadingHTTPServer
 from threading import Thread
 from typing import ClassVar
@@ -11,11 +12,12 @@ from curl_cffi import CurlOpt
 from curl_cffi.requests.exceptions import ConnectionError, Timeout
 from pydantic import ValidationError
 
+from backend.application.retry import retry_delay
 from backend.core import public_network, web_adapter
 from backend.core.contracts import ExtractionConfiguration, Source
 from backend.core.evidence import LocalEvidenceStore
-from backend.core.inputs import InputError, KeywordInput, WebInput
-from backend.core.origin_rate import RequestCooldown
+from backend.core.inputs import CapturedInput, InputError, KeywordInput, WebInput
+from backend.core.origin_rate import RELEASE, OriginRate, RequestCooldown
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.core.robots import parse_policy
 from backend.core.runner import CollectionRunner
@@ -41,14 +43,20 @@ class TestRate:
 
 @pytest.fixture
 def website():
+    paths: list[str] = []
+
     class Handler(FixtureHandler):
         metrics: ClassVar[list[tuple[str, float, float]]] = []
+
+        def do_GET(self):
+            paths.append(self.path)
+            super().do_GET()
 
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            yield f"http://127.0.0.1:{server.server_port}", Handler.metrics
+            yield f"http://127.0.0.1:{server.server_port}", paths
         finally:
             server.shutdown()
             thread.join()
@@ -113,7 +121,7 @@ def test_two_search_layouts_preserve_keyword_and_detail_lineage(
         "detail",
     ]
     assert [item.page_number for item in result.all_evidence] == [1, 2, 3, 4, 5]
-    assert len(requests) == 6 and requests[0][0] == "/robots.txt"
+    assert len(requests) == 6 and requests[0] == "/robots.txt"
     parameter = "q" if layout == "cards" else "term"
     for item in result.all_evidence[:2]:
         assert parse_qs(urlsplit(item.original_location).query)[parameter] == [KEYWORD]
@@ -163,7 +171,7 @@ def test_search_failure_outcomes(tmp_path, website, keyword, status, error, capt
         captures,
     )
     assert len(result.records) == (1 if status == "partial" else 0)
-    assert all("169.254" not in path for path, _, _ in requests)
+    assert all("169.254" not in path for path in requests)
     if keyword == "detail429":
         assert result.error.retry_after_seconds == 33
         assert rate.timings[-1].retry_after_ms == 33_000
@@ -420,6 +428,74 @@ def test_public_robots_denial_or_unavailable_never_fetches_search(
             requests=requests,
         )
     assert denied.value.error.code == expected
+
+
+@pytest.mark.parametrize(
+    ("at_robots", "status", "challenge", "retry_after", "expected", "delay"),
+    [
+        (True, 403, False, None, "access_blocked", None),
+        (False, 401, False, None, "access_blocked", None),
+        (False, 403, False, None, "access_blocked", None),
+        (False, 503, True, 120, "access_blocked", None),
+        (True, 429, False, 120, "robots_unavailable", 120),
+        (False, 429, False, 120, "rate_limited", 120),
+        (False, 429, False, None, "rate_limited", 30),
+        (True, 503, False, 120, "robots_unavailable", 120),
+        (False, 503, False, 120, "http_error", 120),
+        (False, 200, False, None, "origin_rate_unavailable", 10),
+    ],
+)
+def test_origin_release_failure_preserves_publisher_denial_and_retry_delay(
+    monkeypatch, at_robots, status, challenge, retry_after, expected, delay
+):
+    origin = "http://127.0.0.1:5217"
+    approved = source(origin)
+    config = ExtractionConfiguration.model_validate(search_config(origin, "cards"))
+    rate = OriginRate("redis://127.0.0.1:6379/0")
+    calls = []
+
+    def fetch(url, **_):
+        calls.append(url)
+        if url.endswith("/robots.txt") and not at_robots:
+            return CapturedInput(b"", url, http_status=404), None, False
+        return (
+            CapturedInput(
+                b"fixture response",
+                url,
+                http_status=status,
+                retry_after_seconds=retry_after,
+            ),
+            None,
+            challenge,
+        )
+
+    def eval_rate(script, *_):
+        if script != RELEASE:
+            return 0
+        if at_robots or calls[-1] != origin + "/robots.txt":
+            raise InputError("origin_rate_unavailable", "Redis release failed")
+        return 1
+
+    monkeypatch.setattr(web_adapter, "_get", fetch)
+    monkeypatch.setattr(rate, "_eval", eval_rate)
+    requests = web_adapter.SearchRequests(approved, config.search, rate, lambda: None)
+    entry = initial_input(approved, config, KeywordInput("quick"))
+    with pytest.raises(InputError) as failed:
+        web_adapter.capture_html(approved, entry, requests=requests)
+
+    assert failed.value.error.code == expected
+    assert failed.value.error.http_status == status
+    assert retry_delay(failed.value.error, 1) == (
+        timedelta(seconds=delay) if delay is not None else None
+    )
+    if at_robots:
+        assert calls == [origin + "/robots.txt"]
+        assert failed.value.capture is None
+    else:
+        assert calls == [origin + "/robots.txt", entry.url]
+        assert failed.value.capture.body == b"fixture response"
+        if expected != "origin_rate_unavailable":
+            assert failed.value.capture.requested_location == entry.url
 
 
 def test_pinned_https_timeout_is_reported_without_raw_transport_context(monkeypatch):

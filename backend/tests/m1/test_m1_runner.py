@@ -156,6 +156,32 @@ def test_csv_same_ingestion_returns_valid_invalid_duplicate_and_evidence(
     assert record.provenance.validation_status == "passed"
 
 
+def test_csv_quarantines_nul_in_mapped_value_and_preserves_evidence(
+    runner, csv_source, csv_config
+):
+    runner.profiles.register_source(csv_source)
+    sample = CsvInput(
+        "listing-sample", b"Key,Name,Count,Active\na1,North Trail,7,true\n"
+    )
+    approved = approve(runner, csv_source, csv_config, sample)
+    raw = b"Key,Name,Count,Active\na1,North Trail,7,true\na2,River\x00Walk,3,false\n"
+    result = runner.run(approved.profile_version_id, CsvInput("listing-import", raw))
+
+    assert result.status == "partial"
+    (record,) = result.records
+    assert record.source_position.index == 2
+    assert record.payload["title"] == "North Trail"
+    (rejected,) = result.invalid
+    assert rejected.source_position.model_dump() == {"kind": "csv_row", "index": 3}
+    assert [(problem.code, problem.field) for problem in rejected.problems] == [
+        ("invalid_row", "title")
+    ]
+    assert rejected.evidence_reference == record.evidence_reference
+    evidence, body = runner.evidence.resolve(record.evidence_reference)
+    assert body == raw
+    assert evidence.content_hash == sha256(raw).hexdigest()
+
+
 def test_new_draft_keeps_previous_run_references_and_retired_version_rejects(
     runner, web_source, controlled_site, cards_config, table_config
 ):

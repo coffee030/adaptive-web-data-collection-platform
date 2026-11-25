@@ -21,6 +21,6 @@ FastAPI checks loopback Host. If a browser Origin is present, it must match the 
 
 ## Pagination and monitoring
 
-Jobs, Records, and Quarantine use deterministic order and offset. Jobs and Records order by `created_at, id`, and Quarantine orders by `position_index, id`. The API keeps `limit` at 1–100 and offset nonnegative. The full Source list orders by `created_at, id`, and Versions order by unique version number within a Source. The browser can store both pages in the URL. Inserts or Job status changes between reads can change page membership. An empty tail page can return to its predecessor. There is no snapshot across requests.
+Jobs, Records, and Quarantine use deterministic order and offset. The Jobs and Records lists default to `order=oldest` (`created_at, id` ascending). Use `order=newest` to reverse both sort keys before pagination. Quarantine orders by `position_index, id`. The API keeps `limit` at 1–100 and offset nonnegative. The full Source list orders by `created_at, id`, and Versions order by unique version number within a Source. The browser can store both pages in the URL. Inserts or Job status changes between reads can change page membership. An empty tail page can return to its predecessor. There is no snapshot across requests.
 
 Pending and Running Jobs schedule the next poll after each read while detail is visible. Terminal state, navigation away, and a hidden tab clear the timer. Active views defer result fetching. Terminal views fetch Records and Evidence and use actual Job and execution events.

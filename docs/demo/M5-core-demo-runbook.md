@@ -85,7 +85,8 @@ $composeArgs += @('-f','var/m5-local/compose.acceptance.yaml')
 # On a fresh checkout, create the host test environment first.
 py -3.12 -m venv .venv
 $python = '.\.venv\Scripts\python.exe'
-& $python -m pip install -r backend/requirements.txt pytest==9.2.0 ruff==0.17.5
+& $python -m pip install -r backend/requirements.txt
+& $python -m pip check
 $env:M2_TEST_DATABASE_URL = "postgresql+psycopg://${env:POSTGRES_USER}:${env:POSTGRES_PASSWORD}@127.0.0.1:${env:POSTGRES_PORT}/${env:POSTGRES_DB}"
 $env:M2_TEST_COMPOSE_PROJECT = $demoProject
 $env:M3_TEST_COMPOSE_PROJECT = $demoProject
@@ -94,11 +95,19 @@ $env:M3_TEST_BROKER_URL = 'redis://127.0.0.1:56395/1'
 # Example overlay used for acceptance. Change the filename to match the actual overlay.
 $env:M3_TEST_COMPOSE_EXTRA_ARGS = '-f var/m5-local/compose.acceptance.yaml'
 $env:M4_COMPOSE_OVERLAYS = 'var/m5-local/compose.acceptance.yaml'
-& $python -m ruff check backend
-& $python -m ruff format --check backend
 & $python -m pytest -q -rs --tb=short -s backend/tests
 & $python -m backend.experiments.m5_evaluation --workers 1
 ```
+
+For the pull-request backend checks without PostgreSQL or Redis, run these commands from the checkout root after installing `backend/requirements.txt`. The required test plugin rejects skipped tests.
+
+```powershell
+& $python -m ruff check --config ruff.toml backend mcp_access scripts
+& $python -m ruff format --config ruff.toml --check backend mcp_access scripts
+& $python -m pytest -p scripts.require_pytest_pass -q -ra backend/tests --ignore=backend/tests/m2 backend/experiments/test_m22a_onboarding.py backend/experiments/test_m22b_suggestions.py
+```
+
+Run the [Compose release gate](../evaluation/Clean-Checkout-Acceptance.md#hosted-release-gate) for the deployed browser journeys, Worker recovery, and live MCP checks.
 
 Set `M3_TEST_REDIS_SERVER` to the existing local Redis executable so the native outage case can stop and start actual Redis on the dedicated port. A separate Compose outage case also stops and restores Redis. Run browser suites in sequence and close any Vite process on the same port first. The live Jobs test reads a completed Partial Job, created by the earlier backend tests, evaluation, or manual demo.
 

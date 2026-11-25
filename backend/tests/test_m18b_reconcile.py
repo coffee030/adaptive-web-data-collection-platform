@@ -58,7 +58,8 @@ def test_reconcile_escaped_strings_nested_payload_and_nulls(exports):
     for rows, as_csv in ((csv_rows, True), (json_rows, False)):
         result = compare(rows, reference, as_csv=as_csv)
         assert not any(
-            result[field] for field in ("missing", "extra", "repeated", "field_differences")
+            result[field]
+            for field in ("missing", "extra", "repeated", "field_differences")
         )
 
 

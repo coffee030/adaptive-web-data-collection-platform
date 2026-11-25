@@ -41,7 +41,9 @@ def test_timeout_is_opt_in_and_preserves_the_default_configuration_hash():
 def test_timeout_accepts_one_to_five_whole_seconds(value):
     config = search_config(HTTPS, "cards")
     config["search"]["timeout_seconds"] = value
-    assert ExtractionConfiguration.model_validate(config).search.timeout_seconds == value
+    assert (
+        ExtractionConfiguration.model_validate(config).search.timeout_seconds == value
+    )
 
 
 @pytest.mark.parametrize("value", [0, 6, 3.5, "5", True])
@@ -62,7 +64,11 @@ def test_timeout_rejects_out_of_range_or_non_integer_values(value):
     ],
 )
 def test_pacing_and_dns_share_the_correct_deadlines(
-    monkeypatch, traversal_age, dns_time, dns_budget, transfer_budget,
+    monkeypatch,
+    traversal_age,
+    dns_time,
+    dns_budget,
+    transfer_budget,
 ):
     now = 100.0
     monkeypatch.setattr(web_adapter, "monotonic", lambda: now)
@@ -119,11 +125,26 @@ def delayed_https(tmp_path_factory):
     certificate, key = root / "localhost.crt", root / "localhost.key"
     subprocess.run(
         [
-            openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-            "-subj", "/CN=public.example", "-addext", "subjectAltName=DNS:public.example",
-            "-out", str(certificate), "-keyout", str(key),
+            openssl,
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=public.example",
+            "-addext",
+            "subjectAltName=DNS:public.example",
+            "-out",
+            str(certificate),
+            "-keyout",
+            str(key),
         ],
-        check=True, capture_output=True, timeout=12,
+        check=True,
+        capture_output=True,
+        timeout=12,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -157,7 +178,12 @@ def delayed_https(tmp_path_factory):
     [(2, 3, 2, None), (5, 3, 3, 200), (5, 6, 5, None)],
 )
 def test_real_curl_transfer_deadline(
-    monkeypatch, delayed_https, timeout, delay, elapsed, expected_status,
+    monkeypatch,
+    delayed_https,
+    timeout,
+    delay,
+    elapsed,
+    expected_status,
 ):
     port, certificate = delayed_https
     real_session = public_network.Session
@@ -182,8 +208,10 @@ def test_real_curl_transfer_deadline(
     config = search_config(HTTPS, "cards")
     config["search"]["timeout_seconds"] = timeout
     requests = web_adapter.SearchRequests(
-        source(HTTPS), ExtractionConfiguration.model_validate(config).search,
-        TestRate(), lambda: None,
+        source(HTTPS),
+        ExtractionConfiguration.model_validate(config).search,
+        TestRate(),
+        lambda: None,
     )
     start = monotonic()
     url = f"{HTTPS}:{port}/delay/{delay}"
@@ -196,5 +224,7 @@ def test_real_curl_transfer_deadline(
         assert document.http_status == expected_status
         assert document.body == b"<p>delayed local response</p>"
     measured = monotonic() - start
-    print(f"timeout={timeout}s delay={delay}s outcome={expected_status or 'timeout'} elapsed={measured:.3f}s")
+    print(
+        f"timeout={timeout}s delay={delay}s outcome={expected_status or 'timeout'} elapsed={measured:.3f}s"
+    )
     assert measured == pytest.approx(elapsed, abs=1)

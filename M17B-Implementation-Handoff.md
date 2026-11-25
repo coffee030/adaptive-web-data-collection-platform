@@ -55,6 +55,4 @@ Acceptance covered controlled fixtures, the SDK, and the existing Dashboard. The
 
 ## Publication and review
 
-The repository-local author and committer were `coffee030 <59193099+coffee030@users.noreply.github.com>`. The HTTPS credential used to publish verified the GitHub login `coffee030`, account ID `59193099`, and push permission for `coffee030/adaptive-web-data-collection-platform`.
-
-`git push --no-follow-tags origin HEAD:refs/heads/feature/M17-mcp-access` used the same credential. `git ls-remote --exit-code --refs origin refs/heads/feature/M17-mcp-access` confirmed implementation commit `991c220ed00ffe692243095a438f8265429e5114`. This handoff is a later commit on the same branch for review. [GitHub feature branch](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M17-mcp-access)
+The published implementation was `991c220ed00ffe692243095a438f8265429e5114`. [M17 delivery snapshot](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/ec1d2f7d9476dcd900829cfdd2ee253acde3a185)

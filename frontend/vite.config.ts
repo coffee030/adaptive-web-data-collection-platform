@@ -62,6 +62,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
   };
 
   return {
+    publicDir: false,
     plugins: [react(), approvalBoundary(localApproval)],
     define: {
       __LOCAL_PROFILE_APPROVAL__: JSON.stringify(localApproval || containerApproval),

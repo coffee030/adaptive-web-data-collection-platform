@@ -8,7 +8,7 @@
 | Implementation and evidence commit | `8e4f400b6492502a048e62683ea9d022fb3b36ff` |
 | M10 baseline | `1572fc8a8aab05f0d81a81c9b0a7ffc994218974` |
 
-The branch HEAD includes this handoff and the preceding commit is the implementation above. [Delivery branch](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M11-ui-foundation-overview) [Implementation commit](https://github.com/coffee030/adaptive-web-data-collection-platform/commit/8e4f400b6492502a048e62683ea9d022fb3b36ff)
+The delivery snapshot includes this handoff. The preceding commit contains the implementation. [Delivery snapshot](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/875c94c8f0c358904813fe1c41e1018034713049) [Implementation commit](https://github.com/coffee030/adaptive-web-data-collection-platform/commit/8e4f400b6492502a048e62683ea9d022fb3b36ff)
 
 ## Review and design
 

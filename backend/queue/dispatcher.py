@@ -91,7 +91,6 @@ class Dispatcher:
                         message="Broker publication could not be confirmed",
                     ),
                 )
-                # A broker outage affects the queue. Continue on the next poll.
                 return False
             row.last_dispatched_at = database_now(session)
             row.dispatch_error_code = None

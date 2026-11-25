@@ -21,7 +21,9 @@ class RequiredTests:
 
     def pytest_terminal_summary(self, terminalreporter):
         if self.has_skips:
-            terminalreporter.write_line("Required verification failed because tests were skipped.")
+            terminalreporter.write_line(
+                "Required verification failed because tests were skipped."
+            )
 
 
 def pytest_configure(config):

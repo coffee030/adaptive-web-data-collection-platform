@@ -114,9 +114,7 @@ export function webLocation(value: string) {
   try {
     const url = new URL(value);
     if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin + url.pathname;
-  } catch {
-    // Return a neutral label for an unusable location.
-  }
+  } catch {}
   return 'Unavailable';
 }
 

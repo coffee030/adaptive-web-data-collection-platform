@@ -75,6 +75,8 @@ Used installed Impeccable 4.9.0 Operate, polish, and audit with existing `PRODUC
 - First 390px rendered scan flagged a one-word last line in Evidence hash help. Added `text-wrap: pretty` and checked again.
 - Captured and checked live CSV Records, Record, Quarantine, and Evidence at 1440, 1280, 768, and 390px. Sixteen live axe A/AA scans and 16 controlled long-data scans had zero violations. All widths had no page-wide overflow. Keyboard checks covered focus, routes, horizontal scrolling, filter submission, and JSON copying. Manual screenshot review checked hashes, structure, actions, and status. Safari, physical phones, screen readers, and full compliance audit were NOT RUN.
 
+Run the historical detector commands from the [M5.5 checkout](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/86994a84a96423371995efef79093a6a94c31f70).
+
 ```powershell
 & .agents/skills/impeccable/scripts/impeccable.cmd detect --json frontend/src
 $env:PUPPETEER_EXECUTABLE_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'

@@ -60,7 +60,7 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 - [Windows setup and troubleshooting](docs/setup/Windows-One-Click-Setup.md)
 - [Example data and manual Docker Compose setup](docs/demo/M5.5-dashboard-demo-runbook.md)
 - [Development and testing](docs/demo/M5-core-demo-runbook.md)
-- [MVP release readiness](docs/evaluation/M16-Release-Readiness.md)
+- [Clean-checkout and Compose verification](docs/evaluation/Clean-Checkout-Acceptance.md)
 - [Core release verification matrix](docs/evaluation/Final-Core-Readiness.md)
 - [FYP presentation runbook](docs/evaluation/M16-FYP-Presentation-Runbook.md)
 - [Local Codex MCP setup and presenter walkthrough](docs/setup/Windows-MCP-Access.md#four-minute-presenter-walkthrough)

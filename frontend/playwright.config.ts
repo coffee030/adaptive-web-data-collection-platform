@@ -12,6 +12,7 @@ if (browserName !== 'chromium' && browserName !== 'firefox' && browserName !== '
 export default defineConfig({
   testDir: './tests',
   testMatch: integration ? '**/*.integration.ts' : '**/*.spec.ts',
+  forbidOnly: Boolean(process.env.CI),
   outputDir: 'test-results',
   workers: 2,
   use: {

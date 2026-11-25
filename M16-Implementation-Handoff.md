@@ -6,7 +6,7 @@
 | --- | --- |
 | Latest reviewed baseline | M15 `0b609b198146fdc2e0ab494e7a4a3b58083abc5d` |
 | Final M16 implementation commit | `185981553a14bf005345a5761eb549aa216a785c`. Release documents and GitHub verification results were saved in a separate documentation commit. |
-| Integration branch | [feature/M16-final-mvp-acceptance](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M16-final-mvp-acceptance) |
+| Integration snapshot | [M16 MVP acceptance](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/3f0aeb095ddba703dcb632deb677722ed68b7052) |
 | Draft PR | Targeted `main`. [#5 · M16 — Final MVP Acceptance and M6–M16 Integration](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/5) |
 | GitHub Actions | The local frontend build and all 187 selected Linux unit checks passed. [Draft PR #5 live check report](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/5/checks) |
 | Independent technical review | PENDING |
