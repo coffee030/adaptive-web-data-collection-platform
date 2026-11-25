@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { useResource } from '../../lib/useResource';
 import { Overlay } from './components';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, SourcePost, SourceRef, SurveyEvidence } from './IntelligenceEvidence';
-import { amount, campaignInput, date, runCampaign, visibleFor, isFresh, type CampaignRequest, type CampaignResult, type DataMode, type Recommendation } from './intelligence';
+import { amount, campaignInput, date, languageOptions, runCampaign, visibleFor, isFresh, type CampaignRequest, type CampaignResult, type DataMode, type Recommendation } from './intelligence';
 import { useMarketing } from './workspace';
 
 export function reportCurrent(report: CampaignResult) {
@@ -19,6 +19,10 @@ const readable = (value: string) => {
   if (value.startsWith('required_fact_unverified:')) {
     return 'Required fact unverified (' + value.slice('required_fact_unverified:'.length).replaceAll('_', ' ') + ')';
   }
+  if (value.startsWith('language:')) {
+    const language = value.slice('language:'.length) as keyof typeof languageOptions;
+    return 'Language evidence (' + (languageOptions[language] ?? language) + ')';
+  }
   return ({
     confirmed_quote_unavailable: 'Current firm quote unavailable',
     target_market_evidence_unavailable: 'Audience evidence unavailable',
@@ -27,6 +31,13 @@ const readable = (value: string) => {
     required_language_unverified: 'Required language unverified',
     required_market_share_unverified: 'Required audience share unverified',
     required_market_share_below_minimum: 'Audience share below minimum',
+    relevance: 'Content relevance',
+    performance: 'Historical performance',
+    consistency: 'Historical consistency',
+    cost: 'Quote fit',
+    market: 'Audience fit',
+    language: 'Language evidence',
+    preferences: 'Reviewed preferences',
   }[value] ?? value.replaceAll('_', ' '));
 };
 
@@ -105,14 +116,16 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
     {selected && current && <Overlay title={'Evidence for ' + selected.name} close={() => setSelected(undefined)}>
       <p>Ranking factors describe relative content and campaign fit.</p>
       <SourceRef evidence={selected.profile_evidence} />
-      <dl className="hl-facts">{Object.entries(selected.factor_weights).map(([name, weight]) =>
-        <div key={name}><dt>{readable(name)}</dt><dd>{selected.factors[name] == null ? 'Unavailable' : 'Used in ranking'} · Weight {weight}</dd></div>)}</dl>
+      <h3>Supporting posts</h3>
       {selected.evidence.length > 0 ? selected.evidence.map(post => <SourcePost key={post.content.data.id} post={post} mode={mode} />)
         : <p>Supporting content unavailable.</p>}
       {Object.entries(selected.requirement_evidence).map(([rule, evidence]) => <div key={rule}><strong>{readable(rule)}</strong><br /><SourceRef evidence={evidence} /></div>)}
       <HistoricMetrics history={selected.historical} />
       <h3>Audience evidence</h3><SurveyEvidence survey={selected.market_evidence} mode={mode} />
       <h3>Quote</h3><QuoteEvidence quote={selected.quote} mode={mode} />
+      <h3>Ranking factors</h3>
+      <dl className="hl-facts">{Object.entries(selected.factor_weights).map(([name, weight]) =>
+        <div key={name}><dt>{readable(name)}</dt><dd>{selected.factors[name] == null ? 'Unavailable' : 'Used in ranking'} · Weight {weight}</dd></div>)}</dl>
     </Overlay>}
   </div>;
 }

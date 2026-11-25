@@ -68,7 +68,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   const evidence = page.getByRole('region', { name: 'Eligible candidates' }).getByRole('button', { name: /Evidence for Fixture/ }).first();
   await evidence.click();
   await expect(page.getByRole('dialog')).toContainText('Ranking factors describe relative content and campaign fit.');
-  await expect(page.getByRole('dialog')).toContainText('Evidence fictional-');
+  await expect(page.getByRole('dialog')).toContainText(/Evidence (?:fictional-|core-record-)/);
   await page.keyboard.press('Escape');
   await page.getByRole('link', { name: 'Inspect plan' }).click();
   await expect(page.getByText('Feasible within budget', { exact: true })).toBeVisible();

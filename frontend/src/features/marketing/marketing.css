@@ -71,10 +71,9 @@
 .hl-availability .notice { padding:5px 0; }
 .hl-availability > a,.hl-availability>p { margin-top:12px; }
 .hl-advisor { display:grid; grid-template-columns:minmax(300px,29%) minmax(0,1fr); min-height:calc(100vh - 68px); }
-.hl-brief-lane h1 { font-size:clamp(2rem,3vw,3.25rem); text-wrap:balance; }
 .hl-brief-lane { background:var(--hl-lane); color:#fbf7ff; padding:clamp(25px,3.6vw,53px); overflow-wrap:anywhere; }
 .hl-brief-lane :is(p,dt,.hl-crumb) { color:#ddd2e7; }
-.hl-brief-lane h1 { font-size:clamp(2rem,3.7vw,3.25rem); }
+.hl-brief-lane h1 { font-size:clamp(2rem,3vw,3.25rem); text-wrap:balance; }
 .hl-brief-lane h1 + p { margin-top:15px; }
 .hl-brief-lane section { border-top:1px solid #55475f; padding-top:14px; margin-top:20px; }
 .hl-brief-lane section h2 { font-size:1rem; }
