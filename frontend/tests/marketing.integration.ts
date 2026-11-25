@@ -43,6 +43,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await expect(page.getByText('Fictional backend demo', { exact: true })).toBeVisible();
   await page.goto('/demo/connected/advisor');
   await expect(page.getByRole('combobox', { name: 'Campaign platform' })).toHaveValue('other');
+  await expect(page.getByLabel('Your category labels')).toHaveValue('');
   await page.getByRole('button', { name: 'Save brief' }).click();
   await expect(page.getByRole('button', { name: 'Run Campaign Advisor' })).toBeVisible();
   await page.getByRole('link', { name: 'Creator Explorer' }).click();

@@ -49,11 +49,11 @@ function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave
       {mode ? <>
         <label>Campaign objective<select name="objective" defaultValue={initial.objective === 'Engagement' ? 'Engagement' : 'Local awareness'}><option>Local awareness</option><option>Engagement</option></select></label>
         <label>Preferred reviewed fact identifiers<input name="preferredFacts" maxLength={650} defaultValue={initial.preferredFacts} /></label>
-        <label className="hl-span">Your category labels<input name="categoryLabels" maxLength={1090} defaultValue={initial.categoryLabels} placeholder="Separate labels with commas, or leave blank for suggestions" /></label>
+        <label key="connected-categories" className="hl-span">Your category labels<input name="categoryLabels" maxLength={1090} defaultValue={initial.categoryLabels} placeholder="Separate labels with commas, or leave blank for suggestions" /></label>
       </> : <>
         <label>Campaign objective<input name="objective" maxLength={80} defaultValue={initial.objective} /></label>
         <label>Preferred platform<select key="local-platform" name="platform" defaultValue={initial.platform}><option value="">Any supported platform</option><option>Instagram</option><option>TikTok</option></select></label>
-        <label>Preferred deliverable<input name="deliverable" maxLength={80} defaultValue={initial.deliverable} /></label>
+        <label key="draft-deliverable">Preferred deliverable<input name="deliverable" maxLength={80} defaultValue={initial.deliverable} /></label>
       </>}
       <label className="hl-span">Optional preferences<textarea name="preferred" rows={2} maxLength={500} defaultValue={initial.preferred} /></label>
     </div></fieldset>
