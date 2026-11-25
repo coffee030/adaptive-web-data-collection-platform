@@ -215,6 +215,19 @@ Test-Case 'Migration failure stops consumers and does not downgrade the schema' 
     Expect-Error 'DB-006' { Update-DatabaseSchema }
     Assert (($calls -join '|') -ceq 'current --check-heads|stop frontend dispatcher worker api|upgrade head') 'Unexpected migration sequence.'
 }
+Test-Case 'Harbourline diagnosis checks live catalog coverage' {
+    function Get-ServiceState { return 'running/healthy/0/false' }
+    function Invoke-Compose { return $ok }
+    function Invoke-RestMethod($Uri) {
+        if ($Uri -like '*/capabilities') { return @{ demo_intelligence = 'available' } }
+        Assert ($Uri -like '*/intelligence/demo/processing') 'Expected the demo processing endpoint.'
+        return @{ state = 'preparing'; indexed_datasets = 1; eligible_datasets = 2 }
+    }
+    function Invoke-DemoCheck { throw 'Core teaching presets do not describe this workspace.' }
+    Write-DemoDiagnosis
+    Assert ([IO.File]::ReadAllText($LogFile).Contains('Harbourline catalog state: preparing. Indexed 1 of 2')) 'Missing catalog diagnostics.'
+}
+
 Test-Case 'Up-to-date database skips upgrade on repeated start' {
     function Invoke-Compose($Arguments) {
         Assert ($Arguments[-1] -eq '--check-heads') 'An upgrade was attempted after a successful head check.'
