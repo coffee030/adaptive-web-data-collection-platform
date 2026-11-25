@@ -11,11 +11,12 @@ from curl_cffi import CurlOpt
 from curl_cffi.requests.exceptions import ConnectionError, Timeout
 from pydantic import ValidationError
 
+from backend.application.retry import retry_delay
 from backend.core import public_network, web_adapter
 from backend.core.contracts import ExtractionConfiguration, Source
 from backend.core.evidence import LocalEvidenceStore
-from backend.core.inputs import InputError, KeywordInput, WebInput
-from backend.core.origin_rate import RequestCooldown
+from backend.core.inputs import CapturedInput, InputError, KeywordInput, WebInput
+from backend.core.origin_rate import RELEASE, OriginRate, RequestCooldown
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.core.robots import parse_policy
 from backend.core.runner import CollectionRunner
@@ -420,6 +421,63 @@ def test_public_robots_denial_or_unavailable_never_fetches_search(
             requests=requests,
         )
     assert denied.value.error.code == expected
+
+
+@pytest.mark.parametrize(
+    ("at_robots", "status", "challenge", "expected"),
+    [
+        (True, 403, False, "access_blocked"),
+        (False, 401, False, "access_blocked"),
+        (False, 403, False, "access_blocked"),
+        (False, 503, True, "access_blocked"),
+        (False, 200, False, "origin_rate_unavailable"),
+    ],
+)
+def test_origin_release_failure_preserves_explicit_blocking(
+    monkeypatch, at_robots, status, challenge, expected
+):
+    origin = "http://127.0.0.1:5217"
+    approved = source(origin)
+    config = ExtractionConfiguration.model_validate(search_config(origin, "cards"))
+    rate = OriginRate("redis://127.0.0.1:6379/0")
+    calls = []
+
+    def fetch(url, **_):
+        calls.append(url)
+        if url.endswith("/robots.txt") and not at_robots:
+            return CapturedInput(b"", url, http_status=404), None, False
+        return (
+            CapturedInput(b"fixture response", url, http_status=status),
+            None,
+            challenge,
+        )
+
+    def eval_rate(script, *_):
+        if script != RELEASE:
+            return 0
+        if at_robots or calls[-1] != origin + "/robots.txt":
+            raise InputError("origin_rate_unavailable", "Redis release failed")
+        return 1
+
+    monkeypatch.setattr(web_adapter, "_get", fetch)
+    monkeypatch.setattr(rate, "_eval", eval_rate)
+    requests = web_adapter.SearchRequests(approved, config.search, rate, lambda: None)
+    entry = initial_input(approved, config, KeywordInput("quick"))
+    with pytest.raises(InputError) as failed:
+        web_adapter.capture_html(approved, entry, requests=requests)
+
+    assert failed.value.error.code == expected
+    assert failed.value.error.http_status == status
+    if expected == "access_blocked":
+        assert retry_delay(failed.value.error, 1) is None
+    if at_robots:
+        assert calls == [origin + "/robots.txt"]
+        assert failed.value.capture is None
+    else:
+        assert calls == [origin + "/robots.txt", entry.url]
+        assert failed.value.capture.body == b"fixture response"
+        if expected == "access_blocked":
+            assert failed.value.capture.requested_location == entry.url
 
 
 def test_pinned_https_timeout_is_reported_without_raw_transport_context(monkeypatch):

@@ -1,10 +1,12 @@
 import socket
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.app import create_app
 from backend.persistence.database import make_engine
+from backend.tests.m7_fixture import search_config
 
 
 def test_profile_http_lifecycle(pg_engine, tmp_path, config):
@@ -97,6 +99,57 @@ def test_http_error_envelope_and_input_limit(pg_engine, tmp_path):
         large = client.post("/api/v1/sources", content=b"x" * (7 * 1024 * 1024))
         assert large.status_code == 413
         assert large.json()["error"]["code"] == "request_too_large"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("source_name", "Invalid\x00name"),
+        ("permission_reference", "Invalid\x00reference"),
+        ("allowed_datasets", ["Invalid\x00dataset"]),
+    ],
+)
+def test_source_rejects_nul_before_persistence(pg_engine, tmp_path, field, value):
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://127.0.0.1",
+    ) as client:
+        source = {
+            "source_name": "CSV",
+            "adapter_type": "csv",
+            "allowed_datasets": ["listings"],
+            "permission_reference": "fixture consent",
+            field: value,
+        }
+        reply = client.post("/api/v1/sources", json=source)
+        assert reply.status_code == 422, reply.text
+        assert reply.json()["error"]["fields"][0]["location"][:2] == ["body", field]
+        assert client.get("/api/v1/sources").json() == []
+
+
+def test_profile_rejects_nul_selector_before_persistence(pg_engine, tmp_path):
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://127.0.0.1",
+    ) as client:
+        origin = "http://127.0.0.1:5217"
+        source = client.post(
+            "/api/v1/sources",
+            json={
+                "source_name": "Controlled search",
+                "adapter_type": "web",
+                "allowed_origins": [origin],
+                "permission_reference": "fixture consent",
+            },
+        )
+        assert source.status_code == 201, source.text
+        versions = f"/api/v1/sources/{source.json()['source_id']}/versions"
+        config = search_config(origin, "cards")
+        config["item_selector"] = "article\x00"
+        reply = client.post(versions, json={"configuration": config})
+        assert reply.status_code == 422, reply.text
+        assert reply.json()["error"]["fields"][0]["location"][-1] == "item_selector"
+        assert client.get(versions).json() == []
 
 
 def test_database_unavailable_response_does_not_expose_connection_details(tmp_path):
