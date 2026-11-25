@@ -74,7 +74,7 @@ test('Overview preserves request outcomes and offers scoped results and running 
     if (!query.has('request_id')) expect(query.get('order')).toBe('newest');
     return request.fulfill({ json: [record] });
   });
-  await page.goto('/');
+  await page.goto('/operations');
   const ledger = page.getByRole('region', { name: 'Recent collection requests' });
   await expect(ledger.getByRole('link', { name: 'Running jobs' })).toHaveAttribute('href', jobs + '?status=running');
   await expect(ledger.getByRole('link', { name: 'Listings · north', exact: true })).toHaveAttribute('href', '/collection-requests/' + requestId);
@@ -109,7 +109,7 @@ test('Overview distinguishes setup, loading, and error and retries an unavailabl
     await gate;
     await request.fulfill({ json: { error: { code: 'database_unavailable' } }, status: 503 });
   });
-  await page.goto('/');
+  await page.goto('/operations');
   const topicDirectory = page.getByRole('region', { name: 'Collect by topic', exact: true });
   await expect(topicDirectory.getByText('No eligible topics yet')).toBeVisible();
   await expect(topicDirectory.getByRole('link', { name: 'Manage sources' })).toHaveAttribute('href', '/sources');
@@ -143,7 +143,7 @@ test('An eligible Overview topic opens New Collection with a verified preset and
   await route(page, '/topics/' + topic.id, topic);
   await route(page, '/topics/' + topic.id + '/bindings', [binding]);
   await route(page, '/topics/' + unavailable.id + '/bindings', []);
-  await page.goto('/');
+  await page.goto('/operations');
   const directory = page.getByRole('region', { name: 'Collect by topic', exact: true });
   await expect(directory.getByText('No eligible sources', { exact: true })).toBeVisible();
   await expect(directory.getByRole('link', { name: /South area/ })).toHaveCount(0);
@@ -163,7 +163,7 @@ test('Narrow navigation exposes operations by keyboard and restores focus on Esc
   await route(page, '/sources', []);
   await route(page, jobs, []);
   await route(page, '/records', []);
-  await page.goto('/');
+  await page.goto('/operations');
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   const toggle = nav.getByRole('button', { name: 'Operations' });
   await expect(nav.getByRole('link', { name: 'New Collection' })).toBeVisible();
@@ -193,7 +193,7 @@ test('System theme reacts, and manual light and dark persist across routes and r
   await route(page, jobs, []);
   await route(page, '/records', []);
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.goto('/');
+  await page.goto('/operations');
   const theme = page.getByRole('combobox', { name: 'Theme' });
   const root = page.locator('html');
   await expect(theme).toHaveValue('system');
@@ -313,7 +313,7 @@ for (const [width, theme] of [[1440, 'light'], [390, 'dark']] as const) {
       const rules = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
       expect((await new AxeBuilder({ page }).withTags(rules).analyze()).violations).toEqual([]);
     };
-    await page.goto('/');
+    await page.goto('/operations');
     await expect(page.getByText('North Trail')).toBeVisible();
     await audit();
     await page.goto(jobs + '/new');

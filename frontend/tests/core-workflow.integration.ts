@@ -486,7 +486,7 @@ for (const adapter of ['web', 'csv'] as const) {
       await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
       console.log('M4-E restart and real replay', confirmed.job_id, recoveredJob.job_id);
     }
-    await page.goto('/');
+    await page.goto('/operations');
     await expect(page.getByRole('region', { name: 'Recent jobs', exact: true })).toContainText(registered.name);
     const latest = page.getByRole('region', { name: 'Validated records', exact: true });
     await expect(latest).toContainText(web ? 'River Walk' : 'North Trail');

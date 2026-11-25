@@ -64,6 +64,17 @@ export function apiPatch<T>(path: string, body: object, signal: AbortSignal) {
   return sendJson<T>('PATCH', path, body, signal);
 }
 
+export function apiLocal<T>(path: string, token: string, signal: AbortSignal,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', body?: object,
+) {
+  return request<T>(path, signal, {
+    method,
+    redirect: 'error',
+    headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  }, timeoutMs, response => response.status === 204 ? Promise.resolve(undefined as T) : response.json(), '/api/v1');
+}
+
 function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: object, signal: AbortSignal,
   requestTimeout?: number, read?: (response: Response) => Promise<T>,
 ) {
@@ -75,12 +86,12 @@ function sendJson<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: objec
 }
 
 async function request<T>(path: string, signal: AbortSignal, init?: RequestInit, requestTimeout = timeoutMs,
-  read: (response: Response) => Promise<T> = response => response.json(),
+  read: (response: Response) => Promise<T> = response => response.json(), target = baseUrl,
 ): Promise<T> {
   const timeout = AbortSignal.timeout(requestTimeout);
   const combinedSignal = AbortSignal.any([signal, timeout]);
   try {
-    const response = await fetch(`${baseUrl}${path}`, {
+    const response = await fetch(`${target}${path}`, {
       ...init,
       signal: combinedSignal,
       cache: 'no-store',

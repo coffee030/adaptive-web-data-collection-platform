@@ -22,6 +22,11 @@ import { RequestDetails, RequestList } from '../features/topic-collections/Reque
 import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
+import { operationsPath, researchPath } from '../features/operator/OperationsTasks';
+
+const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
+const CreatorResearch = lazy(async () => ({ default: (await import('../features/operator/CreatorResearch')).CreatorResearch }));
+const operatorPrefixes = [operationsPath, jobsPath, requestsPath, topicsPath, articlesPath, recordsPath, evidencePath, sourcesPath];
 const ProfilePage = lazy(async () => ({ default: (await import('../features/profiles/ProfilePage')).ProfilePage }));
 const TopicCatalog = lazy(async () => ({ default: (await import('../features/topic-collections/TopicCatalog')).TopicCatalog }));
 const TopicBindings = lazy(async () => ({ default: (await import('../features/topic-collections/TopicBindings')).TopicBindings }));
@@ -31,12 +36,24 @@ function operatorRoute(page: ReactNode) {
 }
 
 export function App() {
+  const { pathname } = useLocation();
+  const path = pathname.replace(/\/+$/, '') || '/';
+  const demo = path === '/demo' || path.startsWith('/demo/');
+  const operations = operatorPrefixes.some(prefix => path === prefix || path.startsWith(prefix + '/'));
+  if (demo || (!operations && !(path === '/' && __PLATFORM_SYNTHETIC_DEMO__))) {
+    return <Suspense fallback={<Loading>Loading campaign workspace…</Loading>}><MarketingWorkspace demo={demo} /></Suspense>;
+  }
+  return <OperationsApp />;
+}
+
+function OperationsApp() {
   const { pathname, hash } = useLocation();
   const lastPath = useRef(pathname);
   const main = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const title = pathname === '/' ? 'Overview'
+    const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
+      : pathname === researchPath ? 'Creator research and refresh'
       : pathname === jobsPath ? 'Collection Jobs'
       : pathname === newJobPath ? 'Single-source collection and CSV import'
       : pathname === newRequestPath ? 'Collect by topic'
@@ -68,7 +85,7 @@ export function App() {
       }}>Skip to main content</a>
       <ScrollRestoration />
       <header className="topbar">
-        <Link className="wordmark" to="/">Data Collection Platform</Link>
+        <Link className="wordmark" to={__PLATFORM_SYNTHETIC_DEMO__ ? "/" : operationsPath}>Data Operations</Link>
         <ThemeSelect />
       </header>
       <WorkspaceNavigation />
@@ -81,7 +98,9 @@ export function App() {
             </p>
           )}
           <Routes>
-            <Route path="/" element={<Overview />} />
+            {__PLATFORM_SYNTHETIC_DEMO__ && <Route path="/" element={<Overview />} />}
+            <Route path={operationsPath} element={<Overview />} />
+            <Route path={researchPath} element={operatorRoute(<CreatorResearch />)} />
             <Route path={jobsPath} element={<JobList />} />
             <Route path={newJobPath} element={<JobCreate />} />
             <Route path={requestsPath} element={<RequestList />} />

@@ -81,3 +81,29 @@ button.operator-danger:hover { background: var(--error-surface); }
   .operator-ledger td[data-label] { grid-template-columns: minmax(0, 1fr); }
   .operator-sheet button, .operator-sheet .control { min-block-size: 44px; }
 }
+
+
+.operations-tasks { margin-block:24px; padding-block:14px; border-block:1px solid var(--divider); }
+.operations-task-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-block:12px; }
+.operations-task-grid h3 { font-size:0.95rem; margin:0 0 4px; }
+.operations-task-grid p,.operations-health span { color:var(--text-secondary); font-size:0.875rem; }
+.operations-task-grid a { display:block; width:fit-content; margin-top:7px; font-size:0.875rem; }
+.operations-health,.operator-research-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px 14px; }
+.operations-health { border-top:1px solid var(--divider); padding-top:10px; }
+.operations-health strong { font-size:0.875rem; }
+.operator-research { max-width:1070px; }
+.operator-research-result { margin-block:12px; padding:12px 0; border-block-start:1px solid var(--divider); }
+.operator-research-result > p { margin-top:6px; }
+.operator-research-form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 12px; padding:12px 0; }
+.operator-research-form label { display:grid; gap:4px; min-width:0; font-size:0.875rem; }
+.operator-research-form input { min-height:36px; max-width:100%; padding:6px 9px; font:inherit; color:var(--text); background:var(--surface);
+  border:1px solid var(--control-border); border-radius:var(--radius-compact); }
+.operator-research-form > div { display:flex; flex-wrap:wrap; gap:5px; }
+.operator-token > p { flex-basis:100%; }
+.operator-research-result summary { cursor:pointer; font-weight:650; }
+.operator-research-result summary ~ button { margin-top:8px; }
+.operator-research-result th { min-width:72px; }
+@media(max-width:650px) {
+  .operations-task-grid { grid-template-columns:1fr; gap:12px; }
+  .operator-research-form label { flex-basis:100%; }
+}

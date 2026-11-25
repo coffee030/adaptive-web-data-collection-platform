@@ -1,3 +1,4 @@
+import { OperationsTasks } from '../operator/OperationsTasks';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Status, Timestamp } from '../../components/feedback';
@@ -173,6 +174,7 @@ export function Overview() {
         </ol>
       </> : <p className="overview-empty">No collection requests yet</p>}</OverviewResource>
     </section>
+    <OperationsTasks />
     <div className="overview-followup">
       <section className="overview-diagnostics" aria-labelledby="recent-jobs-title">
         <div className="overview-section-heading">

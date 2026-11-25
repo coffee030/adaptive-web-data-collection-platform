@@ -146,9 +146,9 @@ test('shell, persisted fields, and keyboard navigation', async ({ page }) => {
   await mockDetail(page);
   await page.route(api + '/sources/' + sourceId, route => route.fulfill({ json: { source_name: 'Fixture listings' } }));
   await page.route(api + '/sources/' + sourceId + '/versions/' + profileId, route => route.fulfill({ json: { version: 4 } }));
-  await page.goto('/');
-  await expect(page).toHaveURL('/');
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Data Collection Platform' })).toBeVisible();
+  await page.goto('/operations');
+  await expect(page).toHaveURL('/operations');
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Data Operations', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Data Collection Overview' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Collection Jobs' }).click();

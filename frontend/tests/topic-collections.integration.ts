@@ -256,7 +256,7 @@ test('operator configures two sources, traces collection history and downloads p
     expect(reply.status()).toBe(201);
     return await reply.json() as CollectionRequest;
   }
-  await page.goto('/');
+  await page.goto('/operations');
   await prepareCollection('quick');
   await checkLayout(page, checkAxe);
   const initial = await submitCollection();
