@@ -3,10 +3,16 @@ import { Link, useSearchParams } from 'react-router';
 import { TableRegion } from '../../components/feedback';
 import { audience, compact, eligibility, eligible, type Creator } from './contracts';
 import { Compare, CreatorProfile, Evidence, Identity, Overlay, SaveCreator } from './components';
+import { ConnectedExplorer } from './ConnectedExplorer';
+import type { DataMode } from './intelligence';
 import { demoSearch } from './demo/fixture';
 import { useMarketing } from './workspace';
 
-export function CreatorExplorer({ capability }: { capability: ReactNode }) {
+export function CreatorExplorer({ capability, mode }: { capability: ReactNode; mode?: DataMode }) {
+  return mode ? <ConnectedExplorer mode={mode} /> : <FixtureExplorer capability={capability} />;
+}
+
+function FixtureExplorer({ capability }: { capability: ReactNode }) {
   const { draft, setDraft, demo, creators, path } = useMarketing();
   const [params, setParams] = useSearchParams();
   const [comparison, showComparison] = useState(false);

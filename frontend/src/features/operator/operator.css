@@ -107,3 +107,11 @@ button.operator-danger:hover { background: var(--error-surface); }
   .operations-task-grid { grid-template-columns:1fr; gap:12px; }
   .operator-research-form label { flex-basis:100%; }
 }
+
+.operator-dataset-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:end; gap:12px; max-width:750px; }
+.operator-dataset-form label { display:grid; gap:4px; min-width:0; font-size:.875rem; }
+.operator-dataset-form input:not([type=checkbox]) { min-height:36px; width:100%; padding:5px 8px; font:inherit; color:var(--text);
+  background:var(--surface); border:1px solid var(--control-border); border-radius:var(--radius-compact); }
+.operator-dataset-form .operator-dataset-attest,.operator-dataset-form .operator-research-toolbar { grid-column:1/-1; }
+.operator-dataset-form .operator-dataset-attest { display:flex; gap:7px; align-items:center; }
+@media(max-width:600px) { .operator-dataset-form { grid-template-columns:1fr; } }

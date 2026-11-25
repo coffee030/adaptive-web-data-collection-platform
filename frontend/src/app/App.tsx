@@ -22,9 +22,10 @@ import { RequestDetails, RequestList } from '../features/topic-collections/Reque
 import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
-import { operationsPath, researchPath } from '../features/operator/OperationsTasks';
+import { datasetsPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
 
 const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
+const IntelligenceDatasets = lazy(async () => ({ default: (await import('../features/operator/IntelligenceDatasets')).IntelligenceDatasets }));
 const CreatorResearch = lazy(async () => ({ default: (await import('../features/operator/CreatorResearch')).CreatorResearch }));
 const operatorPrefixes = [operationsPath, jobsPath, requestsPath, topicsPath, articlesPath, recordsPath, evidencePath, sourcesPath];
 const ProfilePage = lazy(async () => ({ default: (await import('../features/profiles/ProfilePage')).ProfilePage }));
@@ -41,7 +42,7 @@ export function App() {
   const demo = path === '/demo' || path.startsWith('/demo/');
   const operations = operatorPrefixes.some(prefix => path === prefix || path.startsWith(prefix + '/'));
   if (demo || (!operations && !(path === '/' && __PLATFORM_SYNTHETIC_DEMO__))) {
-    return <Suspense fallback={<Loading>Loading campaign workspace…</Loading>}><MarketingWorkspace demo={demo} /></Suspense>;
+    return <Suspense fallback={<Loading>Loading campaign workspace…</Loading>}><MarketingWorkspace mode={path === '/demo/connected' || path.startsWith('/demo/connected/') ? 'server-demo' : demo ? 'sample' : 'partner'} /></Suspense>;
   }
   return <OperationsApp />;
 }
@@ -54,6 +55,7 @@ function OperationsApp() {
   useEffect(() => {
     const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
       : pathname === researchPath ? 'Creator research and refresh'
+      : pathname === datasetsPath ? 'Intelligence datasets'
       : pathname === jobsPath ? 'Collection Jobs'
       : pathname === newJobPath ? 'Single-source collection and CSV import'
       : pathname === newRequestPath ? 'Collect by topic'
@@ -100,6 +102,7 @@ function OperationsApp() {
           <Routes>
             {__PLATFORM_SYNTHETIC_DEMO__ && <Route path="/" element={<Overview />} />}
             <Route path={operationsPath} element={<Overview />} />
+            <Route path={datasetsPath} element={operatorRoute(<IntelligenceDatasets />)} />
             <Route path={researchPath} element={operatorRoute(<CreatorResearch />)} />
             <Route path={jobsPath} element={<JobList />} />
             <Route path={newJobPath} element={<JobCreate />} />

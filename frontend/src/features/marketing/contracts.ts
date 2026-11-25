@@ -12,6 +12,9 @@ export interface Brief {
   minAudience: number;
   requireCantonese: boolean;
   creatorCount: number;
+  requiredFacts?: string;
+  preferredFacts?: string;
+  categoryLabels?: string;
 }
 
 export interface Creator {

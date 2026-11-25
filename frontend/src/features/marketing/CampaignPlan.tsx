@@ -22,10 +22,14 @@ function download(brief: Brief, lines: PlanLine[], creators: readonly Creator[],
         creator ? eligibility(creator, brief) : 'Unavailable'];
     }),
   ];
+  exportCsv(rows, demo ? 'harbourline-fictional-plan.csv' : 'harbourline-draft.csv');
+}
+
+export function exportCsv(rows: (string | number)[][], filename: string) {
   const url = URL.createObjectURL(new Blob(['\ufeff', rows.map(row => row.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = demo ? 'harbourline-fictional-plan.csv' : 'harbourline-draft.csv';
+  link.download = filename;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -5,13 +5,13 @@ import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../featu
 import { evidencePath, recordsPath } from '../features/results/api';
 import { sourcesPath } from '../features/sources/api';
 
-import { operationsPath, researchPath } from '../features/operator/OperationsTasks';
+import { datasetsPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
 
 export function WorkspaceNavigation() {
   const { pathname, key } = useLocation();
   const [openFor, setOpenFor] = useState<string>();
   const open = openFor === key;
-  const operationsCurrent = [sourcesPath, topicsPath, jobsPath, researchPath].some(path =>
+  const operationsCurrent = [sourcesPath, topicsPath, jobsPath, researchPath, datasetsPath].some(path =>
     pathname === path || pathname.startsWith(path + '/'),
   );
   const resultsContext = [articlesPath, evidencePath].some(path =>
@@ -48,6 +48,7 @@ export function WorkspaceNavigation() {
         <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink>
         <NavLink to={newJobPath} end className="nav-secondary">Single-source &amp; CSV</NavLink>
         <NavLink to={researchPath} className="nav-secondary">Creator research</NavLink>
+        <NavLink to={datasetsPath} className="nav-secondary">Intelligence datasets</NavLink>
       </div>
     </div>
   </nav>;

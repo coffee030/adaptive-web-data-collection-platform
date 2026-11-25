@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { blankBrief, type Brief, type PlanLine } from './contracts';
+import { campaignExpiry, type CampaignResult } from './intelligence';
 import { demoBrief, demoCreators } from './demo/fixture';
+
+export type WorkspaceMode = 'partner' | 'sample' | 'server-demo';
 
 interface Draft {
   brief: Brief;
@@ -21,9 +24,34 @@ function readDraft(key: string, demo: boolean): Draft {
   } catch { return base; }
 }
 
-function useDraft(demo: boolean) {
-  const key = 'harbourline-draft-v1-' + (demo ? 'demo' : 'live');
-  const [draft, setDraft] = useState(() => readDraft(key, demo));
+const backendDemoBrief: Brief = {
+  ...blankBrief, name: 'Affordable dining campaign',
+  description: 'Find Cantonese creators who cover affordable neighbourhood restaurants and café meals. 街坊粉麵餐廳 平價 探店',
+  language: 'yue', platform: 'other', deliverable: 'short_video', creatorCount: 1,
+  requireCantonese: true, requiredFacts: 'affordable_local_lunch',
+};
+
+function useDraft(mode: WorkspaceMode) {
+  const demo = mode === 'sample';
+  const key = 'harbourline-draft-v1-' + (demo ? 'demo' : mode === 'partner' ? 'live' : 'server-demo');
+  const [draft, setDraft] = useState(() => {
+    const value = readDraft(key, demo);
+    return mode === 'server-demo' && !value.saved ? { ...value, brief: backendDemoBrief } : value;
+  });
+  const [report, setReport] = useState<CampaignResult>();
+  useEffect(() => {
+    if (!report) return;
+    const expiry = campaignExpiry(report);
+    if (expiry === undefined) return;
+    let timer: ReturnType<typeof setTimeout>;
+    function check() {
+      if (expiry === undefined) return;
+      if (expiry <= Date.now()) setReport(undefined);
+      else timer = setTimeout(check, Math.min(2_000_000_000, expiry - Date.now()));
+    }
+    check();
+    return () => clearTimeout(timer);
+  }, [report]);
   const [storageFailed, setStorageFailed] = useState(false);
 
   useEffect(() => {
@@ -31,13 +59,16 @@ function useDraft(demo: boolean) {
     catch { setStorageFailed(true); }
   }, [draft, key]);
 
-  const base = demo ? '/demo' : '';
+  const base = mode === 'server-demo' ? '/demo/connected' : demo ? '/demo' : '';
   function path(page = '') {
-    return !demo && !page && __PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : base + '/' + page;
+    return mode === 'partner' && !page && __PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : base + '/' + page;
   }
   return {
-    draft, setDraft, demo, path, storageFailed, creators: demo ? demoCreators : [],
-    saveBrief: (brief: Brief) => setDraft(old => ({ ...old, brief, saved: true })),
+    draft, setDraft, demo, mode, report, setReport, path, storageFailed, creators: demo ? demoCreators : [],
+    saveBrief: (brief: Brief) => {
+      setReport(undefined);
+      setDraft(old => ({ ...old, brief, saved: true }));
+    },
     toggleShortlist: (id: string) => setDraft(old => ({
       ...old, shortlist: old.shortlist.includes(id) ? old.shortlist.filter(item => item !== id) : [...old.shortlist, id],
     })),
@@ -47,8 +78,8 @@ function useDraft(demo: boolean) {
 
 const DraftContext = createContext<ReturnType<typeof useDraft> | null>(null);
 
-export function MarketingDraft({ demo, children }: { demo: boolean; children: ReactNode }) {
-  const value = useDraft(demo);
+export function MarketingDraft({ mode, children }: { mode: WorkspaceMode; children: ReactNode }) {
+  const value = useDraft(mode);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 

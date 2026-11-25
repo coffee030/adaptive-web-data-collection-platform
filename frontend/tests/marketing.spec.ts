@@ -146,3 +146,17 @@ test('mobile Advisor and plan have accessible names and fit the viewport', async
     expect(result.violations).toEqual([]);
   }
 });
+test('a configured partner workspace respects server authorization without loading demo data', async ({ page }) => {
+  await page.route(capabilityPath, route => route.fulfill({ json: { ...capability, customer_intelligence: 'available', demo_intelligence: 'available' } }));
+  const requested: string[] = [];
+  await page.route('**/api/v1/marketing/intelligence/**', route => {
+    requested.push(new URL(route.request().url()).pathname);
+    expect(route.request().headers().authorization).toBeUndefined();
+    return route.fulfill({ status: 403, json: { error: { code: 'workspace_restricted' } } });
+  });
+  await page.goto('/creators');
+  await expect(page.getByRole('alert')).toContainText('Workspace access is restricted');
+  expect(requested.some(path => path.endsWith('/partner/creators'))).toBe(true);
+  expect(requested.every(path => path.includes('/partner/'))).toBe(true);
+  await expect(page.getByText('Mira Lau')).toHaveCount(0);
+});
