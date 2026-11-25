@@ -10,6 +10,7 @@ from backend.persistence.database import settings
 QUEUE = "collection"
 TASK = "collection.execute_job"
 MARKETING_TASK = "marketing.execute_youtube_run"
+INTELLIGENCE_TASK = "marketing.index_intelligence_dataset"
 TASK_TIME_LIMIT = 60
 VISIBILITY_TIMEOUT = 180
 LOGGER = logging.getLogger(__name__)

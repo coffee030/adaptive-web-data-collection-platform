@@ -51,7 +51,9 @@ if __name__ == "__main__":
         (
             "alembic.ini",
             "backend/requirements-runtime.txt",
+            "backend/requirements-marketing-onnx.txt",
             "backend/api/app.py",
+            "backend/intelligence/recommend.py",
             "backend/marketing/pipeline.py",
             "backend/migrations/versions/0010_worker_attempt_identity.py",
             "backend/migrations/versions/0011_youtube_marketing_research.py",
@@ -65,6 +67,8 @@ if __name__ == "__main__":
             "backend/core/.venv/check.py",
             "backend/marketing/.env.local",
             "backend/marketing/provider-snapshot.json",
+            "backend/intelligence/model.onnx",
+            ".local/marketing-granite/tokenizer.json",
             "backend/experiments/private-export.csv",
             "backend/tests/marketing_worker.py",
             "backend/tests/.pytest_cache/sentinel",

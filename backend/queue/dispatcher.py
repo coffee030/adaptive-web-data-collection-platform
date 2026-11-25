@@ -14,13 +14,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.application.jobs import Jobs, database_now
 from backend.core.contracts import CollectionError
+from backend.intelligence.indexing import INDEX_CLAIM_WINDOW, Indexing
+from backend.intelligence.store import Config as IntelligenceConfig
 from backend.marketing.pipeline import CLAIM_WINDOW as MARKETING_CLAIM_WINDOW
 from backend.marketing.pipeline import Pipeline
 from backend.marketing.store import ResearchSettings
 from backend.persistence.database import database_url, make_engine, session_factory
 from backend.persistence.models import JobRow
 
-from .celery_app import MARKETING_TASK, TASK, app
+from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, TASK, app
 
 LOGGER = logging.getLogger(__name__)
 POLL_SECONDS = 1
@@ -43,6 +45,15 @@ def publish_marketing(run_id: UUID) -> None:
         args=[str(run_id)],
         retry=False,
         expires=MARKETING_CLAIM_WINDOW.total_seconds(),
+    )
+
+
+def publish_intelligence(dataset_id: UUID, claim: UUID) -> None:
+    app.send_task(
+        INTELLIGENCE_TASK,
+        args=[str(dataset_id), str(claim)],
+        retry=False,
+        expires=INDEX_CLAIM_WINDOW.total_seconds(),
     )
 
 
@@ -134,15 +145,20 @@ def main() -> None:
     sessions = session_factory(engine)
     dispatcher = Dispatcher(sessions)
     marketing = Pipeline(sessions, ResearchSettings.load())
+    intelligence = Indexing(sessions, IntelligenceConfig.load())
     try:
         if args.once:
             dispatcher.poll()
             marketing.maintain()
             marketing.dispatch(publish_marketing)
+            intelligence.maintain()
+            intelligence.dispatch(publish_intelligence)
             return
         LOGGER.info("Collection dispatcher polling PostgreSQL")
         marketing_due = 0.0
         cleanup_due = 0.0
+        indexing_due = 0.0
+        indexing_cleanup_due = 0.0
         while True:
             try:
                 dispatcher.poll()
@@ -166,6 +182,24 @@ def main() -> None:
                 except SQLAlchemyError as error:
                     LOGGER.warning(
                         "Marketing dispatcher database operation failed (%s)",
+                        type(error).__name__,
+                    )
+            if monotonic() >= indexing_due:
+                interval = (
+                    MARKETING_POLL_SECONDS
+                    if intelligence.config.model_dir
+                    else MARKETING_CLEANUP_SECONDS
+                )
+                indexing_due = monotonic() + interval
+                try:
+                    purge = monotonic() >= indexing_cleanup_due
+                    intelligence.maintain(purge=purge)
+                    if purge:
+                        indexing_cleanup_due = monotonic() + MARKETING_CLEANUP_SECONDS
+                    intelligence.dispatch(publish_intelligence)
+                except SQLAlchemyError as error:
+                    LOGGER.warning(
+                        "Intelligence dispatcher database operation failed (%s)",
                         type(error).__name__,
                     )
             sleep(POLL_SECONDS)

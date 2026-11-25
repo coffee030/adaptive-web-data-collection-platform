@@ -111,7 +111,8 @@ class Capability(BaseModel):
     )
     permitted_purposes: tuple[Literal["research"], ...] = ("research",)
     retention_days: int = RETENTION.days
-    customer_intelligence: Literal["unavailable"] = "unavailable"
+    customer_intelligence: Literal["available", "unavailable"] = "unavailable"
+    demo_intelligence: Literal["available", "unavailable"] = "unavailable"
 
 
 def permits_youtube(purpose: Purpose) -> bool:

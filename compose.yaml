@@ -5,7 +5,10 @@ x-logging: &logging
     max-file: "3"
 
 x-backend: &backend
-  build: .
+  build:
+    context: .
+    args:
+      MARKETING_ONNX: ${MARKETING_ONNX:-0}
   image: ${COLLECTION_BACKEND_IMAGE:-collection-backend:local}
   logging: *logging
   environment: &backend-environment
@@ -54,6 +57,9 @@ services:
     environment:
       <<: *backend-environment
       MARKETING_OPERATOR_TOKEN: ${MARKETING_OPERATOR_TOKEN:-}
+      MARKETING_PARTNER_WORKSPACE: ${MARKETING_PARTNER_WORKSPACE:-}
+      MARKETING_CUSTOMER_TOKEN: ${MARKETING_CUSTOMER_TOKEN:-}
+      MARKETING_DEMO_ENABLED: ${MARKETING_DEMO_ENABLED:-0}
     command: ["python", "-m", "uvicorn", "backend.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       postgres:

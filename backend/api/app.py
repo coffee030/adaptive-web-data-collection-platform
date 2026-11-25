@@ -25,6 +25,9 @@ from backend.core.csv_adapter import MAX_INPUT_BYTES
 from backend.core.evidence import LocalEvidenceStore
 from backend.core.inputs import InputError
 from backend.core.profiles import ProfileError
+from backend.intelligence.api import router as intelligence_router
+from backend.intelligence.store import Config as IntelligenceConfig
+from backend.intelligence.store import IntelligenceStore
 from backend.marketing.api import router as marketing_router
 from backend.marketing.store import MarketingError, ResearchSettings, ResearchStore
 from backend.persistence.database import (
@@ -163,6 +166,9 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         app.state.articles = Articles(app.state.sessions)
         app.state.results = Results(app.state.sessions)
         app.state.marketing = ResearchStore(app.state.sessions, ResearchSettings.load())
+        app.state.intelligence = IntelligenceStore(
+            app.state.sessions, IntelligenceConfig.load()
+        )
         app.state.evidence = LocalEvidenceStore(evidence_root)
         try:
             yield
@@ -181,6 +187,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     app.include_router(articles_router, prefix="/api/v1")
     app.include_router(results_router, prefix="/api/v1")
     app.include_router(marketing_router, prefix="/api/v1")
+    app.include_router(intelligence_router, prefix="/api/v1")
 
     @app.get("/api/v1/health", response_model=dict[str, str], tags=["health"])
     def health(request: Request):
