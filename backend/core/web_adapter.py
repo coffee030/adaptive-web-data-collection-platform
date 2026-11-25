@@ -421,6 +421,8 @@ class SearchRequests:
                     cooldown.retry_after_ms = (
                         max(30, document.retry_after_seconds or 0) * 1000
                     )
+                elif _has_publisher_backoff(document):
+                    cooldown.retry_after_ms = (document.retry_after_seconds or 0) * 1000
                 if robots and not blocked:
                     self.policy = self._read_policy(document)
                     self.interval_ms = max(self.interval_ms, self.policy.interval_ms)

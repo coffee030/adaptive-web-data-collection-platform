@@ -19,6 +19,6 @@ The inventory ran on 2026-11-14 Hong Kong time. It covered the user-specified FY
 
 The teammate brief named `web_scraping_public_demo` and described HTTPX fetching, Beautiful Soup pagination, controlled sites, raw HTML, metadata and hashes, a CLI, and saved results. The designated workspace did not contain the expected `web_scraping_public_demo/` source, `web_scraping_public_demo.zip`, tests, or dependency locks. Existing prototype tests were **BLOCKED** and reported results remained **unverified prototype claims**. The spike results came from a new experiment. [Spike results](M0-scrapling-spike.md)
 
-M0 approved controlled HTML and CSV development after 36 Scrapling spike tests passed. Public collection still required separate authorisation and verification of destination and egress controls.
+M0 approved controlled HTML and CSV development after 36 Scrapling spike tests passed. Public collection still required separate authorisation and verification of destination and egress controls. [Original readiness review](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/b774f7c1a0131ea99b2ae953ea4fe9f79022eadf/docs/experiments/M0-readiness-review.md)
 
 Reusable design ideas include fixture ground truth, page budgets, loop prevention, raw Evidence, and failure classification. HTTPX and Beautiful Soup reflect the older direction. Assess reusable policy or fixtures after obtaining authorised source access.

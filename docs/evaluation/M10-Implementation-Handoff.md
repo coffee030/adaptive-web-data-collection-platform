@@ -26,7 +26,7 @@ M10 adds an isolated Compose test configuration, reproducible load runner, indep
 | Frontend | TypeScript and Vite build passed. 89 mocked Chromium regressions and 17 live Chromium tests passed. The targeted live Topic flow passed in Chromium, Firefox and WebKit, with trace, screenshots and download artifacts. |
 | Restart and persisted bytes | Actual Launcher Stop and Start kept all three volumes. Direct SQL and disk verification covered six Jobs, six observations, two Articles and 14 Evidence captures. Six CSV/JSON attachments matched SQL and remained byte-identical across restart. Chrome opened the preserved Request on the printed Launcher URL. |
 
-Ignored `.local/m10/` retains the execution logs, Playwright artifacts, raw measurements, SQL verifications and Launcher logs. [Scalability and raw trials](M10-Scalability-Evaluation.md) · [Reliability matrix](M10-Reliability-Evaluation.md) · [Deployment verification](M10-Deployment-Verification.md) · [Fixture demo runbook](M10-FYP-Core-Demo-Runbook.md)
+Ignored `.local/m10/` retains the execution logs, Playwright artifacts, raw measurements, SQL verifications and Launcher logs. [Original repository audit](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/1572fc8a8aab05f0d81a81c9b0a7ffc994218974/docs/evaluation/M10-Repository-Audit.md) · [Scalability and raw trials](M10-Scalability-Evaluation.md) · [Reliability matrix](M10-Reliability-Evaluation.md) · [Deployment verification](M10-Deployment-Verification.md) · [Fixture demo runbook](M10-FYP-Core-Demo-Runbook.md)
 
 ## Final Backend regression
 
