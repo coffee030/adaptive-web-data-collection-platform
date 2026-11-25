@@ -86,11 +86,14 @@ export function MarketingDraft({ mode, children }: { mode: WorkspaceMode; childr
       return belongs(saved) && localStorage.getItem(saved) ? saved : base;
     } catch { return base; }
   });
+  useEffect(() => {
+    try { sessionStorage.setItem(pointer, active); }
+    catch { /* Browser storage may be unavailable. */ }
+  }, [pointer, active]);
   function openDraft(key = base + '/campaign/' + crypto.randomUUID()) {
     if (!belongs(key)) return;
     setActive(key);
     try {
-      sessionStorage.setItem(pointer, key);
       localStorage.setItem(pointer, key);
     } catch { /* The active draft stays available in this tab. */ }
   }

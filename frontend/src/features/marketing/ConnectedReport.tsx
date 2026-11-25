@@ -72,7 +72,8 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
         : current?.plan.status === 'search_limit' ? 'The selection search reached its limit' : 'Evaluate the campaign brief'}</h2>
       {current && <p className="hl-note">As of {date(current.as_of)} · {current.retrieval === 'granite_int8' ? 'Granite multilingual retrieval' : 'Text retrieval'}
         {current.indexing === 'preparing' ? ' · Semantic indexing in progress' : current.indexing === 'fallback' ? ' · Lexical fallback' : ''}</p>}</div>
-      <div className="hl-actions"><button type="button" className="hl-primary" disabled={running} onClick={() => submit()}>{current ? 'Refresh recommendations' : 'Run Campaign Advisor'}</button>
+      <div className="hl-actions"><button type="button" className="hl-primary" disabled={running} onClick={() => current ? retry() : submit()}>{current ? 'Refresh recommendations' : 'Run Campaign Advisor'}</button>
+        {current?.campaign.shortlist?.length ? <button type="button" onClick={() => submit()}>Evaluate all creators</button> : null}
         {draft.shortlist.length > 0 && <button type="button" disabled={running} onClick={() => submit(true)}>Evaluate shortlist</button>}
         {current && <Link className="hl-button" to={path('plan')}>Inspect plan</Link>}</div>
     </div>
