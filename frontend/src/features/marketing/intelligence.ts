@@ -105,6 +105,7 @@ export interface Recommendation {
   limitations: string[];
 }
 export interface CampaignResult {
+  revision: string;
   state: 'available' | 'empty' | 'incomplete';
   mode: DataMode;
   as_of: string;
@@ -117,9 +118,9 @@ export interface CampaignResult {
   campaign: CampaignRequest;
 }
 interface ScopeResult { mode: DataMode }
-interface CatalogResult extends ScopeResult { state: 'available' | 'empty'; creators: CreatorSummary[] }
+interface CatalogResult extends ScopeResult { state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
 export interface ComparisonResult extends ScopeResult { state: 'available' | 'empty' | 'incomplete'; creators: CreatorDetail[]; unavailable_ids: string[] }
-interface ProcessingResult extends ScopeResult { state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
+interface ProcessingResult extends ScopeResult { revision: string; state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
 export interface ScenarioRequest {
   currency: 'HKD'; impressions?: number; click_rate?: string; conversion_rate?: string;
   value_per_conversion_minor?: number; advertising_spend_minor?: number; campaign_cost_minor?: number;
@@ -137,12 +138,27 @@ function scoped<T extends ScopeResult>(result: T, mode: DataMode) {
 }
 export const catalog = async (mode: DataMode, search: URLSearchParams, signal: AbortSignal) =>
   scoped(await apiGet<CatalogResult>(prefix(mode) + '/creators?' + search, signal), mode);
+interface BriefOptions extends ScopeResult {
+  reviewed_facts: string[];
+  quoted_deliverables: Deliverable[];
+}
+export const briefOptions = async (mode: DataMode, platform: Platform, signal: AbortSignal) =>
+  scoped(await apiGet<BriefOptions>(prefix(mode) + '/brief-options?platform=' + encodeURIComponent(platform), signal), mode);
 export const creatorDetail = (mode: DataMode, id: string, signal: AbortSignal) =>
   apiGet<CreatorDetail>(prefix(mode) + '/creators/' + encodeURIComponent(id), signal);
 export const compareCreators = async (mode: DataMode, ids: string[], signal: AbortSignal) =>
   scoped(await apiPost<ComparisonResult>(prefix(mode) + '/creators/compare', { creator_ids: ids }, signal), mode);
-export const runCampaign = async (mode: DataMode, input: CampaignRequest, signal: AbortSignal) =>
-  scoped(await apiPost<CampaignResult>(prefix(mode) + '/campaign-briefs', input, signal, 30_000), mode);
+export async function runCampaign(mode: DataMode, input: CampaignRequest, signal: AbortSignal) {
+  const report = scoped(await apiPost<CampaignResult>(prefix(mode) + '/campaign-briefs', input, signal, 30_000), mode);
+  const visible = report.recommendations.every(candidate => visibleFor(mode, candidate.profile_evidence)
+    && candidate.evidence.every(post => visibleFor(mode, post.content.evidence)
+      && (!post.performance || visibleFor(mode, post.performance.evidence)))
+    && Object.values(candidate.requirement_evidence).every(item => visibleFor(mode, item))
+    && (!candidate.market_evidence || visibleFor(mode, candidate.market_evidence.evidence))
+    && (!candidate.quote || (visibleFor(mode, candidate.quote.evidence) && isFresh(candidate.quote.data.valid_until))));
+  if (!visible) throw new ApiError('http', 409, 'catalog_changed');
+  return report;
+}
 export const processing = async (mode: DataMode, signal: AbortSignal) =>
   scoped(await apiGet<ProcessingResult>(prefix(mode) + '/processing', signal), mode);
 export const calculateScenario = (mode: DataMode, input: ScenarioRequest, signal: AbortSignal) =>

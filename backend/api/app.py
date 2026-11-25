@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from psycopg import OperationalError
@@ -29,12 +29,14 @@ from backend.intelligence.api import router as intelligence_router
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.intelligence.store import IntelligenceStore
 from backend.marketing.api import router as marketing_router
+from backend.marketing.pilot_access import require_core_operator
 from backend.marketing.store import MarketingError, ResearchSettings, ResearchStore
 from backend.persistence.database import (
     database_url,
     evidence_path,
     make_engine,
     session_factory,
+    settings,
 )
 
 from .articles import router as articles_router
@@ -181,11 +183,19 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     )
     app.add_middleware(LimitRequestBody)
     app.add_middleware(LocalConsoleBoundary)
-    app.include_router(profiles_router, prefix="/api/v1")
-    app.include_router(jobs_router, prefix="/api/v1")
-    app.include_router(collection_router, prefix="/api/v1")
-    app.include_router(articles_router, prefix="/api/v1")
-    app.include_router(results_router, prefix="/api/v1")
+    core_access = (
+        [Depends(require_core_operator)]
+        if settings().get("MARKETING_PILOT_PASSWORD")
+        else []
+    )
+    for router in (
+        profiles_router,
+        jobs_router,
+        collection_router,
+        articles_router,
+        results_router,
+    ):
+        app.include_router(router, prefix="/api/v1", dependencies=core_access)
     app.include_router(marketing_router, prefix="/api/v1")
     app.include_router(intelligence_router, prefix="/api/v1")
 
@@ -205,6 +215,13 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     async def marketing_error(_: Request, error: MarketingError):
         response = error_response(error.status, error.code, str(error))
         response.headers["Cache-Control"] = "no-store"
+        if error.code in {"pilot_customer_login", "pilot_operator_login"}:
+            realm = (
+                "Harbourline partner"
+                if error.code == "pilot_customer_login"
+                else "Harbourline operator"
+            )
+            response.headers["WWW-Authenticate"] = f'Basic realm="{realm}"'
         return response
 
     @app.exception_handler(InputError)

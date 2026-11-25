@@ -51,9 +51,18 @@ def operator_store(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
 ) -> ResearchStore:
-    expected = settings().get("MARKETING_OPERATOR_TOKEN") or ""
+    values = settings()
+    expected = values.get("MARKETING_OPERATOR_TOKEN") or ""
     token = credentials.credentials if credentials else ""
-    if len(expected) < 24 or not compare_digest(token.encode(), expected.encode()):
+    if (
+        len(expected) < 24
+        or expected
+        in (
+            values.get("MARKETING_CUSTOMER_TOKEN"),
+            values.get("MARKETING_PILOT_PASSWORD"),
+        )
+        or not compare_digest(token.encode(), expected.encode())
+    ):
         raise MarketingError(
             403, "operator_required", "Marketing operator access is required"
         )

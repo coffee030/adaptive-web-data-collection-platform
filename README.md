@@ -40,11 +40,17 @@ The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B
 
 ### Harbourline Marketing Intelligence Demo
 
-Double-click **\`Start-Harbourline-Demo.bat\`** to open the connected Creator Explorer, Campaign Advisor and Plan Builder with fictional data. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use \`-HarbourlineTextOnly\` to rehearse that mode deliberately.
+Double-click **`Start-Harbourline-Demo.bat`** to open the connected Creator Explorer, Campaign Advisor and Plan Builder with fictional data. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use `-HarbourlineTextOnly` to rehearse that mode deliberately.
 
 The demo includes a bundled fictional marketing library and one controlled CSV collected by the Core. The latter enters the fictional marketing dataset after separate Source authorization and Profile approval, validated Records, and a verified raw Evidence match. The demo grants cover academic demonstration. Partner data requires its own authorization and dataset onboarding.
 
-Open the printed connected workspace URL. Run \`Stop-Platform.bat -Demo\` to stop the owned services and retain state. Run the Harbourline launcher again to reuse the same settings, model cache and data.
+Open the printed connected workspace URL. Run `Stop-Platform.bat -Demo` to stop the owned services and retain state. Run the Harbourline launcher again to reuse the same settings, model cache and data.
+
+### Private partner pilot on Windows
+
+Double-click **Start-Harbourline-Pilot.bat** on the trusted pilot workstation. It starts a separate, empty local partner workspace with its own database, model cache and private settings in `.local-pilot`. Open the printed URL, normally [127.0.0.1:5199](http://127.0.0.1:5199/). When a creator or campaign request asks for sign-in, use the username **partner** and the password from `.local-pilot/partner-password.txt`. The operator gives this password to the authorized participant. Use separate browser profiles for customers and operators and close the participant's private browsing window after a shared-machine session.
+
+Operators open `/operations/intelligence-datasets` from the pilot URL, choose **Partner**, and use the operator token from `.local-pilot/harbourline-operator.token` to import and inspect each independently authorized dataset. For automated refresh, the operator can supply updated grant-checked JSON in the workspace folder under `.local-pilot/partner-refresh`. Core Data Operations prompts for the username **operator** and the same operator token. Use `Diagnose-Platform.bat -Pilot` for diagnostics and `Stop-Platform.bat -Pilot` for shutdown. Keep the workstation and private settings under operator control. The pilot provides one shared customer workspace per installation. [Supported import rows, grants, and limits](docs/contracts/Marketing-M2-intelligence.md)
 
 ## Collect by topic
 

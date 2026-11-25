@@ -5,8 +5,9 @@ import { amount, date, deliverableOptions, languageOptions, platformOptions, vis
   type ContentEvidence, type DataMode, type EvidenceRef, type History, type Measure, type Observed, type Quote, type Survey } from './intelligence';
 
 export function IntelligenceError({ error, retry }: { error: ApiError; retry: () => void }) {
-  if (error.status === 403 || error.status === 404 || error.code === 'catalog_changed' || error.status === 422) {
-    const message = error.status === 403 ? 'Workspace access is restricted. For partner data, open this workspace through its trusted application host.'
+  if (error.status === 401 || error.status === 403 || error.status === 404 || error.code === 'catalog_changed' || error.status === 422) {
+    const message = error.status === 401 ? 'Sign in with the partner username and password supplied by your pilot operator, then retry.'
+      : error.status === 403 ? 'Workspace access is restricted. For partner data, open this workspace through its trusted application host.'
       : error.status === 404 ? 'This creator is unavailable in the current workspace.'
       : error.status === 422 ? 'Review the campaign criteria or search filters before retrying.'
       : 'The eligible catalog changed while this request was running. Retry against the current catalog.';

@@ -1,13 +1,36 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCatalogRevision } from './CatalogUpdates';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { eligibility, eligible, fee, audience, planStatus, type Brief, type Creator } from './contracts';
+import { useResource } from '../../lib/useResource';
 import { ConnectedReport } from './ConnectedReport';
-import { deliverableOptions, languageOptions, platformOptions, type DataMode } from './intelligence';
+import { briefOptions, deliverableOptions, languageOptions, platformOptions, type DataMode, type Platform } from './intelligence';
 import { Evidence, Identity, Overlay, SaveCreator } from './components';
 import { useMarketing } from './workspace';
 
+function ReviewedCriteria({ label, name, choices, initial }: { label: string; name: string; choices: string[]; initial?: string }) {
+  const [chosen, setChosen] = useState(() => initial?.split(',').map(value => value.trim()).filter(Boolean) ?? []);
+  return <div className="hl-span">
+    <label>{label}<select aria-label={label} value="" disabled={chosen.length >= 10 || !choices.some(value => !chosen.includes(value))}
+      onChange={event => setChosen([...chosen, event.target.value])}>
+      <option value="">Choose a reviewed criterion</option>
+      {choices.filter(value => !chosen.includes(value)).map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}
+    </select></label>
+    <input type="hidden" name={name} value={chosen.join(',')} />
+    {chosen.length > 0 && <ul className="hl-criteria">{chosen.map(value => <li key={value}>
+      <span>{value.replaceAll('_', ' ')}</span>
+      <button type="button" aria-label={'Remove ' + value.replaceAll('_', ' ') + ' from ' + label.toLowerCase()}
+        onClick={() => setChosen(chosen.filter(item => item !== value))}>Remove</button>
+    </li>)}</ul>}
+  </div>;
+}
+
 function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave: (brief: Brief) => void; onCancel?: () => void; mode?: DataMode }) {
   const [error, setError] = useState('');
+  const [platform, setPlatform] = useState(initial.platform.toLowerCase() as Platform);
+  const loadOptions = useCallback((signal: AbortSignal) => briefOptions(mode!, platform, signal), [mode, platform]);
+  const options = useResource(loadOptions, useCatalogRevision(), false, Boolean(mode && platform));
+  const available = options.result.state === 'ready' ? options.result.data : undefined;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -33,22 +56,29 @@ function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave
       <label>Creator budget (HK$)<input name="budget" type="number" min={0} max={10000000} required defaultValue={initial.budget} /></label>
       <label>Required creators<input name="creatorCount" type="number" min={1} max={mode ? 8 : 10} required defaultValue={initial.creatorCount} /></label>
       {mode && <>
-        <label>Campaign platform<select key="connected-platform" name="platform" required defaultValue={initial.platform.toLowerCase()}><option value="">Choose a platform</option>{Object.entries(platformOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
+        <label>Campaign platform<select key="connected-platform" name="platform" required value={platform} onChange={event => setPlatform(event.target.value as Platform)}><option value="">Choose a platform</option>{Object.entries(platformOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
         <label>Campaign deliverable<select name="deliverable" required defaultValue={initial.deliverable}><option value="">Choose a deliverable</option>{Object.entries(deliverableOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
       </>}
+      {mode && platform && <div className="hl-span hl-note" role="status">
+        {available ? (available.quoted_deliverables.length
+          ? 'Current HKD quotes cover ' + available.quoted_deliverables.map(value => deliverableOptions[value].toLowerCase()).join(', ') + '.'
+          : 'This platform has no current firm HKD quotes.')
+          : options.result.state === 'error' ? <>Quote coverage and reviewed criteria are unavailable. <button type="button" onClick={options.retry}>Retry coverage</button></>
+          : 'Checking quote coverage and reviewed criteria…'}
+      </div>}
       <label>Market<input name="market" maxLength={60} defaultValue={initial.market} /></label>
-      <label>Minimum HK audience (%)<input name="minAudience" type="number" min={0} max={100} required defaultValue={initial.minAudience} /></label>
+      <label>Minimum target-market audience (%)<input name="minAudience" type="number" min={0} max={100} required defaultValue={initial.minAudience} /></label>
       {mode ? <label>Campaign language<select name="language" defaultValue={initial.language === 'Cantonese' ? 'yue' : initial.language}>
         <option value="">Any language</option>{Object.entries(languageOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
         : <label>Language requirement<input name="language" maxLength={60} defaultValue={initial.language} /></label>}
       <label className="hl-check hl-span"><input name="requireCantonese" type="checkbox" defaultChecked={initial.requireCantonese} />{mode ? 'Require evidence of the selected language' : 'Require evidence of spoken Cantonese'}</label>
-      {mode && <label className="hl-span">Required reviewed fact identifiers<input name="requiredFacts" maxLength={650} defaultValue={initial.requiredFacts} placeholder="For example, stroller_access" /><small>Separate identifiers with commas.</small></label>}
+      {mode && <ReviewedCriteria label="Required content evidence" name="requiredFacts" choices={available?.reviewed_facts ?? []} initial={initial.requiredFacts} />}
       <label className="hl-span">{mode ? 'Other must-haves for manual review' : 'Other must-haves'}<textarea name="required" rows={2} maxLength={500} defaultValue={initial.required} /></label>
     </div></fieldset>
     <fieldset><legend>Objective and optional preferences</legend><div className="hl-form-grid">
       {mode ? <>
         <label>Campaign objective<select name="objective" defaultValue={initial.objective === 'Engagement' ? 'Engagement' : 'Local awareness'}><option>Local awareness</option><option>Engagement</option></select></label>
-        <label>Preferred reviewed fact identifiers<input name="preferredFacts" maxLength={650} defaultValue={initial.preferredFacts} /></label>
+        <ReviewedCriteria label="Preferred content evidence" name="preferredFacts" choices={available?.reviewed_facts ?? []} initial={initial.preferredFacts} />
         <label key="connected-categories" className="hl-span">Your category labels<input name="categoryLabels" maxLength={1090} defaultValue={initial.categoryLabels} placeholder="Separate labels with commas, or leave blank for suggestions" /></label>
       </> : <>
         <label>Campaign objective<input name="objective" maxLength={80} defaultValue={initial.objective} /></label>
@@ -100,7 +130,7 @@ export function Advisor({ capability, mode }: { capability: ReactNode; mode?: Da
           {mode && <div><dt>Platform</dt><dd>{platformOptions[brief.platform as keyof typeof platformOptions]}</dd></div>}
           {mode && <div><dt>Deliverable</dt><dd>{deliverableOptions[brief.deliverable as keyof typeof deliverableOptions]}</dd></div>}
           {brief.market && (!mode || brief.minAudience > 0) && <div><dt>Market</dt><dd>{brief.market}</dd></div>}
-          {brief.minAudience > 0 && <div><dt>HK audience</dt><dd>{brief.minAudience}% minimum</dd></div>}
+          {brief.minAudience > 0 && <div><dt>Target-market audience</dt><dd>{brief.minAudience}% minimum</dd></div>}
           {brief.language && (!mode || brief.requireCantonese) && <div><dt>Language</dt><dd>{languageOptions[brief.language as keyof typeof languageOptions] ?? brief.language}</dd></div>}
           {brief.requireCantonese && <div><dt>Evidence</dt><dd>{mode ? 'Selected language required' : 'Spoken Cantonese'}</dd></div>}
           {mode && brief.requiredFacts && <div><dt>Reviewed facts</dt><dd>{brief.requiredFacts.replaceAll('_',' ')}</dd></div>}

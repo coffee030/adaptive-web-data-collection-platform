@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-import fcntl
 import io
 import json
 import os
@@ -492,6 +491,8 @@ def run(*, check, retry):
 
 
 def main():
+    import fcntl
+
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true")

@@ -172,8 +172,12 @@ def api_base(value: str) -> str:
 
 def rest_client() -> httpx2.AsyncClient:
     # Ignore proxy configuration and fail on redirects, including local redirects.
+    pilot_token = os.environ.get("FYP_MCP_OPERATOR_TOKEN")
     return httpx2.AsyncClient(
-        trust_env=False, follow_redirects=False, timeout=TIMEOUT_SECONDS
+        trust_env=False,
+        follow_redirects=False,
+        timeout=TIMEOUT_SECONDS,
+        headers={"Authorization": f"Bearer {pilot_token}"} if pilot_token else None,
     )
 
 

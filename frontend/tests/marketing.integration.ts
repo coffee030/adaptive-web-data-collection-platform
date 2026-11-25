@@ -87,6 +87,11 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByLabel('Budget cap (HK$)').fill('1');
   await page.getByRole('button', { name: 'Recalculate selection' }).click();
   await expect(page.getByText('No feasible combination under this budget and scope', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Budget cap (HK$)')).toHaveValue('1');
+  await expect(page.getByText('No feasible combination under this budget and scope', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Advertising spend (HK$)')).toHaveValue('50');
+  await expect(page.getByText('4×', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
@@ -106,6 +111,8 @@ test('Data Operations imports and inspects the M2 demo dataset with operator aut
   await page.getByRole('checkbox', { name: /reviewed the written grant/ }).check();
   await page.getByRole('button', { name: 'Import dataset' }).click();
   await expect(page.getByText(/Authorized dataset accepted/)).toBeVisible();
+  await page.getByRole('button', { name: 'List datasets' }).click();
+  await page.getByLabel('Registered datasets').selectOption(datasetId);
   await page.getByRole('button', { name: 'Inspect dataset' }).click();
   await expect(page.getByRole('region', { name: 'Dataset status' })).toContainText(datasetId);
 });

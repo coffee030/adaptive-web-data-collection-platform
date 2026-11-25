@@ -10,11 +10,13 @@ import { CampaignPlan } from './CampaignPlan';
 import { Brand } from './components';
 import { CreatorExplorer } from './CreatorExplorer';
 import { fee } from './contracts';
+import { CatalogUpdates } from './CatalogUpdates';
 import { MarketingDraft, useMarketing, type WorkspaceMode } from './workspace';
 import './marketing.css';
 
 function Home({ capability, serverDemo }: { capability: ReactNode; serverDemo: boolean }) {
-  const { draft, demo, mode, path } = useMarketing();
+  const { draft, demo, mode, path, otherDrafts, openDraft } = useMarketing();
+  const saved = otherDrafts();
   const navigate = useNavigate();
 
   function search(event: FormEvent<HTMLFormElement>) {
@@ -35,6 +37,9 @@ function Home({ capability, serverDemo }: { capability: ReactNode; serverDemo: b
         <h2>{draft.saved ? 'Current campaign draft' : 'Campaign drafts'}</h2>
         {draft.saved ? <><Link className="hl-campaign-link" to={path('advisor')}>{draft.brief.name}</Link>
           <p>{fee(draft.brief.budget)} budget · {draft.brief.creatorCount} creator slots</p></> : <p>Start a brief to keep your campaign scope and planning assumptions in this browser.</p>}
+        {!demo && draft.saved && <button type="button" onClick={() => { openDraft(); navigate(path('advisor')); }}>Start another campaign</button>}
+        {!demo && saved.length > 0 && <div className="hl-home-state"><h3>Other saved campaigns</h3>
+          {saved.map(item => <p key={item.key}><button type="button" onClick={() => { openDraft(item.key); navigate(path('advisor')); }}>{item.name}</button></p>)}</div>}
         {demo ? <div className="hl-home-state"><strong>Fictional demo</strong><p>Sample creators, quotes and evidence use a Sheung Wan coffee launch.</p></div>
           : <div className="hl-home-state">{capability}{mode === 'partner' && <div className="hl-actions">
               {serverDemo && <Link to="/demo/connected">Open backend demo</Link>}
@@ -99,13 +104,14 @@ function MarketingShell() {
     </header>
     <main id="harbour-main" tabIndex={-1} ref={main}>
       {storageFailed && <p className="hl-storage" role="alert">This browser could not save the draft. Open work stays available for this session.</p>}
-      <Routes>
+      <CatalogUpdates mode={pathname === path() ? undefined : apiMode}><Routes>
         <Route path={path()} element={<Home capability={capability} serverDemo={serverDemo} />} />
         <Route path={path('advisor')} element={<Advisor capability={capability} mode={apiMode} />} />
         <Route path={path('creators')} element={<CreatorExplorer capability={capability} mode={apiMode} />} />
-        <Route path={path('plan')} element={apiMode ? <ConnectedPlan mode={apiMode} /> : <CampaignPlan />} />
+        <Route path={path('plan')} element={apiMode ? <ConnectedPlan mode={apiMode} />
+          : !demo && (result.state === 'loading' || mode === 'server-demo') ? capability : <CampaignPlan />} />
         <Route path="*" element={<div className="hl-page"><h1>Page unavailable</h1><Link to={path()}>Open workspace</Link></div>} />
-      </Routes>
+      </Routes></CatalogUpdates>
     </main>
   </div>;
 }

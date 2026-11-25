@@ -1,9 +1,9 @@
-function Initialize-HarbourlineSettings {
-    $secretPath = Join-Path $Local 'harbourline-operator.token'
+function Get-HarbourlineSecret([string]$FileName) {
+    $secretPath = Join-Path $Local $FileName
     if ((Test-Path -LiteralPath $secretPath) -and
         ((Get-Item -LiteralPath $secretPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        Stop-WithError 'HL-001' 'Invalid Harbourline Operator Settings' 'The local demo token file redirects elsewhere.' `
-            'A private regular token file is required.' @('Remove the redirect from the isolated demo settings and retry.')
+        Stop-WithError 'HL-001' 'Invalid Harbourline Access Settings' 'The local credential file redirects elsewhere.' `
+            'A private regular token file is required.' @('Remove the redirect from the private launcher settings and retry.')
     }
     if (!(Test-Path -LiteralPath $secretPath)) {
         $bytes = New-Object byte[] 32
@@ -13,10 +13,35 @@ function Initialize-HarbourlineSettings {
     }
     $token = [IO.File]::ReadAllText($secretPath)
     if ($token -cnotmatch '^[a-f0-9]{64}$') {
-        Stop-WithError 'HL-001' 'Invalid Harbourline Operator Settings' 'The local demo token could not be validated.' `
-            'The private token file has an unexpected format.' @('Restore the isolated demo token file and retry.')
+        Stop-WithError 'HL-001' 'Invalid Harbourline Access Settings' 'The local credential could not be validated.' `
+            'The private token file has an unexpected format.' @('Restore the private credential file and retry.')
     }
-    $Config['MARKETING_OPERATOR_TOKEN'] = $token
+    return $token
+}
+
+function Initialize-HarbourlinePilotSettings {
+    $Config['MARKETING_PARTNER_WORKSPACE'] = $Config.COMPOSE_PROJECT_NAME
+    $refreshRoot = Join-Path $Local 'partner-refresh'
+    foreach ($folder in @($refreshRoot, (Join-Path $refreshRoot $Config.COMPOSE_PROJECT_NAME))) {
+        if ((Test-Path -LiteralPath $folder) -and ((Get-Item -LiteralPath $folder -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            Stop-WithError 'HL-004' 'Invalid Partner Refresh Folder' 'The refresh folder redirects elsewhere.' `
+                'A private regular directory is required.' @('Restore the private refresh folder and restart.')
+        }
+        $null = New-Item -ItemType Directory -Force -Path $folder
+    }
+    $Config['MARKETING_PARTNER_REFRESH_HOST_DIR'] = $refreshRoot
+    $Config['MARKETING_CUSTOMER_TOKEN'] = Get-HarbourlineSecret 'harbourline-customer.token'
+    $Config['MARKETING_PILOT_PASSWORD'] = Get-HarbourlineSecret 'partner-password.txt'
+    $Config['MARKETING_OPERATOR_TOKEN'] = Get-HarbourlineSecret 'harbourline-operator.token'
+    $Config['MARKETING_DEMO_ENABLED'] = '0'
+    $Config['MARKETING_YOUTUBE_RESEARCH'] = '0'
+    $Config['MARKETING_YOUTUBE_DISCOVERY'] = '0'
+    $Config['MARKETING_ONNX'] = '0'
+}
+
+function Initialize-HarbourlineSettings {
+    $Config['MARKETING_PILOT_PASSWORD'] = ''
+    $Config['MARKETING_OPERATOR_TOKEN'] = Get-HarbourlineSecret 'harbourline-operator.token'
     $Config['MARKETING_DEMO_ENABLED'] = '1'
     $Config['MARKETING_PARTNER_WORKSPACE'] = ''
     $Config['MARKETING_CUSTOMER_TOKEN'] = ''

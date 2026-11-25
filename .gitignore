@@ -8,6 +8,7 @@ __pycache__/
 /.codex/config.toml
 /.local/
 /.local-demo/
+/.local-pilot/
 /logs/launcher/
 /var/evidence/
 /var/m2-postgres/

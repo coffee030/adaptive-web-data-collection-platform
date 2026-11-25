@@ -16,6 +16,7 @@ function Invoke-Compose([string[]]$Arguments, $Seconds = 25) {
         $options += @('-f', (Join-Path $Root 'compose.fixture.yaml'), '-f', (Join-Path $PSScriptRoot 'compose.launcher-fixture.yaml'))
     }
     if ($DemoMode) { $options += @('-f', (Join-Path $PSScriptRoot 'compose.demo.yaml')) }
+    if ($Config.MARKETING_PARTNER_REFRESH_HOST_DIR) { $options += @('-f', (Join-Path $Root 'compose.marketing-refresh.yaml')) }
     if ($Config.MARKETING_MODEL_HOST_DIR) { $options += @('-f', (Join-Path $Root 'compose.marketing-onnx.yaml')) }
     if ($Config.LAUNCHER_SUBNET) { $options += @('-f', (Join-Path $PSScriptRoot 'compose.subnet.yaml')) }
     if ($Config.LAUNCHER_FIXTURE -eq '1' -and $Config.LAUNCHER_FIXTURE_SUBNET) {

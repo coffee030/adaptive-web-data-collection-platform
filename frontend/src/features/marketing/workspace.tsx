@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { blankBrief, type Brief, type PlanLine } from './contracts';
-import { campaignExpiry, type CampaignResult } from './intelligence';
+import type { CampaignRequest, ScenarioRequest } from './intelligence';
 import { demoBrief, demoCreators } from './demo/fixture';
 
 export type WorkspaceMode = 'partner' | 'sample' | 'server-demo';
@@ -12,6 +12,8 @@ interface Draft {
   lines: PlanLine[];
   explorer: string;
   assumption?: string;
+  evaluation?: CampaignRequest;
+  scenario?: ScenarioRequest;
 }
 
 function readDraft(key: string, demo: boolean): Draft {
@@ -31,27 +33,12 @@ const backendDemoBrief: Brief = {
   requireCantonese: true, requiredFacts: 'affordable_local_lunch',
 };
 
-function useDraft(mode: WorkspaceMode) {
+function useDraft(mode: WorkspaceMode, key: string, first: boolean) {
   const demo = mode === 'sample';
-  const key = 'harbourline-draft-v1-' + (demo ? 'demo' : mode === 'partner' ? 'live' : 'server-demo');
   const [draft, setDraft] = useState(() => {
     const value = readDraft(key, demo);
-    return mode === 'server-demo' && !value.saved ? { ...value, brief: backendDemoBrief } : value;
+    return first && mode === 'server-demo' && !value.saved ? { ...value, brief: backendDemoBrief } : value;
   });
-  const [report, setReport] = useState<CampaignResult>();
-  useEffect(() => {
-    if (!report) return;
-    const expiry = campaignExpiry(report);
-    if (expiry === undefined) return;
-    let timer: ReturnType<typeof setTimeout>;
-    function check() {
-      if (expiry === undefined) return;
-      if (expiry <= Date.now()) setReport(undefined);
-      else timer = setTimeout(check, Math.min(2_000_000_000, expiry - Date.now()));
-    }
-    check();
-    return () => clearTimeout(timer);
-  }, [report]);
   const [storageFailed, setStorageFailed] = useState(false);
 
   useEffect(() => {
@@ -64,10 +51,9 @@ function useDraft(mode: WorkspaceMode) {
     return mode === 'partner' && !page && __PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : base + '/' + page;
   }
   return {
-    draft, setDraft, demo, mode, report, setReport, path, storageFailed, creators: demo ? demoCreators : [],
+    draft, setDraft, demo, mode, path, storageFailed, creators: demo ? demoCreators : [],
     saveBrief: (brief: Brief) => {
-      setReport(undefined);
-      setDraft(old => ({ ...old, brief, saved: true }));
+      setDraft(old => ({ ...old, brief, saved: true, evaluation: undefined }));
     },
     toggleShortlist: (id: string) => setDraft(old => ({
       ...old, shortlist: old.shortlist.includes(id) ? old.shortlist.filter(item => item !== id) : [...old.shortlist, id],
@@ -76,11 +62,48 @@ function useDraft(mode: WorkspaceMode) {
   };
 }
 
-const DraftContext = createContext<ReturnType<typeof useDraft> | null>(null);
+interface CampaignNavigation {
+  otherDrafts: () => { key: string; name: string }[];
+  openDraft: (key?: string) => void;
+}
+
+const DraftContext = createContext<(ReturnType<typeof useDraft> & CampaignNavigation) | null>(null);
+
+function ActiveDraft({ mode, draftKey, first, children, navigation }: {
+  mode: WorkspaceMode; draftKey: string; first: boolean; children: ReactNode; navigation: CampaignNavigation;
+}) {
+  const value = useDraft(mode, draftKey, first);
+  return <DraftContext.Provider value={{ ...value, ...navigation }}>{children}</DraftContext.Provider>;
+}
 
 export function MarketingDraft({ mode, children }: { mode: WorkspaceMode; children: ReactNode }) {
-  const value = useDraft(mode);
-  return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
+  const base = 'harbourline-draft-v1-' + (mode === 'sample' ? 'demo' : mode === 'partner' ? 'live' : 'server-demo');
+  const pointer = base + '/active';
+  const belongs = (key: string | null): key is string => key === base || Boolean(key?.startsWith(base + '/campaign/'));
+  const [active, setActive] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(pointer) ?? localStorage.getItem(pointer);
+      return belongs(saved) && localStorage.getItem(saved) ? saved : base;
+    } catch { return base; }
+  });
+  function openDraft(key = base + '/campaign/' + crypto.randomUUID()) {
+    if (!belongs(key)) return;
+    setActive(key);
+    try {
+      sessionStorage.setItem(pointer, key);
+      localStorage.setItem(pointer, key);
+    } catch { /* The active draft stays available in this tab. */ }
+  }
+  function otherDrafts() {
+    try {
+      return Object.keys(localStorage).filter(key => key !== active && belongs(key)).flatMap(key => {
+        const draft = readDraft(key, false);
+        return draft.saved ? [{ key, name: draft.brief.name }] : [];
+      });
+    } catch { return []; }
+  }
+  return <ActiveDraft key={active} mode={mode} draftKey={active} first={active === base}
+    navigation={{openDraft,otherDrafts}}>{children}</ActiveDraft>;
 }
 
 export function useMarketing() {

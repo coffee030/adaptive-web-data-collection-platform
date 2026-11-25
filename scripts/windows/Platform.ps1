@@ -8,6 +8,7 @@ param(
     [switch]$DemoRetry,
     [switch]$OneClickDemo,
     [switch]$Harbourline,
+    [switch]$Pilot,
     [switch]$HarbourlineTextOnly
 )
 
@@ -17,7 +18,7 @@ param(
 . "$PSScriptRoot/Frontend.ps1"
 . "$PSScriptRoot/Demo.ps1"
 . "$PSScriptRoot/Harbourline.ps1"
-Set-LauncherMode -Demo:$Demo
+Set-LauncherMode -Demo:$Demo -Pilot:$Pilot
 
 function Assert-OwnedDocker {
     if (!(Confirm-DockerOwnership)) {
@@ -59,6 +60,7 @@ function Start-Platform {
     Write-Step '[3/7] Loading private local configuration...'
     $script:Config = Get-LauncherConfig -Create -AutoDemoNetwork:$DemoMode
     if ($Harbourline) { Initialize-HarbourlineSettings }
+    if ($Pilot) { Initialize-HarbourlinePilotSettings }
     $compose = Invoke-Compose @('config', '--quiet')
     if ($compose.Code -ne 0) {
         Stop-WithError 'CFG-004' 'Compose Configuration Failed Validation' 'Docker Compose rejected the local configuration.' `
@@ -73,7 +75,7 @@ function Start-Platform {
     }
     Stop-OwnedFrontend
     Assert-LauncherPorts
-    if ($Harbourline) { Initialize-HarbourlineImage }
+    if ($Harbourline -or $Pilot) { Initialize-HarbourlineImage }
     else { Update-PlatformImage api }
     Update-PlatformImage frontend
     Write-Step '[4/7] Starting PostgreSQL and Redis...'
@@ -92,6 +94,10 @@ function Start-Platform {
     Write-Step "URL: $url"
     if (!$NoBrowser) { Open-PlatformBrowser $url }
     if ($Harbourline) { Write-Step '[SUCCESS] Harbourline Fictional Demo is ready!' }
+    elseif ($Pilot) {
+        Write-Step "[SUCCESS] Private partner workspace is ready. Sign in as partner with the password in $Local/partner-password.txt."
+        Write-Step "[INFO] Data Operations uses the separate credential in $Local/harbourline-operator.token."
+    }
     elseif ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
     else { Write-Step '[SUCCESS] Platform is ready!' }
 }
@@ -169,18 +175,22 @@ $lock = $null
 $exitCode = 1
 $logDirectory = Join-Path $Root 'logs/launcher'
 if ($DemoMode) { $logDirectory = Join-Path $logDirectory 'demo' }
+elseif ($Pilot) { $logDirectory = Join-Path $logDirectory 'pilot' }
 try {
     $null = New-Item -ItemType Directory -Path $logDirectory -Force
     $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
     $script:LogFile = Join-Path $logDirectory "$stamp-$PID.log"
     Write-Step 'Adaptive Web Data Collection Platform | Windows Launcher 1.0'
-    $modeLabel = if ($DemoMode) { 'Synthetic Demo' } else { 'Normal' }
+    $modeLabel = if ($DemoMode) { 'Synthetic Demo' } elseif ($Pilot) { 'Private partner pilot' } else { 'Normal' }
     Write-Step "[INFO] $modeLabel mode. Action: $Action."
     if ($DemoRetry -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid Demo Retry Option' 'The -DemoRetry option requires Start with -Demo.' `
             'A different launcher action or mode was selected.' @('Use Start-Platform.bat -Demo -DemoRetry.')
     }
-    if (($Harbourline -and (!$DemoMode -or $Action -ne 'Start')) -or ($HarbourlineTextOnly -and !$Harbourline)) {
+    if ($Pilot -and $Demo) {
+        Stop-WithError 'HL-003' 'Invalid Pilot Mode' 'Pilot and Synthetic Demo use separate workspaces.' 'Both modes were selected.' @('Run Start-Harbourline-Pilot.bat.')
+    }
+    if (($Harbourline -and (!$DemoMode -or $Action -ne 'Start')) -or ($HarbourlineTextOnly -and !$Harbourline -and !$Pilot)) {
         Stop-WithError 'HL-003' 'Invalid Harbourline Demo Option' 'This option is available during an isolated Harbourline Demo start.' `
             'The selected launcher mode does not support it.' @('Use Start-Harbourline-Demo.bat.')
     }

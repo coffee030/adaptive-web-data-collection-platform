@@ -6,9 +6,10 @@ $script:Utf8 = New-Object System.Text.UTF8Encoding($false)
 $script:DockerHost = 'npipe:////./pipe/dockerDesktopLinuxEngine'
 $script:LogFile = $null
 
-function Set-LauncherMode([switch]$Demo) {
+function Set-LauncherMode([switch]$Demo, [switch]$Pilot) {
+    $script:PilotMode = [bool]$Pilot
     $script:DemoMode = [bool]$Demo
-    $script:Local = Join-Path $Root $(if ($Demo) { '.local-demo' } else { '.local' })
+    $script:Local = Join-Path $Root $(if ($Demo) { '.local-demo' } elseif ($Pilot) { '.local-pilot' } else { '.local' })
 }
 
 function Write-LauncherLog($Level, $Message) {
@@ -186,8 +187,9 @@ function Get-LauncherConfig([switch]$Create, [switch]$Probe, [switch]$AutoDemoNe
         try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
         $password = [BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
         $owner = [Guid]::NewGuid().ToString('N')
-        $mode = if ($DemoMode) { 'demo' } else { 'local' }
-        $offset = if ($DemoMode) { 1 } else { 0 }
+        $mode = if ($DemoMode) { 'demo' } elseif ($PilotMode) { 'pilot' } else { 'local' }
+        $offset = if ($DemoMode) { 1 } elseif ($PilotMode) { 2 } else { 0 }
+        $fixture = [int][bool]$DemoMode
         $postgresPort = 55497 + $offset
         $apiPort = 58097 + $offset
         $frontendPort = 5197 + $offset
@@ -208,15 +210,15 @@ POSTGRES_PASSWORD=$password
 POSTGRES_PORT=$postgresPort
 API_PORT=$apiPort
 FRONTEND_PORT=$frontendPort
-LAUNCHER_FIXTURE=$offset
-LOCAL_PROFILE_APPROVAL=$offset$networkSettings
+LAUNCHER_FIXTURE=$fixture
+LOCAL_PROFILE_APPROVAL=$fixture$networkSettings
 "@
         Write-AtomicFile $file ($contents + [Environment]::NewLine)
         Write-Step '[PASS] Created private local settings.'
     }
     elseif (!$Probe) { Write-Step '[INFO] Reading existing local settings.' }
 
-    $mode = if ($DemoMode) { 'demo' } else { 'local' }
+    $mode = if ($DemoMode) { 'demo' } elseif ($PilotMode) { 'pilot' } else { 'local' }
     $fixtureFlag = if ($DemoMode) { '1' } else { '[01]' }
     $rules = @{
         LAUNCHER_OWNER = '[a-f0-9]{32}'

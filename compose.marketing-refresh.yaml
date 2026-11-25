@@ -1,0 +1,9 @@
+services:
+  dispatcher:
+    environment:
+      MARKETING_PARTNER_REFRESH_DIR: /data/partner-refresh
+    volumes:
+      - type: bind
+        source: ${MARKETING_PARTNER_REFRESH_HOST_DIR:?set the private partner refresh directory}
+        target: /data/partner-refresh
+        read_only: true

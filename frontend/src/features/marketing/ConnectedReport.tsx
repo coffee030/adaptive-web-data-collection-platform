@@ -1,19 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router';
-import { useResource } from '../../lib/useResource';
+import { useEvaluation } from './useEvaluation';
 import { Overlay } from './components';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, SourcePost, SourceRef, SurveyEvidence } from './IntelligenceEvidence';
-import { amount, campaignInput, date, languageOptions, runCampaign, visibleFor, isFresh, type CampaignRequest, type CampaignResult, type DataMode, type Recommendation } from './intelligence';
+import { amount, campaignInput, date, languageOptions, type DataMode, type Recommendation } from './intelligence';
 import { useMarketing } from './workspace';
-
-export function reportCurrent(report: CampaignResult) {
-  return report.recommendations.every(candidate => visibleFor(report.mode, candidate.profile_evidence)
-    && candidate.evidence.every(post => visibleFor(report.mode, post.content.evidence)
-      && (!post.performance || visibleFor(report.mode, post.performance.evidence)))
-    && Object.values(candidate.requirement_evidence).every(evidence => visibleFor(report.mode, evidence))
-    && (!candidate.market_evidence || visibleFor(report.mode, candidate.market_evidence.evidence))
-    && (!candidate.quote || (visibleFor(report.mode, candidate.quote.evidence) && isFresh(candidate.quote.data.valid_until))));
-}
 
 const readable = (value: string) => {
   if (value.startsWith('required_fact_unverified:')) {
@@ -42,17 +33,10 @@ const readable = (value: string) => {
 };
 
 export function ConnectedReport({ mode }: { mode: DataMode }) {
-  const { draft, path, report, setReport, toggleShortlist } = useMarketing();
-  const [input, setInput] = useState<CampaignRequest>();
+  const { draft, path, toggleShortlist } = useMarketing();
+  const { current, evaluate, running, error, retry } = useEvaluation(mode);
   const [invalid, setInvalid] = useState('');
-  const [selected, setSelected] = useState<Recommendation>();
-  const load = useCallback((signal: AbortSignal) => runCampaign(mode, input!, signal), [mode, input]);
-  const { result, retry } = useResource(load, 0, false, Boolean(input));
-  const running = Boolean(input) && result.state === 'loading';
-
-  useEffect(() => {
-    if (result.state === 'ready') setReport(result.data);
-  }, [result, setReport]);
+  const [selectedId, setSelectedId] = useState<string>();
 
   function submit(shortlist = false) {
     setInvalid('');
@@ -60,14 +44,13 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
       if (shortlist && draft.shortlist.length > 40) throw Error('Choose up to 40 shortlisted creators for one campaign evaluation.');
       const payload = campaignInput(draft.brief);
       if (shortlist) payload.shortlist = draft.shortlist;
-      setSelected(undefined);
-      setReport(undefined);
-      setInput(payload);
+      setSelectedId(undefined);
+      evaluate(payload);
     } catch (error) { setInvalid((error as Error).message); }
   }
 
-  const current = report?.mode === mode && reportCurrent(report) ? report : undefined;
   const candidates = current?.recommendations ?? [];
+  const selected = candidates.find(candidate => candidate.creator_id === selectedId);
   const eligible = candidates.filter(candidate => candidate.eligible);
   const excluded = candidates.filter(candidate => !candidate.eligible);
 
@@ -77,7 +60,7 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
         ? ['Meets checked requirements', ...candidate.limitations.map(readable)].join(' · ')
         : candidate.limitations.map(readable).join(' · ') || 'Needs eligibility review'}
         {current?.plan.selected.includes(candidate.creator_id) && ' · Selected in plan'}</span></span>
-      <span className="hl-actions"><button type="button" onClick={() => setSelected(candidate)}>Evidence for {candidate.name}</button>
+      <span className="hl-actions"><button type="button" onClick={() => setSelectedId(candidate.creator_id)}>Evidence for {candidate.name}</button>
         <button type="button" aria-pressed={draft.shortlist.includes(candidate.creator_id)} aria-label={'Shortlist ' + candidate.name}
           onClick={() => toggleShortlist(candidate.creator_id)}>Shortlist</button></span></div>;
   }
@@ -93,11 +76,10 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
         {draft.shortlist.length > 0 && <button type="button" disabled={running} onClick={() => submit(true)}>Evaluate shortlist</button>}
         {current && <Link className="hl-button" to={path('plan')}>Inspect plan</Link>}</div>
     </div>
-    {(draft.brief.required || draft.brief.preferred) && <p className="hl-note">Review free-form notes manually. Reviewed fact identifiers are the structured requirements and preferences sent to the engine.</p>}
+    {(draft.brief.required || draft.brief.preferred) && <p className="hl-note">The Advisor checks your selected content criteria. Review any additional notes manually.</p>}
     {invalid && <p role="alert" className="hl-decision hl-warning">{invalid}</p>}
     {running && <Pending>Reviewing eligible campaign evidence…</Pending>}
-    {input && result.state === 'error' && <IntelligenceError error={result.error} retry={retry} />}
-    {report && !current && <p role="status" className="hl-decision hl-warning">The recommendation contains expired or unavailable evidence. Refresh before planning.</p>}
+    {error && <IntelligenceError error={error} retry={retry} />}
     {current && <>
       {current.categories.labels.length > 0 && <p className="hl-category"><strong>{current.categories.source === 'suggested' ? 'Suggested categories' : 'Your category labels'}</strong> · {current.categories.labels.join(', ')}</p>}
       {current.unavailable_shortlist_ids.length > 0 && <p className="hl-note">{current.unavailable_shortlist_ids.length} shortlisted creators are unavailable.</p>}
@@ -113,7 +95,7 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
         </details>}
       </>}
     </>}
-    {selected && current && <Overlay title={'Evidence for ' + selected.name} close={() => setSelected(undefined)}>
+    {selected && current && <Overlay title={'Evidence for ' + selected.name} close={() => setSelectedId(undefined)}>
       <p>Ranking factors describe relative content and campaign fit.</p>
       <SourceRef evidence={selected.profile_evidence} />
       <h3>Supporting posts</h3>

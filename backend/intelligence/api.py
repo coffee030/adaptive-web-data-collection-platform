@@ -8,13 +8,17 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from backend.marketing.api import NonCacheableRoute, bearer, operator_store
+from backend.marketing.pilot_access import BrowserLogin, pilot_customer
 from backend.marketing.store import MarketingError
 
 from .analytics import ScenarioResult, scenario
-from .catalog import Catalog, CreatorDetail, CreatorSummary, detail, summary
+from .catalog import Catalog, CreatorDetail, CreatorSummary, Observed, detail, summary
 from .contracts import (
     Campaign,
     CompareRequest,
+    Content,
+    Platform,
+    Deliverable,
     CreatorFilter,
     ImportDataset,
     Mode,
@@ -53,12 +57,17 @@ def scope_for(mode: Mode, config: Config, *, administrative: bool = False) -> Sc
 
 
 def customer_scope(
-    mode: Mode, request: Request, credentials: credentials_dependency
+    mode: Mode,
+    request: Request,
+    credentials: credentials_dependency,
+    login: BrowserLogin,
 ) -> Scope:
     config = request.app.state.intelligence.config
     scope = scope_for(mode, config)
     if mode == "partner":
         expected = partner_token(config)
+        if credentials is None and pilot_customer(login):
+            return scope
         actual = credentials.credentials if credentials else ""
         if not expected or not compare_digest(actual.encode(), expected.encode()):
             raise MarketingError(
@@ -77,10 +86,14 @@ def intelligence(request: Request) -> IntelligenceStore:
 Store = Annotated[IntelligenceStore, Depends(intelligence)]
 
 
+class DiscoveryItem(CreatorSummary):
+    preview: Observed[Content] | None
+
+
 class DiscoveryResponse(BaseModel):
     mode: Mode
     state: Literal["available", "empty"]
-    creators: list[CreatorSummary]
+    creators: list[DiscoveryItem]
 
 
 class Comparison(BaseModel):
@@ -91,6 +104,7 @@ class Comparison(BaseModel):
 
 
 class Processing(BaseModel):
+    revision: str
     mode: Mode
     state: Literal["empty", "preparing", "ready", "fallback"]
     eligible_datasets: int
@@ -104,11 +118,13 @@ def discover_creators(
     filters: Annotated[CreatorFilter, Query()],
 ) -> DiscoveryResponse:
     snapshot = store.snapshot(scope)
-    creators = [
-        summary(creator)
-        for creator in Catalog(snapshot).creators.values()
-        if creator.matches(filters)
-    ]
+    creators = []
+    for creator in Catalog(snapshot).creators.values():
+        preview = creator.preview(filters)
+        if creator.matches(filters, preview):
+            creators.append(
+                DiscoveryItem(**summary(creator).model_dump(), preview=preview)
+            )
     creators.sort(
         key=lambda item: (
             item.profile.data.name.casefold(),
@@ -118,6 +134,39 @@ def discover_creators(
     store.assert_current(scope, snapshot.revision)
     return DiscoveryResponse(
         mode=scope.mode, state="available" if creators else "empty", creators=creators
+    )
+
+
+class BriefOptions(BaseModel):
+    mode: Mode
+    reviewed_facts: list[str]
+    quoted_deliverables: list[Deliverable]
+
+
+@router.get("/{mode}/brief-options")
+def brief_options(
+    platform: Platform, scope: CustomerScope, store: Store
+) -> BriefOptions:
+    snapshot = store.snapshot(scope)
+    creators = Catalog(snapshot).creators.values()
+    facts = {
+        fact
+        for creator in creators
+        for post in creator.posts
+        if post.record.data.platform == platform
+        for fact in post.record.data.reviewed_facts
+    }
+    quoted = {
+        quote.data.deliverable
+        for creator in creators
+        for quote in creator.active_quotes()
+        if quote.data.platform == platform and quote.data.currency == "HKD"
+    }
+    store.assert_current(scope, snapshot.revision)
+    return BriefOptions(
+        mode=scope.mode,
+        reviewed_facts=sorted(facts),
+        quoted_deliverables=sorted(quoted),
     )
 
 
@@ -167,8 +216,7 @@ def calculate_scenario(body: Scenario, scope: CustomerScope) -> ScenarioResult:
 
 @router.get("/{mode}/processing")
 def processing(scope: CustomerScope, store: Store) -> Processing:
-    snapshot = store.snapshot(scope)
-    states = {dataset.state for dataset in snapshot.datasets}
+    revision, states, eligible, indexed = store.processing_status(scope)
     if not states:
         state = "empty"
     elif store.config.model_dir is None or "fallback" in states:
@@ -180,12 +228,15 @@ def processing(scope: CustomerScope, store: Store) -> Processing:
     return Processing(
         mode=scope.mode,
         state=state,
-        eligible_datasets=len(snapshot.datasets),
-        indexed_datasets=sum(
-            dataset.state == "ready" and bool(dataset.vectors)
-            for dataset in snapshot.datasets
-        ),
+        revision=revision,
+        eligible_datasets=eligible,
+        indexed_datasets=indexed,
     )
+
+
+@router.get("/operator/{mode}/datasets", dependencies=[Depends(operator_store)])
+def dataset_directory(mode: Mode, store: Store, after: Ref | None = None) -> list[str]:
+    return store.dataset_ids(scope_for(mode, store.config, administrative=True), after)
 
 
 @router.put(

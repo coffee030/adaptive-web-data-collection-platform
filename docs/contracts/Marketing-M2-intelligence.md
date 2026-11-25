@@ -18,11 +18,31 @@ Each row contains `id`, `creator_id`, `evidence_ref`, and `observed_at`. The gra
 
 An identical import is idempotent. Replacing a dataset invalidates its active lease and reuses unchanged normalized text representations. A missing eligible profile or platform account keeps related content and observations outside the customer projection. Expiration immediately removes the dataset from reads. Withdrawal deletes payloads, lexical terms, and vectors, retaining the local dataset identifier to prevent accidental reimport. The dispatcher clears expired payloads on minute-based maintenance. Configure equivalent deletion for backups before an operational pilot.
 
+## Automatic partner refresh
+
+For an authorized partner delivering recurring JSON snapshots, first import the original dataset and verify its written grant in Data Operations. A private pilot may mount the delivery directory on the dispatcher using `compose.marketing-refresh.yaml` and `MARKETING_PARTNER_REFRESH_HOST_DIR`. The directory must be readable by the container user. Limit write access to the operator and the approved delivery process.
+
+The dispatcher checks once per minute while running and resumes after restart. Publish a regular file atomically at `<directory>/<workspace>/<dataset_id>.json`. The following PowerShell example prepares a delivery from an approved import file. Replace the example timestamp with the precise `imported_at` for this dataset, available under **Refresh version** in Data Operations.
+
+```powershell
+$updatedDataset = Get-Content -Raw -Encoding UTF8 -LiteralPath 'updated-partner-data.json' | ConvertFrom-Json
+$delivery = @{
+    expected_imported_at = '2026-11-26T08:20:00.123456Z'
+    dataset = $updatedDataset
+}
+$json = $delivery | ConvertTo-Json -Depth 20
+[IO.File]::WriteAllText('delivery.tmp', $json, [Text.UTF8Encoding]::new($false))
+```
+
+Place the temporary file in the target directory before renaming it to the dataset filename. When updating an existing delivery, use the producer's atomic file-replacement operation on the same volume.
+
+Each accepted update replaces that dataset under its existing grant. Use the new receipt for the next changed snapshot. The service ignores an identical replay and rejects a stale receipt or changed grant while retaining the last accepted dataset. An operator reviews changes to permitted uses or expiry through the normal import. Only active previously onboarded dataset IDs in this partner workspace are read. Withdrawal stops refresh and indexing and clears the stored dataset. The read-only delivery directory remains under the operator’s retention and deletion policy. Inspect the dataset in Data Operations for a rejected delivery reason and the precise refresh version. A successful update clears the error. Files are limited to 1 MiB each.
+
 ## Frontend routes
 
 Discover supported workspaces with `GET /api/v1/marketing/capabilities`. The `permission_status` field describes YouTube. The `customer_intelligence` and `demo_intelligence` fields describe the independent workspaces. The M1 research intake remains separate.
 
-The routes below use `/api/v1/marketing/intelligence/{mode}`, where mode is `demo` or `partner`. The demo requires a deployment opt-in. Partner reads require the deployment's customer token over the existing loopback boundary. The customer token cannot import or withdraw data. Keep it in the application's trusted host or server layer.
+The routes below use `/api/v1/marketing/intelligence/{mode}`, where mode is `demo` or `partner`. The demo requires a deployment opt-in. Partner reads accept a server-held customer bearer token or the dedicated browser sign-in over the existing loopback boundary. Start-Harbourline-Pilot.bat provisions the latter in a separate private workspace. Configure MARKETING_PILOT_PASSWORD to enable the same sign-in in a manual deployment. Use at least 24 characters and keep it distinct from both bearer tokens. In this mode Core routes require the operator credential. Health and marketing capabilities remain public on loopback. The customer token cannot import or withdraw data. Keep it in the application's trusted host or server layer.
 
 | Method and path | Contract |
 | --- | --- |
@@ -65,7 +85,7 @@ History uses the latest permitted observation per post at the same seven-day win
 
 ## Local setup and verification
 
-Apply migration `0012`. Enable `MARKETING_DEMO_ENABLED=1` for the demo. To serve authorized partner data, configure a private `MARKETING_PARTNER_WORKSPACE` and a `MARKETING_CUSTOMER_TOKEN` of at least 24 characters. Use a separate `MARKETING_OPERATOR_TOKEN` for `PUT`, `GET`, and `DELETE` on `/api/v1/marketing/intelligence/operator/{mode}/datasets/{dataset_id}`. The demo seed command produces the existing fictional research fixture as an operator import. The demo is independent of the Core's regular launcher data.
+Apply migrations through `0013`. Enable `MARKETING_DEMO_ENABLED=1` for the demo. To serve authorized partner data, configure a private `MARKETING_PARTNER_WORKSPACE` and a `MARKETING_CUSTOMER_TOKEN` of at least 24 characters. Use a separate `MARKETING_OPERATOR_TOKEN` for `PUT`, `GET`, and `DELETE` on `/api/v1/marketing/intelligence/operator/{mode}/datasets/{dataset_id}`. The demo seed command produces the existing fictional research fixture as an operator import. The demo is independent of the Core's regular launcher data.
 
 ```text
 python -m backend.experiments.marketing_m2.demo_dataset

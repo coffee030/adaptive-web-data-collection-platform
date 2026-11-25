@@ -51,15 +51,17 @@ def entry():
     return {"adapter_type": "csv", "dataset_id": BRIDGE, "content": content.getvalue()}
 
 
-def current_dataset(dataset_id, token):
+def needs_seed(dataset_id, token):
     try:
         status = api(INTAKE + dataset_id, token=token)
     except DemoError as error:
         if "returned HTTP 404 (dataset_not_found)" not in str(error):
             raise
+        return True
+    if status["state"] == "withdrawn":
+        print(f"PASS Preserving withdrawal of {dataset_id}.")
         return False
-    require(status["state"] != "withdrawn", f"{dataset_id} was withdrawn.")
-    return status["state"] != "expired" and status["record_count"] > 0
+    return status["state"] == "expired" or status["record_count"] == 0
 
 
 def prepared_profile():
@@ -247,9 +249,9 @@ def main():
     )
     token = os.environ.get("MARKETING_OPERATOR_TOKEN", "")
     require(len(token) >= 24, "The local demo operator token is missing.")
-    if not current_dataset(LIBRARY, token):
+    if needs_seed(LIBRARY, token):
         api(INTAKE + LIBRARY, method="PUT", body=demo_payload(), token=token)
-    if not current_dataset(BRIDGE, token):
+    if needs_seed(BRIDGE, token):
         records = collect()
         api(INTAKE + BRIDGE, method="PUT", body=project(records), token=token)
         for record in records:
@@ -263,10 +265,6 @@ def main():
         if processing["state"] != "preparing" or monotonic() >= deadline:
             break
         sleep(1)
-    require(
-        processing["eligible_datasets"] >= 2,
-        "The two fictional datasets are not available.",
-    )
     print(
         f"PASS Harbourline demo index {processing['state']} "
         f"({processing['indexed_datasets']}/{processing['eligible_datasets']} datasets indexed)."
