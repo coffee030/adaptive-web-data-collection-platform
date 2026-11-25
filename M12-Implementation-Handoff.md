@@ -6,7 +6,7 @@
 
 ## 1. Repository and changes
 
-Repository `coffee030/adaptive-web-data-collection-platform`. `git ls-remote origin` confirmed the latest M11 remote matched the reviewed SHA. M11 was clean and no remote M12 branch existed. M12 branched from that SHA in the existing clean checkout. The SHA above identifies implementation and tests. The latest documentation commit preserves the handoff and screenshots. The delivery branch covers M12, and M10 Draft PR #4 was separate. [GitHub branch](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M12-new-collection-workflow)
+M12 started from the reviewed M11 commit. The SHA above identifies the implementation and tests. The delivery snapshot includes the handoff and screenshots. [Delivery snapshot](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/432119acc2ec0860d316877577bf0efd4c2db9c1)
 
 | File | Change |
 | --- | --- |

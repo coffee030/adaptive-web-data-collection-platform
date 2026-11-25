@@ -6,7 +6,7 @@ M14 guides Source authorisation, extraction-rule approval, and Topic Binding fro
 | --- | --- |
 | Starting M13 SHA | `ff211bef68dec3e304b5fa253d89a50230e25255` |
 | Final M14 implementation SHA | `425a8edc646672b940cb1b468e17dc27e2e036ea` |
-| Delivery branch and handoff commit | [feature/M14-operator-configuration-workspace](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M14-operator-configuration-workspace) |
+| Delivery snapshot | [M14 configuration workspace](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/b7cc87d2305c57cd8e5e523efa4ac5f21182de17) |
 
 ## Repository review and design
 

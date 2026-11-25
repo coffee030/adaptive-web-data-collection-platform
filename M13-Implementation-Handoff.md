@@ -4,7 +4,7 @@
 
 - Starting M12 SHA was `432119acc2ec0860d316877577bf0efd4c2db9c1`. Local and GitHub M12 HEAD matched before M13 branched.
 - Final M13 implementation SHA was `e0e5c48710d2fc8cee01cdd71884d49bcf3c02fa`. A later commit contains this handoff and QA screenshots. Obtain the full tip from GitHub or `git rev-parse feature/M13-evidence-first-data-explorer`.
-- The feature branch is available for independent review. [feature/M13-evidence-first-data-explorer](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M13-evidence-first-data-explorer)
+- [M13 delivery snapshot](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/ff211bef68dec3e304b5fa253d89a50230e25255)
 - The design review covers API and persistence, entity relationships, and three low-fidelity options. The screenshot index identifies browser evidence and data sources. [M13 design decisions](docs/evaluation/M13-Data-Explorer-Design-Decisions.md) [Index of 21 screenshots](docs/evaluation/M13-screenshots/README.md)
 
 ## Workflow and data

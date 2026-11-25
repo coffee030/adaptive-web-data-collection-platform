@@ -9,7 +9,7 @@
 | Evaluation tooling checkpoint | `1edc1fea65a50b06c11bb96c10c66b8c0c15de9c` |
 | Independently reviewed and regression-tested HEAD | `7418a3b5132da091f10be564dddc8649de2c1fce` |
 | Final documentation HEAD | See the Draft PR head or run `git rev-parse HEAD` on the delivered branch. The workspace handoff records the exact local and remote SHA. |
-| Remote branch | [M10 Core Reliability Evaluation](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M10-core-reliability-evaluation) |
+| Delivery snapshot | [M10 Core Reliability Evaluation](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/1572fc8a8aab05f0d81a81c9b0a7ffc994218974) |
 | M10 Draft PR | **CREATED** · [#4](https://github.com/coffee030/adaptive-web-data-collection-platform/pull/4) · Base `feature/M9-dashboard-integration-export` |
 
 M10 adds an isolated Compose test configuration, reproducible load runner, independent PostgreSQL and Evidence verifier, browser acceptance assertions and the evaluation reports. The benchmark uses real Celery-prefork replicas and unchanged production controls. The M9 base and its Draft PR #3 were verified on GitHub. The separate M7 working tree was preserved.
@@ -26,7 +26,7 @@ M10 adds an isolated Compose test configuration, reproducible load runner, indep
 | Frontend | TypeScript and Vite build passed. 89 mocked Chromium regressions and 17 live Chromium tests passed. The targeted live Topic flow passed in Chromium, Firefox and WebKit, with trace, screenshots and download artifacts. |
 | Restart and persisted bytes | Actual Launcher Stop and Start kept all three volumes. Direct SQL and disk verification covered six Jobs, six observations, two Articles and 14 Evidence captures. Six CSV/JSON attachments matched SQL and remained byte-identical across restart. Chrome opened the preserved Request on the printed Launcher URL. |
 
-Ignored `.local/m10/` retains the execution logs, Playwright artifacts, raw measurements, SQL verifications and Launcher logs. [Repository audit](M10-Repository-Audit.md) · [Scalability and raw trials](M10-Scalability-Evaluation.md) · [Reliability matrix](M10-Reliability-Evaluation.md) · [Deployment verification](M10-Deployment-Verification.md) · [Fixture demo runbook](M10-FYP-Core-Demo-Runbook.md)
+Ignored `.local/m10/` retains the execution logs, Playwright artifacts, raw measurements, SQL verifications and Launcher logs. [Scalability and raw trials](M10-Scalability-Evaluation.md) · [Reliability matrix](M10-Reliability-Evaluation.md) · [Deployment verification](M10-Deployment-Verification.md) · [Fixture demo runbook](M10-FYP-Core-Demo-Runbook.md)
 
 ## Final Backend regression
 

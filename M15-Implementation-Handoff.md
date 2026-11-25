@@ -6,7 +6,7 @@
 | --- | --- |
 | M14 baseline | `b7cc87d2305c57cd8e5e523efa4ac5f21182de17`. The clean worktree, GitHub Compare, and remote ref matched. |
 | M15 implementation commit | `c6ddd3244d525d0869344c6a734669a401986f0a`. The handoff has a separate docs-only commit. Branch HEAD is the full delivery. |
-| Delivery branch | [feature/M15-job-operations-diagnostics](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/feature/M15-job-operations-diagnostics) |
+| Delivery snapshot | [M15 job operations and diagnostics](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/0b609b198146fdc2e0ab494e7a4a3b58083abc5d) |
 | Design and browser evidence | [Design decisions](docs/evaluation/M15-Job-Operations-Design-Decisions.md) · [Screenshot index](docs/evaluation/M15-screenshots/README.md) |
 
 ## Audit and design

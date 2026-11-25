@@ -35,6 +35,8 @@ Using Impeccable Operate, critique, and audit, Chromium reviewed list, form, and
 - At 390px, checked keyboard submission, error summary, required and invalid-origin errors, long origins, and three Profile statuses. Desktop and mobile used existing tokens. Screen reader, Safari, and physical mobile were NOT RUN.
 - The first mobile scan raised two `straggler` advisories in Permission reference and Allowed dataset IDs help. After shortening, final source, desktop, and mobile scans returned `[]` and exit 0. No detector ignores were added. Hooks and Live Mode stayed disabled.
 
+Run the historical detector commands from the [M5.5 checkout](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/86994a84a96423371995efef79093a6a94c31f70).
+
 ```powershell
 & .agents/skills/impeccable/scripts/impeccable.cmd detect --json frontend/src
 $env:PUPPETEER_EXECUTABLE_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'

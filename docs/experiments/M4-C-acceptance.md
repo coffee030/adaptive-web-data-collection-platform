@@ -55,6 +55,8 @@ Full backend regression used separate project `collection-m3-test-m4c` (API 5800
 
 Used Impeccable 4.9.0, the FYP frontend skill, PRODUCT.md, and DESIGN.md. Operate review covered field groups, current state, error recovery, and read-only flow. The first render found `nested-cards` and `gray-on-color` on a disabled primary button. Fine separators kept groups and the disabled button adopted the existing surface. Final source and live 1280 and 390 scans returned `[]` and exit 0.
 
+Run the historical detector commands from the [M5.5 checkout](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/86994a84a96423371995efef79093a6a94c31f70).
+
 ```powershell
 & .agents/skills/impeccable/scripts/impeccable.cmd detect --json frontend/src
 $env:PUPPETEER_EXECUTABLE_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'

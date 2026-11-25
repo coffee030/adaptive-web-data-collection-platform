@@ -77,6 +77,8 @@ Used installed Impeccable 4.9.0 Operate, audit, and polish with existing light-f
 
 Manual sRGB checks measured primary white on teal 6.89:1, secondary on white 5.56:1, Partial warning 4.91:1, error on white 5.85:1, focus on white 4.91:1, and field border on white 3.52:1. Safari, physical mobile, screen reader, and full WCAG conformance were NOT RUN.
 
+Run the historical detector commands from the [M5.5 checkout](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/86994a84a96423371995efef79093a6a94c31f70).
+
 ```powershell
 # repository root, with Vite on 5195 and the isolated API up
 & .agents/skills/impeccable/scripts/impeccable.cmd detect --json frontend/src
@@ -90,4 +92,4 @@ foreach ($vp in @('1280x900','390x844')) {
 
 `@urls` contains Collection Jobs list, new, and detail, Sources list, new, and detail, Approved Profile, Records list and detail, Quarantine, and Evidence. Job form uses the CSV Job Source and Profile query parameters above. The Windows batch launcher first split a URL at `&`. Using the same installed engine directly (`0.1.23`) retained the full arguments. Final source and both rendered scans returned `[]` and exit 0. Local screenshots are in visualisations `m4e/`. Hooks and Live Mode were disabled.
 
-[Demo runbook](../demo/M4-core-demo-runbook.md) · [Issue Manifest](M4-E-issue-manifest.md) · [M5 readiness](M5-readiness-review.md)
+[Demo runbook](../demo/M4-core-demo-runbook.md) · [M5 readiness](M5-readiness-review.md)

@@ -50,6 +50,8 @@ Visually inspected live Playwright captures of CSV Job at 390 px, Records at 144
 
 ## Reproduction
 
+The historical detector commands use the tool included in the [M5.5 checkout](https://github.com/coffee030/adaptive-web-data-collection-platform/tree/86994a84a96423371995efef79093a6a94c31f70).
+
 ```powershell
 # Repository root. Configure and start isolated Compose as in the runbook.
 .\.venv\Scripts\python.exe -m pytest -q -rs --tb=short -s backend/tests
