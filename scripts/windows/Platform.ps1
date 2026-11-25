@@ -6,7 +6,9 @@ param(
     [switch]$NoBrowser,
     [switch]$Demo,
     [switch]$DemoRetry,
-    [switch]$OneClickDemo
+    [switch]$OneClickDemo,
+    [switch]$Harbourline,
+    [switch]$HarbourlineTextOnly
 )
 
 . "$PSScriptRoot/Common.ps1"
@@ -14,6 +16,7 @@ param(
 . "$PSScriptRoot/Backend.ps1"
 . "$PSScriptRoot/Frontend.ps1"
 . "$PSScriptRoot/Demo.ps1"
+. "$PSScriptRoot/Harbourline.ps1"
 Set-LauncherMode -Demo:$Demo
 
 function Assert-OwnedDocker {
@@ -55,6 +58,7 @@ function Start-Platform {
     if ($DemoMode) { Assert-DemoFixtureFiles }
     Write-Step '[3/7] Loading private local configuration...'
     $script:Config = Get-LauncherConfig -Create -AutoDemoNetwork:$DemoMode
+    if ($Harbourline) { Initialize-HarbourlineSettings }
     $compose = Invoke-Compose @('config', '--quiet')
     if ($compose.Code -ne 0) {
         Stop-WithError 'CFG-004' 'Compose Configuration Failed Validation' 'Docker Compose rejected the local configuration.' `
@@ -69,7 +73,8 @@ function Start-Platform {
     }
     Stop-OwnedFrontend
     Assert-LauncherPorts
-    Update-PlatformImage api
+    if ($Harbourline) { Initialize-HarbourlineImage }
+    else { Update-PlatformImage api }
     Update-PlatformImage frontend
     Write-Step '[4/7] Starting PostgreSQL and Redis...'
     Start-StorageServices
@@ -77,14 +82,17 @@ function Start-Platform {
     Update-DatabaseSchema
     Start-BackendServices
     Stop-DisabledFixture
-    if ($DemoMode) { Invoke-DemoProvisioning }
+    if ($Harbourline) { Invoke-HarbourlineProvisioning }
+    elseif ($DemoMode) { Invoke-DemoProvisioning }
     Write-Step '[6/7] Starting the React frontend...'
     Start-ContainerFrontend
     Write-Step '[7/7] Preparing the browser...'
     $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)/"
+    if ($Harbourline) { $url += "demo/connected" }
     Write-Step "URL: $url"
     if (!$NoBrowser) { Open-PlatformBrowser $url }
-    if ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
+    if ($Harbourline) { Write-Step '[SUCCESS] Harbourline Fictional Demo is ready!' }
+    elseif ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
     else { Write-Step '[SUCCESS] Platform is ready!' }
 }
 
@@ -171,6 +179,10 @@ try {
     if ($DemoRetry -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid Demo Retry Option' 'The -DemoRetry option requires Start with -Demo.' `
             'A different launcher action or mode was selected.' @('Use Start-Platform.bat -Demo -DemoRetry.')
+    }
+    if (($Harbourline -and (!$DemoMode -or $Action -ne 'Start')) -or ($HarbourlineTextOnly -and !$Harbourline)) {
+        Stop-WithError 'HL-003' 'Invalid Harbourline Demo Option' 'This option is available during an isolated Harbourline Demo start.' `
+            'The selected launcher mode does not support it.' @('Use Start-Harbourline-Demo.bat.')
     }
     if ($OneClickDemo -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid One-Click Demo Option' 'One-click startup requires Start with -Demo.' `

@@ -122,7 +122,8 @@ export interface ComparisonResult extends ScopeResult { state: 'available' | 'em
 interface ProcessingResult extends ScopeResult { state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
 export interface ScenarioRequest {
   currency: 'HKD'; impressions?: number; click_rate?: string; conversion_rate?: string;
-  value_per_conversion_minor?: number; spend_minor?: number;
+  value_per_conversion_minor?: number; advertising_spend_minor?: number; campaign_cost_minor?: number;
+  contribution_margin?: string;
 }
 export interface ScenarioResult {
   basis: 'assumption_based'; assumptions: ScenarioRequest; clicks: Measure; conversions: Measure;

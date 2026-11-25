@@ -32,6 +32,10 @@ function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave
     <fieldset><legend>Mandatory requirements</legend><div className="hl-form-grid">
       <label>Creator budget (HK$)<input name="budget" type="number" min={0} max={10000000} required defaultValue={initial.budget} /></label>
       <label>Required creators<input name="creatorCount" type="number" min={1} max={mode ? 8 : 10} required defaultValue={initial.creatorCount} /></label>
+      {mode && <>
+        <label>Campaign platform<select key="connected-platform" name="platform" required defaultValue={initial.platform.toLowerCase()}><option value="">Choose a platform</option>{Object.entries(platformOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
+        <label>Campaign deliverable<select name="deliverable" required defaultValue={initial.deliverable}><option value="">Choose a deliverable</option>{Object.entries(deliverableOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
+      </>}
       <label>Market<input name="market" maxLength={60} defaultValue={initial.market} /></label>
       <label>Minimum HK audience (%)<input name="minAudience" type="number" min={0} max={100} required defaultValue={initial.minAudience} /></label>
       {mode ? <label>Campaign language<select name="language" defaultValue={initial.language === 'Cantonese' ? 'yue' : initial.language}>
@@ -44,8 +48,6 @@ function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave
     <fieldset><legend>Objective and optional preferences</legend><div className="hl-form-grid">
       {mode ? <>
         <label>Campaign objective<select name="objective" defaultValue={initial.objective === 'Engagement' ? 'Engagement' : 'Local awareness'}><option>Local awareness</option><option>Engagement</option></select></label>
-        <label>Campaign platform<select key="connected-platform" name="platform" required defaultValue={initial.platform.toLowerCase()}><option value="">Choose a platform</option>{Object.entries(platformOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
-        <label>Campaign deliverable<select name="deliverable" required defaultValue={initial.deliverable}><option value="">Choose a deliverable</option>{Object.entries(deliverableOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
         <label>Preferred reviewed fact identifiers<input name="preferredFacts" maxLength={650} defaultValue={initial.preferredFacts} /></label>
         <label className="hl-span">Your category labels<input name="categoryLabels" maxLength={1090} defaultValue={initial.categoryLabels} placeholder="Separate labels with commas, or leave blank for suggestions" /></label>
       </> : <>
@@ -95,6 +97,8 @@ export function Advisor({ capability, mode }: { capability: ReactNode; mode?: Da
         <section><div className="hl-row-between"><h2>Campaign brief</h2>{!editing && <button type="button" onClick={() => setEditing(true)}>Edit brief</button>}</div><p>{brief.description}</p></section>
         <section><h2>Mandatory requirements</h2><dl>
           <div><dt>Budget cap</dt><dd>{fee(brief.budget)}</dd></div><div><dt>Creator slots</dt><dd>{brief.creatorCount}</dd></div>
+          {mode && <div><dt>Platform</dt><dd>{platformOptions[brief.platform as keyof typeof platformOptions]}</dd></div>}
+          {mode && <div><dt>Deliverable</dt><dd>{deliverableOptions[brief.deliverable as keyof typeof deliverableOptions]}</dd></div>}
           {brief.market && (!mode || brief.minAudience > 0) && <div><dt>Market</dt><dd>{brief.market}</dd></div>}
           {brief.minAudience > 0 && <div><dt>HK audience</dt><dd>{brief.minAudience}% minimum</dd></div>}
           {brief.language && (!mode || brief.requireCantonese) && <div><dt>Language</dt><dd>{languageOptions[brief.language as keyof typeof languageOptions] ?? brief.language}</dd></div>}
@@ -102,8 +106,7 @@ export function Advisor({ capability, mode }: { capability: ReactNode; mode?: Da
           {mode && brief.requiredFacts && <div><dt>Reviewed facts</dt><dd>{brief.requiredFacts.replaceAll('_',' ')}</dd></div>}
         </dl>{brief.required && <p>{brief.required}</p>}</section>
         <section><h2>Optional preferences</h2>
-          <p>{[brief.objective, platformOptions[brief.platform as keyof typeof platformOptions] ?? brief.platform,
-            deliverableOptions[brief.deliverable as keyof typeof deliverableOptions] ?? brief.deliverable].filter(Boolean).join(' · ')}</p>
+          <p>{(mode ? [brief.objective] : [brief.objective, brief.platform, brief.deliverable]).filter(Boolean).join(' · ')}</p>
           {mode && brief.minAudience === 0 && brief.market && <p>Target market · {brief.market}</p>}
           {mode && brief.language && !brief.requireCantonese && <p>Preferred language · {languageOptions[brief.language as keyof typeof languageOptions] ?? brief.language}</p>}
           {mode && brief.preferredFacts && <p>Preferred reviewed facts · {brief.preferredFacts.replaceAll('_',' ')}</p>}

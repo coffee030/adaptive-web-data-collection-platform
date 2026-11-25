@@ -7,7 +7,7 @@ import { amount, calculateScenario, type CampaignRequest, type DataMode, type Sc
 import { useMarketing } from './workspace';
 import { exportCsv } from './CampaignPlan';
 
-function Assumptions({ mode, spend }: { mode: DataMode; spend?: number }) {
+function Assumptions({ mode, quoted }: { mode: DataMode; quoted?: number }) {
   const [input, setInput] = useState<ScenarioRequest>();
   const load = useCallback((signal: AbortSignal) => calculateScenario(mode,input!,signal), [mode,input]);
   const { result, retry } = useResource(load,0,false,Boolean(input));
@@ -19,30 +19,38 @@ function Assumptions({ mode, spend }: { mode: DataMode; spend?: number }) {
       return value ? Number(value) : undefined;
     }
     const clicks = number('clicks'), conversions = number('conversions'), value = number('value');
+    const ads = number('ads'), cost = number('cost'), margin = number('margin');
     setInput({ currency:'HKD', impressions:number('impressions'), click_rate:clicks === undefined ? undefined : (clicks / 100).toFixed(6),
       conversion_rate:conversions === undefined ? undefined : (conversions / 100).toFixed(6),
-      value_per_conversion_minor:value === undefined ? undefined : Math.round(value * 100), spend_minor:spend });
+      value_per_conversion_minor:value === undefined ? undefined : Math.round(value * 100),
+      advertising_spend_minor:ads === undefined ? undefined : Math.round(ads * 100),
+      campaign_cost_minor:cost === undefined ? undefined : Math.round(cost * 100),
+      contribution_margin:margin === undefined ? undefined : (margin / 100).toFixed(6) });
   }
   return <section className="hl-scenario">
     <h2>Scenario assumptions</h2><p>Enter your own assumptions for a what-if calculation. Leave any unknown values blank.</p>
+    {quoted !== undefined && <p className="hl-note">Selected creator quotes total {amount(quoted)}. Enter your full campaign cost separately.</p>}
     <form className="hl-form-grid" onSubmit={submit}>
       <label>Impressions<input type="number" name="impressions" min={0} max={1000000000000} /></label>
       <label>Click rate (%)<input type="number" name="clicks" min={0} max={100} step={0.01} /></label>
       <label>Conversion rate (%)<input type="number" name="conversions" min={0} max={100} step={0.01} /></label>
       <label>Value per conversion (HK$)<input type="number" name="value" min={0} max={10000000} step={0.01} /></label>
+      <label>Advertising spend (HK$)<input type="number" name="ads" min={0} max={10000000} step={0.01} /></label>
+      <label>Total campaign cost (HK$)<input type="number" name="cost" min={0} max={10000000} step={0.01} /></label>
+      <label>Contribution margin (%)<input type="number" name="margin" min={0} max={100} step={0.01} /></label>
       <div><button type="submit" disabled={input !== undefined && result.state === 'loading'}>Calculate scenario</button></div>
     </form>
     {input && result.state === 'loading' && <Pending>Calculating from your assumptions…</Pending>}
     {result.state === 'error' && <IntelligenceError error={result.error} retry={retry} />}
     {result.state === 'ready' && <div className="hl-decision">
       <strong>Assumption-based scenario</strong>
-      {(result.data.assumptions.spend_minor ?? undefined) !== spend ? <p>The selected plan cost changed. Recalculate this scenario.</p>
-        : <dl className="hl-scenario-results">
+      <dl className="hl-scenario-results">
           <div><dt>Clicks</dt><dd>{measureText(result.data.clicks)}</dd></div>
           <div><dt>Conversions</dt><dd>{measureText(result.data.conversions)}</dd></div>
           <div><dt>Attributed revenue</dt><dd>{result.data.attributed_revenue_minor.value === null ? 'Unavailable' : amount(Number(result.data.attributed_revenue_minor.value))}</dd></div>
-          <div><dt>ROI</dt><dd>{measureText(result.data.roi,true)}</dd></div>
-        </dl>}
+          <div><dt>ROAS</dt><dd>{result.data.roas.value === null ? 'Unavailable' : measureText(result.data.roas) + '×'}</dd></div>
+          <div><dt>Contribution-based ROI</dt><dd>{measureText(result.data.roi,true)}</dd></div>
+        </dl><p className="hl-note">ROAS uses attributed revenue and advertising spend. ROI uses contribution after campaign cost.</p>
     </div>}
   </section>;
 }
@@ -129,6 +137,6 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
         </article>)}
       </details>
     </>}
-    <Assumptions mode={mode} spend={!running && result.state !== 'error' ? confirmed : undefined} />
+    <Assumptions mode={mode} quoted={!running && result.state !== 'error' ? confirmed : undefined} />
   </div>;
 }

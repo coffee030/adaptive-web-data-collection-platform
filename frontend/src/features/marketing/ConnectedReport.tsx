@@ -15,11 +15,20 @@ export function reportCurrent(report: CampaignResult) {
     && (!candidate.quote || (visibleFor(report.mode, candidate.quote.evidence) && isFresh(candidate.quote.data.valid_until))));
 }
 
-const readable = (value: string) => ({
-  confirmed_quote_unavailable: 'Current firm quote unavailable',
-  target_market_evidence_unavailable: 'Audience evidence unavailable',
-  insufficient_relevant_content: 'Insufficient supporting content',
-}[value] ?? value.replaceAll('_', ' '));
+const readable = (value: string) => {
+  if (value.startsWith('required_fact_unverified:')) {
+    return 'Required fact unverified (' + value.slice('required_fact_unverified:'.length).replaceAll('_', ' ') + ')';
+  }
+  return ({
+    confirmed_quote_unavailable: 'Current firm quote unavailable',
+    target_market_evidence_unavailable: 'Audience evidence unavailable',
+    insufficient_relevant_content: 'Insufficient supporting content',
+    quote_exceeds_budget: 'Quote exceeds budget',
+    required_language_unverified: 'Required language unverified',
+    required_market_share_unverified: 'Required audience share unverified',
+    required_market_share_below_minimum: 'Audience share below minimum',
+  }[value] ?? value.replaceAll('_', ' '));
+};
 
 export function ConnectedReport({ mode }: { mode: DataMode }) {
   const { draft, path, report, setReport, toggleShortlist } = useMarketing();
@@ -48,12 +57,26 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
 
   const current = report?.mode === mode && reportCurrent(report) ? report : undefined;
   const candidates = current?.recommendations ?? [];
+  const eligible = candidates.filter(candidate => candidate.eligible);
+  const excluded = candidates.filter(candidate => !candidate.eligible);
+
+  function candidateRow(candidate: Recommendation) {
+    return <div key={candidate.creator_id}><span><strong>{candidate.name}</strong><br />
+      <span className="hl-note">{candidate.eligible
+        ? ['Meets checked requirements', ...candidate.limitations.map(readable)].join(' · ')
+        : candidate.limitations.map(readable).join(' · ') || 'Needs eligibility review'}
+        {current?.plan.selected.includes(candidate.creator_id) && ' · Selected in plan'}</span></span>
+      <span className="hl-actions"><button type="button" onClick={() => setSelected(candidate)}>Evidence for {candidate.name}</button>
+        <button type="button" aria-pressed={draft.shortlist.includes(candidate.creator_id)} aria-label={'Shortlist ' + candidate.name}
+          onClick={() => toggleShortlist(candidate.creator_id)}>Shortlist</button></span></div>;
+  }
+
   return <div className="hl-connected-report">
     <div className="hl-row-between">
       <div><h2>{current?.plan.status === 'optimal' ? 'Recommended creator combination'
         : current?.plan.status === 'infeasible' ? 'No feasible combination under the current requirements'
         : current?.plan.status === 'search_limit' ? 'The selection search reached its limit' : 'Evaluate the campaign brief'}</h2>
-      {current && <p className="hl-note">As of {date(current.as_of)} · {current.retrieval === 'granite_int8' ? 'Multilingual semantic retrieval' : 'Text retrieval'}
+      {current && <p className="hl-note">As of {date(current.as_of)} · {current.retrieval === 'granite_int8' ? 'Granite multilingual retrieval' : 'Text retrieval'}
         {current.indexing === 'preparing' ? ' · Semantic indexing in progress' : current.indexing === 'fallback' ? ' · Lexical fallback' : ''}</p>}</div>
       <div className="hl-actions"><button type="button" className="hl-primary" disabled={running} onClick={() => submit()}>{current ? 'Refresh recommendations' : 'Run Campaign Advisor'}</button>
         {draft.shortlist.length > 0 && <button type="button" disabled={running} onClick={() => submit(true)}>Evaluate shortlist</button>}
@@ -69,15 +92,15 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
       {current.unavailable_shortlist_ids.length > 0 && <p className="hl-note">{current.unavailable_shortlist_ids.length} shortlisted creators are unavailable.</p>}
       {current.plan.total_minor !== null && <div className="hl-decision"><strong>{amount(current.plan.total_minor)}</strong> · {current.plan.selected.length} {current.plan.selected.length === 1 ? 'quoted allocation' : 'quoted allocations'}
         <p>{candidates.filter(candidate => current.plan.selected.includes(candidate.creator_id)).map(candidate => candidate.name).join(' + ')}</p></div>}
-      {candidates.length === 0 ? <p>No eligible catalog records were returned for this brief.</p>
-        : <section className="hl-candidate-strip" aria-label="Ranked candidates"><h3>Ranked candidates</h3>
-          {candidates.map(candidate => <div key={candidate.creator_id}><span><strong>{candidate.name}</strong><br />
-            <span className="hl-note">{candidate.eligible ? 'Meets checked requirements' : candidate.limitations.map(readable).join(' · ') || 'Needs eligibility review'}
-              {current.plan.selected.includes(candidate.creator_id) && ' · Selected in plan'}</span></span>
-            <span className="hl-actions"><button type="button" onClick={() => setSelected(candidate)}>Evidence for {candidate.name}</button>
-              <button type="button" aria-pressed={draft.shortlist.includes(candidate.creator_id)} aria-label={'Shortlist ' + candidate.name}
-                onClick={() => toggleShortlist(candidate.creator_id)}>Shortlist</button></span></div>)}
-        </section>}
+      {candidates.length === 0 ? <p>No eligible catalog records were returned for this brief.</p> : <>
+        <section className="hl-candidate-strip" aria-label="Eligible candidates"><h3>Eligible candidates</h3>
+          {eligible.length ? eligible.map(candidateRow) : <p>No candidates meet the checked requirements and budget.</p>}
+        </section>
+        {excluded.length > 0 && <details className="hl-candidate-editor">
+          <summary>Excluded candidates · {excluded.length}</summary>
+          <div className="hl-candidate-strip">{excluded.map(candidateRow)}</div>
+        </details>}
+      </>}
     </>}
     {selected && current && <Overlay title={'Evidence for ' + selected.name} close={() => setSelected(undefined)}>
       <p>Ranking factors describe relative content and campaign fit.</p>

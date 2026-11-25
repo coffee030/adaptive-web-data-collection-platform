@@ -38,6 +38,14 @@ Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The fir
 
 The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B verified successful Jobs and detail evidence for Welsh Government, Scottish Fiscal Commission and Economics Observatory. The FTC and New York Fed candidates were unsupported under the conditions evaluated in M10. [Shared Request evidence trace](docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#record-to-detail-evidence-verification) · [M10 real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
 
+### Harbourline Marketing Intelligence Demo
+
+Double-click **\`Start-Harbourline-Demo.bat\`** to open the connected Creator Explorer, Campaign Advisor and Plan Builder with fictional data. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use \`-HarbourlineTextOnly\` to rehearse that mode deliberately.
+
+The demo includes a bundled fictional marketing library and one controlled CSV collected by the Core. The latter enters the fictional marketing dataset after separate Source authorization and Profile approval, validated Records, and a verified raw Evidence match. The demo grants cover academic demonstration. Partner data requires its own authorization and dataset onboarding.
+
+Open the printed connected workspace URL. Run \`Stop-Platform.bat -Demo\` to stop the owned services and retain state. Run the Harbourline launcher again to reuse the same settings, model cache and data.
+
 ## Collect by topic
 
 1. **Set up approved sources.** In **Sources**, register and authorize each website. Choose **Keyword search and detail pages** in the profile's **Collection mode**, preview and validate a sample keyword, and approve the profile version. To keep article history, enable **Store article history** in the profile before approval.

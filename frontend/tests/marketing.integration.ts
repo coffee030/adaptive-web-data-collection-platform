@@ -38,7 +38,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   test.skip(data.demo_intelligence !== 'available', 'Requires a seeded M2 fictional workspace.');
   const partner = await request.get('/api/v1/marketing/intelligence/partner/creators');
   expect(partner.status()).toBe(403);
-  await page.goto('/');
+  await page.goto('/workspace');
   await page.getByRole('link', { name: 'Open backend demo' }).click();
   await expect(page.getByText('Fictional backend demo', { exact: true })).toBeVisible();
   await page.goto('/demo/connected/advisor');
@@ -64,7 +64,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByRole('navigation', { name: 'Marketing workspace' }).getByRole('link', { name: 'Campaign Advisor' }).click();
   await page.getByRole('button', { name: 'Run Campaign Advisor' }).click();
   await expect(page.getByRole('heading', { name: 'Recommended creator combination' })).toBeVisible();
-  const evidence = page.getByRole('button', { name: /Evidence for Fixture/ }).first();
+  const evidence = page.getByRole('region', { name: 'Eligible candidates' }).getByRole('button', { name: /Evidence for Fixture/ }).first();
   await evidence.click();
   await expect(page.getByRole('dialog')).toContainText('Ranking factors describe relative content and campaign fit.');
   await expect(page.getByRole('dialog')).toContainText('Evidence fictional-');
@@ -75,9 +75,14 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByLabel('Click rate (%)').fill('2');
   await page.getByLabel('Conversion rate (%)').fill('10');
   await page.getByLabel('Value per conversion (HK$)').fill('100');
+  await page.getByLabel('Advertising spend (HK$)').fill('50');
+  await page.getByLabel('Total campaign cost (HK$)').fill('100');
+  await page.getByLabel('Contribution margin (%)').fill('40');
   await page.getByRole('button', { name: 'Calculate scenario' }).click();
   await expect(page.getByText('Assumption-based scenario', { exact: true })).toBeVisible();
   await expect(page.getByText('20', { exact: true })).toBeVisible();
+  await expect(page.getByText('4×', { exact: true })).toBeVisible();
+  await expect(page.getByText('-20%', { exact: true })).toBeVisible();
   await page.getByLabel('Budget cap (HK$)').fill('1');
   await page.getByRole('button', { name: 'Recalculate selection' }).click();
   await expect(page.getByText('No feasible combination under this budget and scope', { exact: true })).toBeVisible();
@@ -91,7 +96,8 @@ test('Data Operations imports and inspects the M2 demo dataset with operator aut
   test.skip(!token || !fixture, 'Requires the isolated M2 demo dataset and operator token.');
   await page.goto('/operations/intelligence-datasets');
   await page.getByRole('combobox', { name: 'Workspace', exact: true }).selectOption('demo');
-  await page.getByLabel('Dataset ID').fill('alpha-fixture');
+  const datasetId = process.env.HARBOURLINE_TEST_DATASET_ID ?? 'alpha-fixture';
+  await page.getByLabel('Dataset ID').fill(datasetId);
   await page.getByLabel('Marketing operator token').fill(token!);
   await page.getByLabel('Dataset JSON').setInputFiles(fixture!);
   await page.getByRole('button', { name: 'Import dataset' }).click();
@@ -100,5 +106,5 @@ test('Data Operations imports and inspects the M2 demo dataset with operator aut
   await page.getByRole('button', { name: 'Import dataset' }).click();
   await expect(page.getByText(/Authorized dataset accepted/)).toBeVisible();
   await page.getByRole('button', { name: 'Inspect dataset' }).click();
-  await expect(page.getByRole('region', { name: 'Dataset status' })).toContainText('alpha-fixture');
+  await expect(page.getByRole('region', { name: 'Dataset status' })).toContainText(datasetId);
 });

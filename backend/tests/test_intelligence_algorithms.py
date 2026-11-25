@@ -104,7 +104,9 @@ def test_scenario_requires_assumptions_and_keeps_zero_and_unknown_distinct():
             click_rate=Decimal("0.02"),
             conversion_rate=Decimal("0.05"),
             value_per_conversion_minor=25000,
-            spend_minor=100000,
+            advertising_spend_minor=100000,
+            campaign_cost_minor=150000,
+            contribution_margin=Decimal("0.4"),
         )
     )
     assert forecast.basis == "assumption_based"
@@ -112,7 +114,31 @@ def test_scenario_requires_assumptions_and_keeps_zero_and_unknown_distinct():
     assert forecast.conversions.value == 10
     assert forecast.attributed_revenue_minor.value == 250000
     assert forecast.roas.value == Decimal("2.5")
-    assert forecast.roi.value == Decimal("1.5")
+    assert forecast.roi.value.quantize(Decimal(".0001")) == Decimal("-.3333")
+    revenue_only = scenario(
+        Scenario(
+            currency="HKD",
+            impressions=100,
+            click_rate=Decimal("0.2"),
+            conversion_rate=Decimal("0.1"),
+            value_per_conversion_minor=500,
+            spend_minor=100,
+        )
+    )
+    assert revenue_only.attributed_revenue_minor.value == 1000
+    assert revenue_only.roas.status == revenue_only.roi.status == "unavailable"
+    zero_margin = scenario(
+        Scenario(
+            currency="HKD",
+            impressions=100,
+            click_rate=Decimal("0.2"),
+            conversion_rate=Decimal("0.1"),
+            value_per_conversion_minor=500,
+            campaign_cost_minor=100,
+            contribution_margin=Decimal("0"),
+        )
+    )
+    assert zero_margin.roi.value == -1
     unknown = scenario(Scenario(currency="HKD", impressions=0, spend_minor=0))
     assert unknown.clicks.status == "unavailable"
     zero = scenario(

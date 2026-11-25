@@ -16,6 +16,7 @@ function Invoke-Compose([string[]]$Arguments, $Seconds = 25) {
         $options += @('-f', (Join-Path $Root 'compose.fixture.yaml'), '-f', (Join-Path $PSScriptRoot 'compose.launcher-fixture.yaml'))
     }
     if ($DemoMode) { $options += @('-f', (Join-Path $PSScriptRoot 'compose.demo.yaml')) }
+    if ($Config.MARKETING_MODEL_HOST_DIR) { $options += @('-f', (Join-Path $Root 'compose.marketing-onnx.yaml')) }
     if ($Config.LAUNCHER_SUBNET) { $options += @('-f', (Join-Path $PSScriptRoot 'compose.subnet.yaml')) }
     if ($Config.LAUNCHER_FIXTURE -eq '1' -and $Config.LAUNCHER_FIXTURE_SUBNET) {
         $options += @('-f', (Join-Path $PSScriptRoot 'compose.fixture-subnet.yaml'))
@@ -175,6 +176,7 @@ function Start-StorageServices {
 function Get-ImageFingerprint([ValidateSet('api', 'frontend')][string]$Service) {
     $settings = ''
     if ($Service -eq 'api') {
+        $settings = "onnx=$($Config.MARKETING_ONNX)"
         $files = @(Get-Item -LiteralPath @((Join-Path $Root 'Dockerfile'), (Join-Path $Root 'alembic.ini'), (Join-Path $Root '.dockerignore')))
         $files += @(Get-ChildItem -LiteralPath (Join-Path $Root 'backend') -File -Recurse |
             Where-Object { $_.FullName -notmatch '[\\/](?:__pycache__|\.pytest_cache|\.ruff_cache)[\\/]' -and $_.Extension -notin @('.pyc', '.pyo') })
@@ -199,7 +201,7 @@ function Get-ImageFingerprint([ValidateSet('api', 'frontend')][string]$Service) 
     finally { $hash.Dispose() }
 }
 
-function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, [switch]$NoCache) {
+function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, [switch]$NoCache, [switch]$AllowFailure) {
     $kind = if ($Service -eq 'api') { 'backend' } else { 'frontend' }
     $stamp = Join-Path $Local "$kind-image.txt"
     $fingerprint = Get-ImageFingerprint $Service
@@ -208,6 +210,7 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
     if (!$NoCache -and $image.Code -eq 0 -and (Test-Path -LiteralPath $stamp) -and
         [IO.File]::ReadAllText($stamp) -ceq "$fingerprint $($image.Out)") {
         Write-Step "[PASS] Reusing the verified $kind image."
+        if ($AllowFailure) { return $true }
         return
     }
     Write-Step "[INFO] Building the $kind image for this checkout. The first build downloads packages and may take several minutes."
@@ -215,11 +218,13 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
     if ($NoCache) { $arguments += '--no-cache' }
     $built = Invoke-Compose ($arguments + $Service) 1200
     if ($built.Code -ne 0) {
+        if ($AllowFailure) { return $false }
         Stop-WithError 'SVC-001' 'Container Image Build Failed' "Docker could not build the $kind image." $built.Reason `
             @('Check internet access to Docker Hub and the package registries.', 'Check free disk space and Docker Desktop.', 'Run Diagnose-Platform.bat, then try again.')
     }
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
     if ($image.Code -eq 0) { Write-AtomicFile $stamp "$fingerprint $($image.Out)" }
+    if ($AllowFailure) { return ($image.Code -eq 0) }
 }
 
 function Update-DatabaseSchema {
