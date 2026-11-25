@@ -43,14 +43,20 @@ class TestRate:
 
 @pytest.fixture
 def website():
+    paths: list[str] = []
+
     class Handler(FixtureHandler):
         metrics: ClassVar[list[tuple[str, float, float]]] = []
+
+        def do_GET(self):
+            paths.append(self.path)
+            super().do_GET()
 
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            yield f"http://127.0.0.1:{server.server_port}", Handler.metrics
+            yield f"http://127.0.0.1:{server.server_port}", paths
         finally:
             server.shutdown()
             thread.join()
@@ -115,7 +121,7 @@ def test_two_search_layouts_preserve_keyword_and_detail_lineage(
         "detail",
     ]
     assert [item.page_number for item in result.all_evidence] == [1, 2, 3, 4, 5]
-    assert len(requests) == 6 and requests[0][0] == "/robots.txt"
+    assert len(requests) == 6 and requests[0] == "/robots.txt"
     parameter = "q" if layout == "cards" else "term"
     for item in result.all_evidence[:2]:
         assert parse_qs(urlsplit(item.original_location).query)[parameter] == [KEYWORD]
@@ -165,7 +171,7 @@ def test_search_failure_outcomes(tmp_path, website, keyword, status, error, capt
         captures,
     )
     assert len(result.records) == (1 if status == "partial" else 0)
-    assert all("169.254" not in path for path, _, _ in requests)
+    assert all("169.254" not in path for path in requests)
     if keyword == "detail429":
         assert result.error.retry_after_seconds == 33
         assert rate.timings[-1].retry_after_ms == 33_000
