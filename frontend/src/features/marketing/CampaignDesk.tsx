@@ -187,7 +187,7 @@ export function CampaignDetail({ report = false }: { report?: boolean }) {
         title={draft.brief.name || 'Untitled campaign'}
         description={draft.brief.description || undefined}
         actions={
-          <Link className="studio-secondary" to="/advisor">
+          <Link className="studio-secondary" to="/advisor#edit-requirements">
             Edit campaign brief
           </Link>
         }

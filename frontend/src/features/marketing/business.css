@@ -54,7 +54,11 @@
 .business-account {
   margin-inline-start: auto;
 }
-.business-workspace .business-legacy {
+.business-workspace .harbour.business-legacy {
+  --hl-accent: var(--studio-accent);
+  --hl-line: var(--studio-border);
+  --hl-soft: var(--studio-subtle);
+  --hl-lane: var(--studio-surface);
   min-height: 0;
   background: var(--studio-canvas);
 }
