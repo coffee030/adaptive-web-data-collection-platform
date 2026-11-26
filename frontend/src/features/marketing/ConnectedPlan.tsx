@@ -137,10 +137,10 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     const rows: (string|number)[][] = [['Classification', mode === 'demo' ? 'Fictional backend demo' : 'Local campaign draft'],
       ['Campaign',draft.brief.name],['Budget cap (HKD)',(current?.campaign.budget_minor ?? draft.brief.budget * 100)/100],
       ['Brief',draft.brief.description],['Platform',draft.brief.platform],['Deliverable',draft.brief.deliverable],
-      ['Required creators',draft.brief.creatorCount],['Required content evidence',draft.brief.requiredFacts ?? ''],
+      ['Required creators',current?.campaign.minimum_creators ?? draft.brief.creatorCount],['Required content evidence',draft.brief.requiredFacts ?? ''],
       ['Mandatory notes',draft.brief.required],['Optional notes',draft.brief.preferred]];
     if (mode === 'demo') {
-      rows.push(['Plan status',status],['Confirmed spend (HKD)',confirmed === undefined ? 'Unavailable' : confirmed / 100], [],
+      rows.push(['Plan status',status],['Evidence reviewed at',current!.as_of],['Confirmed spend (HKD)',confirmed === undefined ? 'Unavailable' : confirmed / 100], [],
         ['Selected fictional creator','Firm quote (HKD)','Quote evidence','Supporting post evidence']);
       for (const item of selected) rows.push([item.name,item.quote?.data.amount_minor == null ? 'Unavailable' : item.quote.data.amount_minor / 100,
         item.quote?.evidence.reference ?? 'Unavailable',item.evidence.map(post => post.content.evidence.reference).join(', ')]);
@@ -162,6 +162,7 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     <div className="hl-page-heading"><div><h1>Campaign plan</h1><p>Review quoted allocations and test a different budget or candidate selection.</p></div>
       {draft.saved && <button type="button" className="hl-primary" disabled={campaignReceipt?.pending || checkingExport || running || Boolean(error) || (mode === 'demo' && !current)}
         onClick={exportPlan}>{active?.status === 'infeasible' ? mode === 'demo' ? 'Export infeasible assessment CSV' : 'Export brief only (CSV)' : mode === 'demo' ? 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
+    {mode === 'partner' && draft.saved && <p className="hl-note">The CSV contains your campaign brief and scenario assumptions. Current creator evidence is available in this workspace.</p>}
     {exportError && <p role="alert">{exportError}</p>}
     {exported && <p role="status">CSV exported.</p>}
     {error && <IntelligenceError error={error} retry={retry} />}

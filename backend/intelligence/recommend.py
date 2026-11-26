@@ -1,5 +1,6 @@
 """Retrieve distinct supporting posts, explain ranking, then optimize eligible quotes."""
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -13,7 +14,15 @@ from .analytics import Historical, Measure, calculated
 from .catalog import Catalog, Creator, EligibleContent, Evidence, Observed, PostDetail
 from .contracts import Audience, Campaign, Mode, Quote
 from .optimizer import Item, Plan, optimize
-from .semantic import INDEX_VERSION, character_grams, embed, tfidf_scores
+from .retrieval import (
+    TOPICS,
+    evidence_match,
+    query_topics,
+    required_words,
+    scores as content_scores,
+    semantic_support,
+)
+from .semantic import INDEX_VERSION
 
 TOP_WEIGHTS = (0.6, 0.3, 0.1)
 WEIGHTS = {
@@ -35,17 +44,6 @@ WEIGHTS = {
         language=10,
         preferences=5,
     ),
-}
-CATEGORIES = {
-    "beauty": "Beauty cosmetics skincare makeup sunscreen 美容 保養 化妝 防曬",
-    "budget": "Budget affordability affordable cost savings price 平價 慳錢 預算",
-    "dining": "Dining restaurants cafés food lunch dinner meals 飲食 餐廳 咖啡 午餐 食飯",
-    "family": "Family children childcare parents and family outings 親子 家庭 小朋友 嬰兒車",
-    "finance": "Personal finance banking savings spending credit 理財 儲蓄 銀行",
-    "lifestyle": "Lifestyle everyday routines living spaces home 日常 生活 家居",
-    "outdoors": "Outdoors hiking parks trails camping 戶外 行山 公園 露營",
-    "sustainability": "Sustainable reuse, repair, recycling and secondhand items 環保 回收 二手 維修",
-    "technology": "Technology software devices work equipment 科技 軟件 電腦 設備",
 }
 
 
@@ -84,6 +82,8 @@ class CampaignResult(BaseModel):
     retrieval: Literal["granite_int8", "character_tfidf"]
     model_version: str | None
     indexing: Literal["ready", "preparing", "fallback"]
+    reviewed_count: int
+    exclusions: dict[str, int]
     categories: Categories
     recommendations: list[Recommendation]
     unavailable_shortlist_ids: list[str]
@@ -103,36 +103,10 @@ def _categories(campaign: Campaign) -> Categories:
         return Categories(
             source="supplied", labels=list(dict.fromkeys(campaign.category_labels))
         )
-    scores = tfidf_scores(
-        campaign.description,
-        {label: character_grams(text) for label, text in CATEGORIES.items()},
-    )
-    selected = sorted(scores, key=lambda label: (-scores[label], label))[:3]
     return Categories(
         source="suggested",
-        labels=[label for label in selected if scores[label] >= 0.04],
+        labels=sorted(query_topics(campaign.description) & TOPICS.keys()),
     )
-
-
-def _scores(
-    query: str, posts: list[EligibleContent], model_dir: Path | None
-) -> tuple[str, dict[str, float]]:
-    vectors = {post.key: post.vector for post in posts if post.vector is not None}
-    grams = {post.key: post.grams for post in posts}
-    if (
-        vectors
-        and vectors.keys() == grams.keys()
-        and (query_vectors := embed(model_dir, [query]))
-    ):
-        query_vector = query_vectors[0]
-        return "granite_int8", {
-            key: min(
-                1.0,
-                max(0.0, sum(a * b for a, b in zip(query_vector, vector, strict=True))),
-            )
-            for key, vector in vectors.items()
-        }
-    return "character_tfidf", tfidf_scores(query, grams)
 
 
 def _strongest(
@@ -152,13 +126,14 @@ def _assess(
     scores: dict[str, float],
     floor: float,
     scale: float,
+    supported: list[EligibleContent],
 ) -> Recommendation:
     creator, posts, historical = (
         candidate.creator,
         candidate.posts,
         candidate.historical,
     )
-    strongest = _strongest(posts, scores, floor)
+    strongest = _strongest(supported, scores, floor)
     weights = TOP_WEIGHTS[: len(strongest)]
     relevance = (
         sum(
@@ -333,7 +308,7 @@ def recommend(
             for account in creator.record.data.accounts
         )
     ]
-    method, scores = _scores(
+    method, scores = content_scores(
         campaign.description,
         [post for candidate in candidates for post in candidate.posts],
         model_dir,
@@ -354,7 +329,18 @@ def recommend(
             default=0,
         )
     )
-    results = [_assess(item, campaign, scores, floor, scale) for item in candidates]
+    labels = query_topics(campaign.description)
+    words = required_words(campaign.description)
+    semantic = semantic_support(method, scores) if not labels else set()
+    results = []
+    for item in candidates:
+        supported = [
+            post
+            for post in item.posts
+            if post.key in semantic
+            or evidence_match(post, labels, words, all_terms=False)
+        ]
+        results.append(_assess(item, campaign, scores, floor, scale, supported))
     results.sort(
         key=lambda item: (item.utility is None, -(item.utility or 0), item.creator_id)
     )
@@ -396,6 +382,16 @@ def recommend(
         retrieval=method,
         model_version=INDEX_VERSION if method == "granite_int8" else None,
         indexing=indexing,
+        reviewed_count=len(results),
+        exclusions=dict(
+            Counter(
+                reason
+                for row in results
+                if not row.eligible
+                for reason in set(row.limitations)
+                if not reason.startswith("target_")
+            )
+        ),
         categories=_categories(campaign),
         recommendations=[item for item in results if item.creator_id in visible],
         unavailable_shortlist_ids=sorted(shortlist - catalog.creators.keys()),

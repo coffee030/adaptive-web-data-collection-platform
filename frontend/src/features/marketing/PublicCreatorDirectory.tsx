@@ -1,14 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { getOperatorCredential, apiLocal, ApiError } from '../../lib/api';
+import { TableRegion } from '../../components/feedback';
 import { publicPath, usePublicResults, type Directory, type PublicProfile } from './publicResearch';
 import { PublishedWorks } from './PublishedWorks';
 import { SaveResearchLead } from './ResearchBrief';
 import './public-directory.css';
-import { TableRegion } from '../../components/feedback';
 
-interface Preview { observed: string; source_id: string; profile_id: string; report_id: string | null; count: number; example: PublicProfile }
-interface SourceStatus { state: string; error?: string; collection?: string; next_check?: string }
 const license = 'https://www.wikidata.org/wiki/Wikidata:Licensing';
 const date = (value: string) => new Date(value).toLocaleDateString('en-HK',{day:'numeric',month:'short',year:'numeric'});
 
@@ -84,48 +81,4 @@ export function PublicCreatorDirectory({ isolatedDemo = false }: { isolatedDemo?
       <p className="hl-note">Source · <a href={license} target="_blank" rel="noreferrer">Wikidata · CC0</a></p>
     </>}
   </div>;
-}
-
-export function PublicDirectoryOperations() {
-  const [enteredToken,setToken] = useState('');
-  const token = getOperatorCredential() || enteredToken;
-  const [preview,setPreview] = useState<Preview>();
-  const [status,setStatus] = useState<SourceStatus>();
-  const [busy,setBusy] = useState(false);
-  const [error,setError] = useState('');
-  const request = useRef<AbortController>(undefined);
-  useEffect(() => () => request.current?.abort(),[]);
-  async function act(action: 'status' | 'prepare' | 'approve' | 'withdraw') {
-    request.current?.abort();
-    const controller = new AbortController(); request.current = controller;
-    setBusy(true); setError('');
-    const base = '/marketing/intelligence/operator/public-directory/';
-    try {
-      if (action === 'prepare') {
-        setPreview(undefined);
-        setPreview(await apiLocal<Preview>(base+action,token,controller.signal,'POST',{}));
-      } else if (action === 'status') {
-        setStatus(await apiLocal<SourceStatus>(base+action,token,controller.signal));
-      } else {
-        if (action === 'withdraw' && !window.confirm('Withdraw all public profiles and stop their automatic refresh?')) return;
-        setStatus(await apiLocal<SourceStatus>(base+action,token,controller.signal,'POST',
-          action === 'approve' && preview ? {source_id:preview.source_id,profile_id:preview.profile_id,report_id:preview.report_id} : {}));
-        setPreview(undefined);
-      }
-    } catch (e) {
-      if (!controller.signal.aborted) setError(e instanceof ApiError && [401,403].includes(e.status ?? 0) ? 'Use a system operator credential to manage this source.'
-        : e instanceof ApiError && e.code === 'directory_source_blocked' ? 'Wikidata declined access. Review the publisher response before enabling refresh.'
-        : 'The operation could not finish. Inspect the current status and retry.');
-    } finally {if (controller === request.current) setBusy(false);}
-  }
-  return <section className="operator-page"><header className="page-heading"><h1>Public creator directory</h1><p>{__HARBOURLINE_INSTALLATION__ === 'demo' ? 'Authorize the Wikidata directory for password-free public research on this isolated demo.' : 'Authorize the Wikidata directory for shared company research.'} Only names and descriptions from the reviewed items enter the catalog.</p></header>
-    <div className="operator-dataset-form">{!getOperatorCredential() && <label>System operator credential<input type="password" autoComplete="off" value={token} onChange={event => {request.current?.abort();setToken(event.target.value);setPreview(undefined);setStatus(undefined);setError('');}} /></label>}
-    <p><a href={license} target="_blank" rel="noreferrer">Review the Wikidata CC0 terms</a>. A dated CC0 snapshot can initialize the first collection. The approved mapping refreshes public directory metadata daily. Unrefreshed listings expire after seven days.</p>
-    <div className="operator-research-toolbar"><button disabled={busy || token.length<24} onClick={() => void act('status')}>Check status</button>
-      <button disabled={busy || token.length<24} onClick={() => void act('prepare')}>Authorize source and preview fields</button></div>
-    {busy && <p role="status">Checking directory…</p>}{error && <p role="alert">{error}</p>}
-    {preview && <section><h2>Review field mapping</h2><p>{preview.count} source items checked on {date(preview.observed)}. Example from revision {preview.example.revision}.</p><p><strong>{preview.example.name} · {preview.example.local_name}</strong><br/>{preview.example.description}</p><button disabled={busy} onClick={() => void act('approve')}>Approve mapping and enable refresh</button></section>}
-    {status && <p role="status">Directory source · {status.state}{status.collection && ' · Collection '+status.collection}{status.next_check && ' · Next check '+new Date(status.next_check).toLocaleString()}{status.error && ' · '+status.error.replaceAll('_',' ')}</p>}
-    {status?.state === 'approved' && <button disabled={busy} onClick={() => void act('withdraw')}>Withdraw public directory</button>}
-    </div></section>;
 }

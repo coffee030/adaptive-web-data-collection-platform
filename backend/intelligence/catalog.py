@@ -9,13 +9,12 @@ from .analytics import Historical, history
 from .contracts import (
     Audience,
     Content,
-    CreatorFilter,
     Origin,
     Performance,
     Profile,
     Quote,
 )
-from .semantic import content_key, normalized
+from .semantic import content_key
 from .store import Dataset, Snapshot
 
 AUDIENCE_WINDOW = timedelta(days=90)
@@ -55,51 +54,6 @@ class Creator:
     @property
     def id(self) -> str:
         return self.record.data.creator_id
-
-    def preview(self, filters: CreatorFilter) -> Observed[Content] | None:
-        query = normalized(filters.query) if filters.query else ""
-        posts = (
-            post.record
-            for post in self.posts
-            if (not filters.platform or post.record.data.platform == filters.platform)
-            and (not filters.language or filters.language in post.record.data.languages)
-        )
-        profile_match = query in normalized(
-            f"{self.record.data.name} {self.record.data.description}"
-        )
-        first = None
-        for post in posts:
-            if query in normalized(post.data.text):
-                return post
-            if first is None and profile_match:
-                first = post
-        return first
-
-    def matches(
-        self, filters: CreatorFilter, preview: Observed[Content] | None
-    ) -> bool:
-        platform = filters.platform
-        if (
-            filters.query
-            and not preview
-            and normalized(filters.query)
-            not in normalized(f"{self.record.data.name} {self.record.data.description}")
-        ):
-            return False
-        if platform and not any(
-            account.platform == platform for account in self.record.data.accounts
-        ):
-            return False
-        if filters.language and preview is None:
-            return False
-        if filters.market and not any(
-            item.data.market == filters.market
-            and item.data.share is not None
-            and (not platform or item.data.platform == platform)
-            for item in self.audiences
-        ):
-            return False
-        return True
 
     def history(self, platform=None) -> Historical:
         return history(

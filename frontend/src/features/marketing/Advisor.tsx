@@ -29,7 +29,7 @@ function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave
   const [error, setError] = useState('');
   const [platform, setPlatform] = useState(initial.platform.toLowerCase() as Platform);
   const loadOptions = useCallback((signal: AbortSignal) => briefOptions(mode!, platform, signal), [mode, platform]);
-  const options = useResource(loadOptions, useCatalogRevision(), false, Boolean(mode && platform));
+  const options = useResource(loadOptions, useCatalogRevision(), false, Boolean(mode));
   const available = options.result.state === 'ready' ? options.result.data : undefined;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,16 +50,18 @@ function BriefForm({ initial, onSave, onCancel, mode }: { initial: Brief; onSave
   }
   return <form className="hl-brief-form" onSubmit={submit}>
     {error && <p role="alert" className="hl-decision hl-warning">{error}</p>}
+    {available?.platforms && <p className="hl-note" aria-label="Campaign evidence coverage">{Object.keys(available.platforms).length ? 'Platforms with approved creator records: ' + Object.entries(available.platforms).map(([key,counts])=>platformOptions[key as Platform]+' ('+counts.creators+')').join(', ') : 'No approved company creator records are available. Public research can support an evidence request.'}</p>}
     <label>Campaign name<input name="name" required maxLength={80} defaultValue={initial.name} /></label>
     <label>Describe the campaign<textarea name="description" required maxLength={1000} rows={4} defaultValue={initial.description} /></label>
     <fieldset><legend>Mandatory requirements</legend><div className="hl-form-grid">
-      <label>Creator budget (HK$)<input name="budget" type="number" min={0} max={10000000} required defaultValue={initial.budget} /></label>
+      <label>Creator budget (HK$)<input name="budget" type="number" step={0.01} min={0} max={10000000} required defaultValue={initial.budget} /></label>
       <label>Required creators<input name="creatorCount" type="number" min={1} max={mode ? 8 : 10} required defaultValue={initial.creatorCount} /></label>
       {mode && <>
         <label>Campaign platform<select key="connected-platform" name="platform" required value={platform} onChange={event => setPlatform(event.target.value as Platform)}><option value="">Choose a platform</option>{Object.entries(platformOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
         <label>Campaign deliverable<select name="deliverable" required defaultValue={initial.deliverable}><option value="">Choose a deliverable</option>{Object.entries(deliverableOptions).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select></label>
       </>}
       {mode && platform && <div className="hl-span hl-note" role="status">
+        {available?.platforms && <p>{platformOptions[platform]} · {available.platforms[platform]?.creators ?? 0} creators · {available.platforms[platform]?.posts ?? 0} historical posts · {available.platforms[platform]?.firm_quotes ?? 0} current firm HKD quotes.</p>}
         {available ? (available.quoted_deliverables.length
           ? 'Current HKD quotes cover ' + available.quoted_deliverables.map(value => deliverableOptions[value].toLowerCase()).join(', ') + '.'
           : 'This platform has no current firm HKD quotes.')
