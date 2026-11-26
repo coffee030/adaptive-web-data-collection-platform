@@ -468,6 +468,51 @@ test('retry and dispatch fields stay distinct and events keep their persisted se
   await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('Rate limiting');
 });
 
+test('live updates keep the current queue and focused job visible through a failed poll', async ({ page }) => {
+  await page.clock.install();
+  let reads = 0;
+  let sourceReads = 0;
+  await page.route(api + '/sources/' + sourceId + '/versions/' + profileId, route => route.fulfill({ json: { version: 2 } }));
+  await page.route(api + '/sources/' + sourceId, route => {
+    sourceReads++;
+    return route.fulfill({ json: { source_name: 'Observed source' } });
+  });
+  await page.route(url => url.pathname === api + jobsUrl, route => {
+    reads++;
+    if (reads === 2) return route.fulfill({ status: 503, json: {} });
+    return route.fulfill({ json: [{ ...partialJob, status: reads < 3 ? 'running' : 'succeeded' }] });
+  });
+
+  await page.goto(jobsUrl + '?order=newest');
+  const row = ledger(page).getByRole('listitem');
+  await expect(row).toContainText('Running');
+  await expect(row).toContainText('Observed source');
+  await page.clock.runFor(3000);
+  expect(reads).toBe(1);
+
+  const live = page.getByRole('checkbox', { name: 'Live updates' });
+  await live.click();
+  await expect(live).toBeChecked();
+  await expect(page).toHaveURL(jobsUrl + '?order=newest&live=1');
+  await inspect(page).focus();
+  await page.clock.runFor(1050);
+  await expect(page.getByText('Job list refresh failed.', { exact: false })).toBeVisible();
+  await expect(row).toContainText('Running');
+  await page.clock.runFor(1150);
+  await expect(row).toContainText('Succeeded');
+  await expect(inspect(page)).toBeFocused();
+  await expect(page.getByText('Job list refresh failed.', { exact: false })).toHaveCount(0);
+  expect(sourceReads).toBe(1);
+
+  await live.click();
+  await expect(live).not.toBeChecked();
+  await expect(page).toHaveURL(jobsUrl + '?order=newest');
+  const lastRead = reads;
+  await page.clock.runFor(3000);
+  expect(reads).toBe(lastRead);
+});
+
+
 test('hidden pages suspend polling and failed refresh preserves the visible Job until recovery', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
@@ -490,10 +535,10 @@ test('hidden pages suspend polling and failed refresh preserves the visible Job 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await page.clock.runFor(3100);
+  await page.clock.runFor(50);
   await expect(page.getByText('Job refresh failed.', { exact: false })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Run overview' })).toContainText('Running');
-  await page.clock.runFor(3100);
+  await page.clock.runFor(1150);
   await expect(page.getByRole('region', { name: 'Run overview' })).toContainText('Failed');
   await page.clock.runFor(10_000);
   expect(reads).toBe(3);

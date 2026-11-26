@@ -1,5 +1,6 @@
 .job-ledger .toolbar { justify-content: flex-start; }
 .job-ledger .toolbar > button { margin-inline-start: auto; }
+.job-live-toggle { display: inline-flex; min-block-size: 44px; align-items: center; gap: var(--xs); }
 .job-ledger-head, .job-ledger-row {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(5.5rem, .65fr) minmax(12.5rem, 1.2fr) minmax(6.5rem, .7fr) 6.5rem;
