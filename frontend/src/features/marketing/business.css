@@ -226,6 +226,33 @@
 .business-empty h3 {
   margin: 0;
 }
+.discovery-empty > p {
+  margin-block: 0.9rem;
+  color: var(--studio-muted);
+}
+.related-discovery > p {
+  margin-block: 0.3rem 0.75rem;
+  color: var(--studio-muted);
+}
+.related-discovery ul {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+}
+.related-discovery li {
+  display: grid;
+  gap: 0.22rem;
+  border-top: 1px solid var(--biz-rule);
+  padding: 0.65rem 0;
+}
+.related-discovery li > a {
+  justify-self: start;
+  font-weight: 600;
+}
+.related-discovery li > span {
+  font-size: 0.89rem;
+  color: var(--studio-muted);
+}
 .biz-actions,
 .market-paging,
 .report-actions {

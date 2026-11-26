@@ -124,4 +124,3 @@
   .ops-market-register button { min-height:44px; }
   .ops-market-register :is(td,th):nth-child(2) { padding-inline:.5rem; }
 }
-

@@ -196,6 +196,7 @@ export function SaveMarketLead({
         }
       >
         {saved ? 'Saved to campaign' : full ? 'Shortlist full' : 'Save to campaign'}
+        <span className="sr-only">{' · ' + creator.name}</span>
       </button>
       {showCampaignLink && saved && campaignReceipt && (
         <Link to={'/campaigns/' + campaignReceipt.id}>Open shortlist</Link>

@@ -244,4 +244,3 @@ th[scope="row"] { text-align: start; font-weight: 400; }
   .timeline > li { grid-template-columns: minmax(0, 1fr); gap: var(--xs); }
   .timeline .timestamp span { display: inline; margin-inline-start: var(--sm); }
 }
-

@@ -66,7 +66,7 @@ function ComparisonColumn({ id }: { id: string }) {
   if (request.result.state === 'loading') return <p role="status">Opening creator…</p>;
   const creator = request.result.data;
   return (
-    <section>
+    <section aria-label={creator.name}>
       <Platform value={creator.platform} />
       <h3>
         <Link to={'/creators/' + encodeURIComponent(id)}>{creator.name}</Link>
@@ -136,7 +136,6 @@ export function MarketDiscovery() {
     <div className="biz-page">
       <PageHeader
         title="Creator discovery"
-        description="Find contributors by name, topic or published work."
         actions={
           <Link className="studio-primary" to="/research">
             Start research
@@ -211,9 +210,11 @@ export function MarketDiscovery() {
       </form>
       <div className="results-heading">
         <h2>
-          {data
-            ? formatCount(data.total) + ' ' + (data.total === 1 ? 'creator' : 'creators')
-            : 'Search results'}
+          {!data
+            ? 'Search results'
+            : data.total
+              ? formatCount(data.total) + ' ' + (data.total === 1 ? 'creator' : 'creators')
+              : 'No exact matches in these creator sources'}
         </h2>
         {selected.length > 0 && (
           <button
@@ -300,17 +301,12 @@ export function MarketDiscovery() {
             </div>
           </>
         ) : (
-          <div className="business-empty">
-            <h3>{page > 1 ? 'No creators on this page' : 'No exact matches in these creator sources'}</h3>
-            <p>
-              Campaign Advisor can also check archived work and company evidence for this brief.
-            </p>
+          <div className="business-empty discovery-empty">
+            {page > 1 && <p>No creators on this page.</p>}
             {data.related?.basis === 'dining_coverage_without_price_evidence' && (
               <section className="related-discovery">
                 <h3>Related dining coverage</h3>
-                <p>
-                  These presenters cover Hong Kong food. Meal prices are unverified in their published credits.
-                </p>
+                <p>Hong Kong food presenters · meal prices unverified</p>
                 <ul>
                   {data.related.items.map((creator) => (
                     <li key={creator.id}>
@@ -333,6 +329,7 @@ export function MarketDiscovery() {
                 </Link>
               </section>
             )}
+            <p>Campaign Advisor can also check archived work and company evidence for this brief.</p>
             <div className="biz-actions">
               <button
                 className="studio-secondary"
