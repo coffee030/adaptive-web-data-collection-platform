@@ -1,10 +1,13 @@
 """Exercise the marketing tools against accounts provisioned by the live API test."""
 
 import asyncio
+import csv
+import io
 import os
 import sys
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 import httpx2
 from mcp import Client, StdioServerParameters
@@ -55,10 +58,15 @@ async def exercise():
             "get_research_progress",
             "get_campaign_performance",
             "export_campaign_performance",
+            "export_rate_request",
         } <= {tool.name for tool in tools} and all(
             tool.annotations.read_only_hint for tool in tools
         )
-        assert "change_campaign_budget" not in {tool.name for tool in tools}
+        assert not {
+            "change_campaign_budget",
+            "shortlist_market_creator",
+            "create_saved_campaign",
+        } & {tool.name for tool in tools}
         records = await read(
             member, "search_creators", filters={"language": "yue"}, limit=1
         )
@@ -115,6 +123,9 @@ async def exercise():
     async with connection(
         base, "company", **settings, HARBOURLINE_MCP_ALLOW_BUDGET_EDITS="1"
     ) as editor:
+        assert not {"shortlist_market_creator", "create_saved_campaign"} & {
+            tool.name for tool in (await editor.list_tools()).tools
+        }
         before = await read(editor, "get_saved_campaign", campaign_id=campaign)
         receipt = await read(
             editor,
@@ -141,6 +152,80 @@ async def exercise():
             "Budget: revision 1 to 2, untouched draft fields preserved, stale write rejected."
         )
     async with connection(
+        base, "company", **settings, HARBOURLINE_MCP_ALLOW_WORKSPACE_EDITS="1"
+    ) as editor:
+        creation = dict(
+            campaign_id=str(uuid4()),
+            name="Dining shortlist",
+            budget_hkd_cents=1500050,
+            creator_count=2,
+        )
+        created = await read(editor, "create_saved_campaign", **creation)
+        assert (
+            created["version"] == 1
+            and await read(editor, "create_saved_campaign", **creation) == created
+        )
+        await denied(
+            editor,
+            "create_saved_campaign",
+            "409",
+            **(creation | {"name": "Different request"}),
+        )
+        await denied(
+            editor,
+            "export_rate_request",
+            "currently eligible",
+            campaign_id=created["id"],
+            expected_version=1,
+        )
+        lead = os.environ["MCP_TEST_MARKET_CREATOR"]
+        old = await read(editor, "get_saved_campaign", campaign_id=campaign)
+        args = dict(
+            campaign_id=campaign, expected_version=old["version"], creator_id=lead
+        )
+        await denied(
+            editor,
+            "shortlist_market_creator",
+            "no currently eligible",
+            **(args | {"creator_id": uuid4().hex}),
+        )
+        added = await read(editor, "shortlist_market_creator", **args)
+        assert added["version"] == old["version"] + 1
+        after = await read(editor, "get_saved_campaign", campaign_id=campaign)
+        assert after["draft"] == (old["draft"] | {"market_leads": [lead]})
+        await denied(editor, "shortlist_market_creator", "changed", **args)
+        repeated = await read(
+            editor,
+            "shortlist_market_creator",
+            **(args | {"expected_version": added["version"]}),
+        )
+        assert repeated == added
+        await denied(
+            editor,
+            "export_rate_request",
+            "409",
+            campaign_id=campaign,
+            expected_version=old["version"],
+        )
+    async with connection(base, "company", **settings) as member:
+        export = await read(
+            member,
+            "export_rate_request",
+            campaign_id=campaign,
+            expected_version=added["version"],
+        )
+        worksheet = list(csv.reader(io.StringIO(export["csv"])))
+        assert export["total"] == 1 and export["next_offset"] is None
+        credit = dict(zip(worksheet[-2], worksheet[-1], strict=True))
+        assert (
+            credit["Attribution"] == "Controlled rights fixture"
+            and credit["Source"] == added["supporting_work"]["url"]
+        )
+        assert credit["Fee (HKD)"] == credit["Availability"] == ""
+        print(
+            "Campaign creation replayed, conflicts rejected, licensed lead persisted without changing other fields, and the attributed rate worksheet reopened read-only."
+        )
+    async with connection(
         base,
         "company",
         HARBOURLINE_MCP_COMPANY_ID=os.environ["MCP_TEST_OTHER"],
@@ -149,6 +234,13 @@ async def exercise():
         assert not (await read(other, "list_saved_campaigns"))["items"]
         assert not (await read(other, "search_creators", filters={}))["items"]
         await denied(other, "get_saved_campaign", "404", campaign_id=campaign)
+        await denied(
+            other,
+            "export_rate_request",
+            "404",
+            campaign_id=campaign,
+            expected_version=added["version"],
+        )
         print(
             "Other company: empty search and campaign list, cross-company campaign unavailable."
         )

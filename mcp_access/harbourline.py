@@ -1,6 +1,8 @@
 """Company-scoped marketing research over local MCP stdio."""
 
 import asyncio
+import csv
+import io
 import os
 import re
 import sys
@@ -13,7 +15,7 @@ import httpx2
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from backend.intelligence.contracts import (
     Campaign,
@@ -46,6 +48,10 @@ WRITE = ToolAnnotations(
     readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
 MarketId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.:-]{1,140}$")]
+MarketLead = Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
+CampaignName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)
+]
 Metric = Annotated[int, Field(strict=True, ge=0, le=1_000_000_000_000)]
 
 
@@ -71,6 +77,33 @@ def page(items: list[Row], limit: int, offset: int) -> Row:
         "items": items[offset:end],
         "total": len(items),
         "next_offset": end if end < len(items) else None,
+    }
+
+
+def worksheet_page(value: str, limit: int, offset: int) -> Row:
+    try:
+        reader = csv.reader(io.StringIO(value, newline=""), strict=True)
+        heading = []
+        for line in reader:
+            heading.append(line)
+            if not line:
+                break
+        heading.append(next(reader))
+        leads = list(reader)
+    except (csv.Error, StopIteration):
+        raise ToolError(
+            "Harbourline returned an unreadable rate-request worksheet."
+        ) from None
+    result = io.StringIO(newline="")
+    writer = csv.writer(result, quoting=csv.QUOTE_ALL)
+    writer.writerows(heading)
+    writer.writerows(leads[offset : offset + limit])
+    return {
+        "media_type": "text/csv",
+        "filename": "harbourline-rate-request.csv",
+        "csv": result.getvalue(),
+        "total": len(leads),
+        "next_offset": offset + limit if offset + limit < len(leads) else None,
     }
 
 
@@ -140,6 +173,14 @@ def create_server(
                 ) as response:
                     status = response.status_code
                     if status not in (200, 201, 202):
+                        if status == 409 and path.endswith("/rate-request"):
+                            detail = row(
+                                row(await response_json(response)).get("error")
+                            )
+                            if detail.get("code") == "no_current_leads":
+                                raise ToolError(
+                                    "This campaign needs a shortlisted creator with currently eligible published work. (HTTP 409)"
+                                )
                         reason = {
                             401: "Company sign-in expired or was revoked. Reconnect with an active member account.",
                             403: "This account or deployment does not permit this workspace operation.",
@@ -458,6 +499,21 @@ def create_server(
         """Open the company-owned brief, shortlist, saved public research, evidence requests, last submitted evaluation inputs and scenario assumptions. Call evaluate_campaign to obtain a current plan."""
         return row(await call(f"{COMPANIES}/campaigns/{campaign_id}"))
 
+    @server.tool(annotations=READ_ONLY)
+    async def export_rate_request(
+        campaign_id: UUID,
+        expected_version: Annotated[int, Field(strict=True, ge=1)],
+        limit: Limit = 10,
+        offset: Offset = 0,
+    ) -> Row:
+        """Return a page of the company's current rate-request CSV with original source credits and blank commercial response fields. Use the saved campaign revision. Each page repeats the worksheet heading. Withdrawn leads are omitted at export time."""
+        value = await call(
+            f"{COMPANIES}/campaigns/{campaign_id}/rate-request",
+            params={"version": expected_version},
+            csv=True,
+        )
+        return {"version": expected_version, **worksheet_page(value, limit, offset)}
+
     runs = COMPANIES + "/research-runs"
 
     @server.tool(annotations=READ_ONLY)
@@ -502,6 +558,102 @@ def create_server(
         }
 
     if allow_workspace_edits:
+
+        @server.tool(annotations=WRITE)
+        async def create_saved_campaign(
+            campaign_id: UUID,
+            name: CampaignName,
+            budget_hkd_cents: Annotated[
+                int, Field(strict=True, ge=0, le=1_000_000_000)
+            ],
+            creator_count: Annotated[int, Field(strict=True, ge=1, le=40)],
+            description: Annotated[str, Field(max_length=2000)] = "",
+            objective: Annotated[str, Field(max_length=160)] = "",
+            deliverable: Annotated[str, Field(max_length=160)] = "",
+        ) -> Row:
+            """Create a saved Hong Kong campaign in the connected company. Supply the intended HKD cap in cents and target creator count. Reuse the same UUID and arguments after a timeout. Creation uses revision zero and cannot overwrite a changed campaign."""
+            saved = row(
+                await call(
+                    f"{COMPANIES}/campaigns/{campaign_id}",
+                    method="PUT",
+                    body={
+                        "version": 0,
+                        "draft": {
+                            "saved": True,
+                            "shortlist": [],
+                            "market_leads": [],
+                            "lines": [],
+                            "explorer": "",
+                            "brief": {
+                                "name": name,
+                                "description": description,
+                                "budget": budget_hkd_cents / CENTS_PER_HKD,
+                                "objective": objective,
+                                "market": "Hong Kong",
+                                "language": "",
+                                "platform": "",
+                                "deliverable": deliverable,
+                                "required": "",
+                                "preferred": "",
+                                "minAudience": 0,
+                                "requireCantonese": False,
+                                "creatorCount": creator_count,
+                            },
+                        },
+                    },
+                )
+            )
+            return fields(saved, "id version updated_at")
+
+        @server.tool(annotations=WRITE)
+        async def shortlist_market_creator(
+            campaign_id: UUID,
+            expected_version: Annotated[int, Field(strict=True, ge=1)],
+            creator_id: MarketLead,
+        ) -> Row:
+            """Add a creator with currently licensed published activity to this saved campaign. Supply the latest campaign version. After a timeout read the shortlist before retrying. A lead still needs a current quote and availability."""
+            path = f"{COMPANIES}/campaigns/{campaign_id}"
+            current = row(await call(path))
+            if current.get("version") != expected_version:
+                raise ToolError(
+                    "Campaign changed. Read the latest shortlist and version before applying this edit."
+                )
+            draft = row(current.get("draft"))
+            leads = draft.get("market_leads", [])
+            if not isinstance(leads, list):
+                raise ToolError(
+                    "Harbourline returned an unreadable campaign shortlist."
+                )
+            evidence = row(
+                await call(
+                    scope + "/market/activity",
+                    params={"creator_id": creator_id, "page_size": 1},
+                )
+            )
+            works = rows(evidence.get("items"))
+            if not works or works[0].get("creator_id") != creator_id:
+                raise ToolError(
+                    "This creator has no currently eligible published work."
+                )
+            if creator_id not in leads:
+                if len(leads) >= 120:
+                    raise ToolError("The campaign already has 120 market leads.")
+                draft["market_leads"] = [*leads, creator_id]
+                current = row(
+                    await call(
+                        path,
+                        method="PUT",
+                        body={"version": expected_version, "draft": draft},
+                    )
+                )
+            return {
+                **fields(current, "id version updated_at"),
+                "creator_id": creator_id,
+                "supporting_work": fields(
+                    works[0],
+                    "title url creator_name attribution license_url credit_role credit_url",
+                ),
+            }
 
         @server.tool(annotations=WRITE)
         async def start_campaign_research(

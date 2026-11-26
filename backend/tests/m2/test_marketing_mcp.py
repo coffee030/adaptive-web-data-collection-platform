@@ -2,10 +2,13 @@
 
 import os
 import subprocess
+from dataclasses import replace
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 from conftest import ROOT
+from sqlalchemy import select
 from test_company_workspaces import BASE, DATA, DRAFT
 from test_intelligence import (
     BRIEF,
@@ -19,13 +22,55 @@ from test_intelligence import (
 )
 from test_process_restart import child_environment, server
 
+from backend.application.execution import JobExecutor
+from backend.core.evidence import LocalEvidenceStore
+from backend.intelligence import market_collection
 from backend.intelligence.contracts import ORIGINS
+from backend.intelligence.market_models import MarketBatch
+from backend.intelligence.market_sources import SOURCES
 
 
-def test_company_marketing_mcp(pg_engine, pg_url, pg_schema, tmp_path):
+def publish_test_lead(sessions, tmp_path, monkeypatch):
+    source = "tvmaze-food"
+    creator_id = uuid4().hex
+    work = {
+        "id": "controlled-food-credit",
+        "creator_id": creator_id,
+        "creator_name": "Controlled host",
+        "profile_url": "https://example.invalid/host",
+        "title": "Test programme",
+        "url": "https://example.invalid/episode",
+        "attribution": "Controlled rights fixture",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "credit_role": "Presenter",
+        "published_at": datetime.now(UTC).isoformat(),
+        "excerpt": None,
+        "topics": ["Dining"],
+        "metrics": [],
+    }
+    monkeypatch.setitem(
+        SOURCES, source, replace(SOURCES[source], load=lambda *args, **kwargs: [work])
+    )
+    evidence = LocalEvidenceStore(tmp_path)
+    assert (
+        market_collection.install(sessions, evidence, source)
+        == "validated and scheduled"
+    )
+    assert market_collection.collect(sessions, source)
+    with sessions() as session:
+        job = session.scalars(
+            select(MarketBatch.job_id).where(MarketBatch.source == source)
+        ).one()
+    JobExecutor(sessions, evidence).execute(job)
+    assert market_collection.publish(sessions, source)
+    return creator_id
+
+
+def test_company_marketing_mcp(sessions, pg_url, pg_schema, tmp_path, monkeypatch):
     python = os.environ.get("HARBOURLINE_MCP_TEST_PYTHON")
     if not python:
         pytest.skip("Set HARBOURLINE_MCP_TEST_PYTHON to the optional MCP interpreter")
+    lead = publish_test_lead(sessions, tmp_path, monkeypatch)
     env = child_environment(pg_url, pg_schema, tmp_path) | {
         "MARKETING_PILOT_PASSWORD": "controlled-browser-password",
         "MARKETING_PARTNER_WORKSPACE": WORKSPACE,
@@ -121,6 +166,7 @@ exit $LASTEXITCODE
             | {
                 "MCP_TEST_API_BASE": str(http.base_url).rstrip("/") + "/api/v1",
                 "MCP_TEST_CAMPAIGN": campaign_id,
+                "MCP_TEST_MARKET_CREATOR": lead,
                 "MCP_TEST_MEMBER_SESSION": user_session,
                 "MCP_TEST_PASSWORD": password,
                 "MCP_TEST_COMPANY": alpha,
