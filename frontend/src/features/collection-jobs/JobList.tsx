@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { PageHeader } from '../../components/studio/Workspace';
 import { useResource } from '../../lib/useResource';
 import { jobPath, jobStatuses, listJobs, maxOffset, newJobPath } from './api';
 import type { CollectionJob } from './api';
@@ -35,15 +36,9 @@ export function JobList() {
   }
 
   return <>
-    <div className="page-heading detail-heading">
-      <h1>Collection Jobs</h1>
-      <div className="profile-actions">
-        <Link to={requestsPath}>Collection requests</Link>
-        <Link className="control primary" to={newJobPath} state={{ jobsSearch: search.toString() }}>
-          Single-source collection and CSV import
-        </Link>
-      </div>
-    </div>
+    <PageHeader title="Collection Jobs" description="Trace a collection from its pinned source mapping to its execution, accepted records and quarantine."
+      actions={<><Link className="studio-secondary" to={requestsPath}>Collection requests</Link>
+        <Link className="studio-primary" to={newJobPath} state={{jobsSearch:search.toString()}}>Single-source collection and CSV import</Link></>}/>
     <section className="panel job-ledger" aria-label="Collection jobs ledger">
       <div className="toolbar">
         <label className="filter">

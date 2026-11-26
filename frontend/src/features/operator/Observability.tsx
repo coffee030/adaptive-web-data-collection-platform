@@ -77,7 +77,7 @@ function SourceHealth({ sources }: { sources: Source[] }) {
         <th scope="row"><Link to={sourcesPath + '/' + row.source_id}>{row.name}</Link></th><td>{row.completed}</td>
         <td><span className="ops-state" data-issue={row.failed + row.partial > 0}>{row.failed || row.partial ? [row.failed && row.failed + ' failed',row.partial && row.partial + ' partial'].filter(Boolean).join(' · ') : 'Succeeded'}</span></td>
         <td>{number.format(row.accepted)}{(row.quarantined > 0 || row.duplicates > 0) && <small>{row.quarantined} held · {row.duplicates} duplicates</small>}</td>
-        <td><Link to={jobPath(row.last_job)} aria-label={'Inspect latest job for ' + row.name}>{moment(row.last_finished)}</Link></td>
+        <td><Link to={jobPath(row.last_job)} aria-label={moment(row.last_finished) + ' · Inspect latest job for ' + row.name}>{moment(row.last_finished)}</Link></td>
       </tr>)}</tbody></table></div> : <p className="studio-panel-body">No source has a completed job in this period. <Link to={sourcesPath}>Inspect configured sources</Link>.</p>}
   </Panel>;
 }
@@ -115,6 +115,10 @@ export function Observability() {
           </Panel>
         </div>
         <SourceHealth sources={result.data.sources}/>
+        <details className="ops-measure-definitions"><summary>How these metrics are counted</summary>
+          <p>Completed jobs include successful, partial and failed runs. Run time starts at the final execution attempt and ends at completion.</p>
+          <p>Accepted records count each collection. Repeated collections can include the same published work. Workers observed counts distinct workers with a recorded job claim during the selected period.</p>
+        </details>
       </>}
   </section>;
 }

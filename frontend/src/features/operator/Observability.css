@@ -33,3 +33,7 @@
 .ops-observability td small { display:block; color:var(--studio-muted); }
 @media(max-width:1060px) { .ops-monitor-grid { grid-template-columns: minmax(0,1fr); } }
 @media(max-width:550px) { .ops-timebar > div { justify-content:flex-start; } .ops-chart { grid-template-rows: 6.8rem auto; }.ops-timebar :is(button,select),.ops-metric-select select,.ops-data-details summary { min-height:44px; } }
+.ops-measure-definitions { max-width:78ch; color:var(--studio-muted); font-size:.86rem; }
+.ops-measure-definitions summary { color:var(--studio-text); cursor:pointer; width:fit-content; padding-block:.4rem; }
+.ops-measure-definitions p { margin:.4rem 0; }
+

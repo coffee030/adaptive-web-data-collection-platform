@@ -62,7 +62,7 @@ class Pulse(Contract):
 router = APIRouter(prefix="/operations", tags=["operations"])
 
 pulse_query = text("""
-WITH bounds AS (
+WITH bounds AS NOT MATERIALIZED (
     SELECT CURRENT_TIMESTAMP AS observed_at,
            CURRENT_TIMESTAMP - :hours * INTERVAL '1 hour' AS starts_at,
            :width * INTERVAL '1 hour' AS bucket_width
@@ -93,16 +93,22 @@ WITH bounds AS (
 ), workers AS (
     SELECT count(DISTINCT e.worker_instance_id) AS observed
     FROM execution_events e CROSS JOIN bounds b
-    WHERE e.kind = 'CLAIMED' AND e.occurred_at >= b.starts_at AND e.occurred_at < b.observed_at
+    WHERE e.kind = 'CLAIMED' AND e.worker_instance_id IS NOT NULL
+      AND e.occurred_at >= b.starts_at AND e.occurred_at < b.observed_at
+), activity AS (
+    SELECT date_bin(b.bucket_width, f.finished_at, b.starts_at) AS starts_at,
+           count(*) AS completed, sum(f.valid_count) AS accepted,
+           sum(f.invalid_count) AS quarantined, sum(f.duplicate_count) AS duplicates
+    FROM finished f CROSS JOIN bounds b
+    GROUP BY 1
 ), buckets AS (
-    SELECT s AS starts_at, count(f.id) AS completed,
-           coalesce(sum(f.valid_count), 0) AS accepted,
-           coalesce(sum(f.invalid_count), 0) AS quarantined,
-           coalesce(sum(f.duplicate_count), 0) AS duplicates
-    FROM bounds b CROSS JOIN LATERAL
-         generate_series(b.starts_at, b.observed_at - b.bucket_width, b.bucket_width) s
-    LEFT JOIN finished f ON f.finished_at >= s AND f.finished_at < s + b.bucket_width
-    GROUP BY s
+    SELECT s.starts_at, coalesce(a.completed, 0) AS completed,
+           coalesce(a.accepted, 0) AS accepted, coalesce(a.quarantined, 0) AS quarantined,
+           coalesce(a.duplicates, 0) AS duplicates
+    FROM bounds b CROSS JOIN LATERAL (
+        SELECT b.starts_at + bucket * b.bucket_width AS starts_at
+        FROM generate_series(0, CAST(:hours AS integer) / CAST(:width AS integer) - 1) bucket
+    ) s LEFT JOIN activity a ON a.starts_at = s.starts_at
 ), source_totals AS (
     SELECT f.source_id, s.name, count(*) AS completed,
            count(*) FILTER (WHERE f.status = 'failed') AS failed,

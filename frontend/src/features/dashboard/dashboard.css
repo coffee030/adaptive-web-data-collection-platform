@@ -1,5 +1,3 @@
-.workspace:has(.collection-overview) { padding-block-start: clamp(16px, 2vw, 30px); }
-
 .collection-overview {
   --overview-inset: clamp(14px, 2vw, 24px);
   container-type: inline-size;
@@ -7,7 +5,6 @@
   gap: var(--lg);
   overflow-wrap: anywhere;
 }
-.overview-title h1 { font-size: clamp(1.65rem, 2.5vw, 2.125rem); }
 .overview-section-heading {
   display: flex;
   flex-wrap: wrap;

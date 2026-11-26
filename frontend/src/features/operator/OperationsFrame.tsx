@@ -16,13 +16,13 @@ export function OperationsFrame({ children, mainRef }: { children: ReactNode; ma
       event.preventDefault(); mainRef.current?.focus();
     }}>Skip to main content</a>
     <header className="ops-topbar">
-      <Link className="ops-brand" to={operationsPath} aria-label="Harbourline Scraping Operations">
+      <Link className="ops-brand" to={operationsPath}>
         <svg width="34" height="34" viewBox="0 0 38 38" fill="none" aria-hidden="true"><rect x="1" y="1" width="36" height="36" rx="8" stroke="currentColor"/>
           <path d="M7 26h5l5-13 5 8 3-5 6 10M9 30h20" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/></svg>
-        <span>Harbourline<small>Scraping Operations</small></span>
+        <span>Harbourline <small>Scraping Operations</small></span>
       </Link>
       <div className="ops-utilities"><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? '/demo/connected' : '/'}>Return to Harbourline</Link>
-        {__HARBOURLINE_INSTALLATION__ === 'pilot' && <button type="button" onClick={lockOperator}>Lock Data Operations</button>}
+        {__HARBOURLINE_INSTALLATION__ === 'pilot' && <button type="button" className="ops-lock" onClick={lockOperator}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>Lock Data Operations</span></button>}
         <ThemeSelect/></div>
     </header>
     <WorkspaceNavigation/>

@@ -18,8 +18,8 @@ export function WorkspaceNavigation() {
       <div className="ops-nav-links">
         <NavLink to={pathname === '/' && __PLATFORM_SYNTHETIC_DEMO__ ? '/' : operationsPath} end>Overview</NavLink>
         <NavLink to={newRequestPath} end>New Collection</NavLink>
-        <NavLink to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
-        {resultsContext ? <Link aria-current="location" to={recordsPath}>Data Explorer</Link> : <NavLink to={recordsPath}>Data Explorer</NavLink>}
+        <NavLink className="ops-wide-link" to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
+        {resultsContext ? <Link className="ops-wide-link" aria-current="location" to={recordsPath}>Data Explorer</Link> : <NavLink className="ops-wide-link" to={recordsPath}>Data Explorer</NavLink>}
       </div>
     </div>
     <div className="ops-admin" data-open={open} onKeyDown={event => {
@@ -33,6 +33,8 @@ export function WorkspaceNavigation() {
           <NavLink to={sourcesPath}>Sources</NavLink><NavLink to={topicsPath}>Topics &amp; bindings</NavLink>
           <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink><NavLink to={newJobPath} end>Single-source &amp; CSV</NavLink>
         </div></div>
+        <div className="ops-narrow-links"><NavLink to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
+          <NavLink to={recordsPath}>Data Explorer</NavLink></div>
         <div className="ops-links-section"><p>Marketing publication</p><div className="ops-nav-links">
           <NavLink to={marketSourcesPath}>Market sources</NavLink><NavLink to={directoryPath}>Public research sources</NavLink>
           <NavLink to={researchPath}>Creator research</NavLink><NavLink to={datasetsPath}>Intelligence datasets</NavLink>
