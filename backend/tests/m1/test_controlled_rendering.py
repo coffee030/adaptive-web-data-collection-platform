@@ -3,6 +3,7 @@ import json
 from dataclasses import replace
 
 import pytest
+from lxml import html
 from pydantic import ValidationError
 
 from backend.application.retry import retry_delay
@@ -15,8 +16,9 @@ from backend.core.contracts import (
 )
 from backend.core.evidence import EvidenceError, LocalEvidenceStore
 from backend.core.inputs import CapturedInput, InputError
+from backend.core.render_markup import offline_document
 from backend.core.rendering import permitted_render_origin, render_document
-from backend.tests.rendered_fixture import DIGEST, page
+from backend.tests.rendered_fixture import DIGEST, SCRIPT, page
 
 
 ORIGIN = "http://127.0.0.1:8091"
@@ -177,3 +179,69 @@ def test_actual_offline_rendering_recovery_and_integrity(
     with pytest.raises(EvidenceError) as damaged:
         store.resolve(reference.evidence_id)
     assert damaged.value.code == "evidence_integrity_error"
+
+
+def test_empty_icon_token_preserves_surrounding_markup_and_script_text():
+    literal = '<link rel="icon" href="data:,">'
+    tag = '<link\n href="data:,"\n rel="icon" />'
+    head = "<!doctype html><html><head><title>Hong Kong</title><!--" + literal + "-->"
+    tail = (
+        "<script>const markup = "
+        + json.dumps(literal)
+        + ";</script></head><body>茶</body></html>"
+    )
+    text = head + tag + tail
+    assert offline_document(text, html.document_fromstring(text)) == head + tail
+    for kept in (
+        '<link href="data:," rel="icon" sizes="32x32">',
+        '<link rel="icon" href="data:," href="/other">',
+        '<link rel="icon stylesheet" href="data:,">',
+        '<link rel="icon" href="data:image/png;base64,AA==">',
+        '<link rel="icon" href="/favicon.ico">',
+        "<template>" + literal + "</template>",
+    ):
+        text = head + kept + tail
+        assert offline_document(text, html.document_fromstring(text)) == text
+
+
+def test_actual_empty_favicon_preserves_raw_and_rejects_meaningful_icons(
+    monkeypatch, controlled_site
+):
+    origin, requests, _ = controlled_site
+    monkeypatch.setenv("CORE_RENDER_FIXTURE_ORIGIN", origin)
+    placeholder = '<link rel="icon" href="data:,">'
+    script = SCRIPT + "\nvoid " + json.dumps(placeholder) + ";"
+    raw = page("/catalog/products").decode().replace(SCRIPT, script)
+    text = raw.replace("</head>", placeholder + "</head>")
+    doc = CapturedInput(
+        body=text.encode(),
+        location=origin + "/catalog/products",
+        content_type="text/html",
+    )
+    config = ControlledRendering(
+        ready_selector="#catalog-ready",
+        script_sha256=[hashlib.sha256(script.encode()).hexdigest()],
+    )
+    result = render_document(source(origin), doc, config)
+    assert result.body == text.encode()
+    dom = html.document_fromstring(result.rendered_body)
+    assert not dom.xpath("/html/head/link")
+    assert dom.xpath("//script[not(@type)]")[0].text == script
+    assert len(dom.xpath("//article")) == 10
+    other_origin = origin.replace("127.0.0.1", "localhost")
+    for href in (
+        "data:image/png;base64,iVBORw0KGgo=",
+        origin + "/favicon.ico",
+        other_origin + "/favicon.ico",
+    ):
+        resource = '<link rel="icon" href="' + href + '">'
+        original = raw.replace("</head>", resource + "</head>").encode()
+        with pytest.raises(InputError) as blocked:
+            render_document(
+                source(origin),
+                replace(doc, body=original),
+                config.model_copy(update={"ready_selector": "#unavailable"}),
+            )
+        assert blocked.value.error.code == "render_resource_denied"
+        assert blocked.value.capture.body == original
+    assert not requests

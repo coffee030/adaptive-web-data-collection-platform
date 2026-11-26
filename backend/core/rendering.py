@@ -12,6 +12,7 @@ from lxml import etree, html
 
 from .contracts import ControlledRendering, RenderedEvidence, Source, controlled_origin
 from .inputs import CapturedInput, InputError
+from .render_markup import offline_document
 from .web_adapter import MAX_BODY_BYTES, _decode_html, checked_url
 
 BROWSER_PROCESS_OVERHEAD_SECONDS = 15
@@ -136,7 +137,7 @@ def render_document(
         )
     body = json.dumps(
         {
-            "html": text,
+            "html": offline_document(text, parsed),
             "url": document.location,
             "config": config.model_dump(),
             "limit": MAX_BODY_BYTES,
