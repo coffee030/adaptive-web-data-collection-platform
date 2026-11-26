@@ -86,6 +86,16 @@ def test_historical_menu_is_context_and_multilingual_direct_evidence_survives():
         "published_at": "2026-11-24",
     }
     assert classify(licensed, decision, NOW)["tier"] == "direct"
+    conflict = brief(
+        "Find affordable dining videos on YouTube",
+        "Neighbourhood dining",
+        "instagram",
+        "dedicated_video",
+    )
+    assert (
+        classify(licensed, evidence_intent(conflict, "affordable dining"), NOW)["tier"]
+        == "context"
+    )
     tv = {
         "title": "Hong Kong's food and dining scene",
         "platform": "TVmaze",
@@ -98,7 +108,11 @@ def test_historical_menu_is_context_and_multilingual_direct_evidence_survives():
         and "Affordability is unverified" in presenter["scope_notes"]
         and "Outside the requested channel" in presenter["scope_notes"]
     )
-    nature = brief("Show publications about 港鐵", "MTR transit guide", "other")
+    nature = brief(
+        "Show publications about 港鐵 and review the evidence",
+        "MTR transit guide",
+        "other",
+    )
     rail = {
         "title": "The World's Best Public Transport? | Hong Kong MTR Explained",
         "platform": "PeerTube · Canadian Civil",
@@ -110,7 +124,7 @@ def test_historical_menu_is_context_and_multilingual_direct_evidence_survives():
         "Find botanical Beauty Berry photography",
         "Botanical flora guide",
         "other",
-        discovery_focus="botanical Beauty Berry",
+        discovery_focus="Beauty Berry",
     )
     assert (
         classify(
@@ -121,7 +135,7 @@ def test_historical_menu_is_context_and_multilingual_direct_evidence_survives():
                 "topics": ["Plants", "Photography"],
                 "published_at": "2026-01-20",
             },
-            evidence_intent(plant, "botanical Beauty Berry"),
+            evidence_intent(plant, "Beauty Berry"),
             NOW,
         )["tier"]
         == "direct"

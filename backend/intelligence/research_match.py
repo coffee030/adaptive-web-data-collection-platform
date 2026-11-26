@@ -37,6 +37,7 @@ def evidence_intent(brief, focus):
     )
     low = original.casefold()
     named = {key for key, pattern in CHANNEL_NAMES.items() if re.search(pattern, low)}
+    selected = {brief.campaign.platform, *brief.alternative_platforms}
     cap = brief.max_evidence_age_days
     if cap is None:
         number = re.search(
@@ -56,18 +57,30 @@ def evidence_intent(brief, focus):
     return {
         "topics": query_topics(original),
         "focus_words": set(market_catalog.pieces(focus)),
+        "domain_words": set(market_catalog.pieces(original))
+        | set(re.findall(r"[^\W_]+", low)),
         "channels": named
         or (
             set()
             if brief.discovery_scope == "all_sources"
             else {brief.campaign.platform, *brief.alternative_platforms}
         ),
+        "channel_conflict": bool(
+            named
+            and named.isdisjoint(selected)
+            and brief.discovery_scope == "campaign_channels"
+        ),
         "days": cap,
         "needs_short": bool(re.search(SHORT_VIDEO, low))
         or brief.campaign.deliverable == "short_video",
         "needs_video": brief.campaign.deliverable
         in {"short_video", "dedicated_video", "video_integration"},
-        "needs_review": bool(re.search(r"\breviews?\b|評測|評價|食評", low)),
+        "needs_review": bool(
+            re.search(
+                r"\breviews\b|\b(?:product|video|sunscreen|restaurant|skincare) review\b|\b(?:who review|review of)\b|評測|評價|食評",
+                low,
+            )
+        ),
         "needs_cantonese": bool(
             re.search(r"\bcantonese\b|廣東話|粵語", low)
             or (brief.campaign.require_language and brief.campaign.language == "yue")
@@ -107,7 +120,7 @@ def classify(record, intent, as_of, *, historical=False, identity=False):
             "coffee",
             "vegetarian",
         }
-        and not focus & NATURE
+        and not intent["domain_words"] & NATURE
     ):
         return None
     if (sought & set(SUBJECTS)) - found:
@@ -138,7 +151,9 @@ def classify(record, intent, as_of, *, historical=False, identity=False):
         reasons.append("Directory identity only")
     platform = record.get("platform", "").casefold()
     channel = next((p for p in SOCIAL if p in platform), "other")
-    if intent["channels"] and channel not in intent["channels"]:
+    if intent["channel_conflict"]:
+        reasons.append("The brief and selected campaign channels differ")
+    elif intent["channels"] and channel not in intent["channels"]:
         reasons.append("Outside the requested channel")
     if intent["days"] is not None:
         stamp = record.get("published_at")

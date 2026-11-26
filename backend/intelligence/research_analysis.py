@@ -22,6 +22,9 @@ BROAD_TERMS = {
     "outdoors": ("hiking", "outdoors"),
     "budget": ("affordable", "budget"),
     "technology": ("technology", "software"),
+    "beauty": ("skincare", "beauty"),
+    "sun_protection": ("sunscreen", "spf"),
+    "pushchair": ("pushchair", "stroller"),
 }
 
 
