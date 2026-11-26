@@ -92,3 +92,24 @@
 .ops-main .studio-page-header + .job-ledger { margin-block-start:1.2rem; }
 .ops-main .job-ledger .toolbar { background:var(--studio-subtle); border-radius:var(--radius-standard) var(--radius-standard) 0 0; }
 @media(prefers-reduced-motion:no-preference) { .ops-nav-links a { transition:color 100ms ease-out, background-color 100ms ease-out; } }
+.ops-access { padding:clamp(1.2rem,5vw,5rem) max(1.1rem,4vw); min-height:100dvh; }
+.ops-access-layout { max-width:38rem; margin:clamp(0rem,6vh,4rem) auto; }
+.ops-access-brand { display:inline-block; font-size:1.1rem; font-weight:680; letter-spacing:-.025em; text-decoration:none; color:var(--studio-text); margin-block-end:1.25rem; }
+.ops-access-panel { border:1px solid var(--studio-border); border-block-start:3px solid var(--studio-accent); }
+.ops-access-panel .studio-panel-body { display:grid; gap:1rem; padding:clamp(1.25rem,3vw,2.5rem); }
+.ops-access-workspace { color:var(--studio-accent); font-size:.88rem; font-weight:610; }
+.ops-access h1 { font-size:clamp(1.7rem,4vw,2.55rem); max-width:100%; letter-spacing:-.042em; }
+.ops-access-panel p { line-height:1.55; }
+.ops-access-panel h1 + p { color:var(--studio-muted); margin:0; }
+.ops-key-file { position:relative; display:flex; align-items:center; justify-content:center; width:fit-content; min-height:44px; border-radius:6px; padding:.5rem 1rem; color:var(--studio-on-action); background:var(--studio-action); font-size:.94rem; font-weight:620; cursor:pointer; }
+.ops-key-file input { position:absolute; inset:0; opacity:0; width:100%; height:100%; cursor:pointer; }
+.ops-key-file:focus-within { outline:2px solid var(--studio-accent); outline-offset:3px; }
+.ops-access-panel .ops-file-hint,.ops-access-return { font-size:.86rem; color:var(--studio-muted); }
+.ops-access-panel .ops-file-hint code { color:var(--studio-text); font-size:.85rem; }
+.ops-key-form { border-block-start:1px solid var(--studio-border); padding-block-start:1rem; }
+.ops-key-form label { display:block; color:var(--studio-muted); font-size:.85rem; margin-block-end:.4rem; }
+.ops-key-form > div { display:flex; flex-wrap:wrap; gap:.5rem; }
+.ops-key-form input { font:inherit; min-width:0; flex:1 1 9rem; padding:.45rem .65rem; border:1px solid var(--control-border); border-radius:5px; background:var(--studio-canvas); color:var(--studio-text); }
+.ops-access-error { color:var(--studio-failure); }
+.ops-access-return { margin-block-start:1rem; }
+
