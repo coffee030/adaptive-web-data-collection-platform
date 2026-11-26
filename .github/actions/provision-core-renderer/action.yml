@@ -1,5 +1,10 @@
 name: Provision the Core test renderer
 description: Install the locked Playwright runtime and select system Chrome for sandboxed collection tests
+inputs:
+  first-probe:
+    description: First offline startup condition for this runner
+    default: sanitized
+    required: false
 runs:
   using: composite
   steps:
@@ -14,10 +19,31 @@ runs:
         browser="$(command -v google-chrome)"
         "$browser" --version
         echo "CORE_RENDER_BROWSER=$browser" >> "$GITHUB_ENV"
-    - name: Verify sandboxed Chrome can open an offline document
+    - name: Compare isolated Chrome startup with a disposable D-Bus session
       shell: bash
+      env:
+        FIRST_PROBE: ${{ inputs.first-probe }}
       run: |
-        if env -i PATH="$PATH" HOME="$HOME" CORE_RENDER_BROWSER="$CORE_RENDER_BROWSER" timeout 18s node "$GITHUB_ACTION_PATH/check.cjs"; then
+        command -v dbus-run-session
+        probe() {
+          printf 'Starting bounded %s probe\n' "$1"
+          if test "$1" = session; then
+            env -i PATH="$PATH" HOME="$HOME" CORE_RENDER_BROWSER="$CORE_RENDER_BROWSER" timeout 18s dbus-run-session -- node "$GITHUB_ACTION_PATH/check.cjs" session
+          else
+            env -i PATH="$PATH" HOME="$HOME" CORE_RENDER_BROWSER="$CORE_RENDER_BROWSER" timeout 18s node "$GITHUB_ACTION_PATH/check.cjs" sanitized
+          fi
+        }
+        case "$FIRST_PROBE" in
+          session) second=sanitized ;;
+          sanitized) second=session ;;
+          *) exit 2 ;;
+        esac
+        first_status=0
+        second_status=0
+        probe "$FIRST_PROBE" || first_status=$?
+        probe "$second" || second_status=$?
+        printf '%s=%s %s=%s\n' "$FIRST_PROBE" "$first_status" "$second" "$second_status"
+        if test "$first_status" -eq 0 && test "$second_status" -eq 0; then
           exit 0
         fi
         id -u
