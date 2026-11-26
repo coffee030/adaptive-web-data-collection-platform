@@ -18,6 +18,10 @@ Job detail (`GET /api/v1/collection-jobs/{job_id}`) also includes the following 
 | --- | --- |
 | `latest_claim_worker_instance_id` | Public UUID recorded on the latest successful claim. It continues to identify that claim while the Job waits for a retry. |
 | `latest_claim_execution_origin` | `worker` for a Celery claim, `direct` for a CLI or other direct claim, or null when identity was never recorded or the Job is unclaimed. `execution_attempt: 0` identifies a Job that has never been claimed. |
+| `latest_worker_heartbeat_at` | Last UTC heartbeat PostgreSQL received from the latest claim's Worker instance. Null when no heartbeat is recorded. |
+| `latest_worker_offline_detected_at` | First UTC observation by the presence watchdog after 15 seconds without a heartbeat. A later heartbeat from the same instance clears this field. |
+
+The Worker parent sends a heartbeat every five seconds, including while its child is busy. The Dispatcher checks presence every five seconds. A missing heartbeat reports an observation about that Worker. Job recovery follows the execution lease. A Celery claim has a 30-second lease renewed by its running child every ten seconds. Renewal locks the Job and checks the current attempt and unexpired deadline against PostgreSQL time. A direct CLI claim retains its fixed 90-second lease. Worker presence requires schema revision `core_worker_presence_01`.
 
 `pending → running → succeeded / partial / failed`. Retryable failures and lease recovery move `running → pending`, preserve the input, and clear the current `started_at`. A new claim sets a new `started_at`. Earlier start times remain in events. Terminal states retain counts and errors, release the lease, and clear temporary input.
 

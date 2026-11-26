@@ -5,9 +5,10 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import type { CollectionJob } from '../src/features/collection-jobs/api';
+import type { CollectionJob, JobDetailResponse } from '../src/features/collection-jobs/api';
 import type { Profile } from '../src/features/profiles/api';
 import type { EvidenceMetadata, GenericRecord, QuarantineEntry } from '../src/features/results/api';
+import { durableJobFields } from './job-readback';
 
 const api = '/api/v1';
 const origin = 'http://collection-fixture:8001';
@@ -249,7 +250,13 @@ test('isolated API and database recover with identical result snapshots and stor
     ['job', api + fixture.jobPath], ['record', api + fixture.recordPath], ['evidence', api + fixture.evidencePath],
     ['quarantine', api + fixture.quarantinePath], ['profile', fixture.profileApi],
   ] as const) {
-    expect(await read(request, path)).toEqual(fixture.snapshot[key]);
+    const current = await read(request, path);
+    const original = fixture.snapshot[key];
+    if (key === 'job') {
+      expect(durableJobFields(current as JobDetailResponse)).toEqual(durableJobFields(original as JobDetailResponse));
+    } else {
+      expect(current).toEqual(original);
+    }
   }
   const storedHash = compose('exec', '-T', 'api', 'python', '-c',
     'import os,sys; from pathlib import Path; from backend.core.evidence import LocalEvidenceStore; meta,body=LocalEvidenceStore(Path(os.environ["EVIDENCE_ROOT"])).resolve(sys.argv[1]); import hashlib; print(hashlib.sha256(body).hexdigest())',

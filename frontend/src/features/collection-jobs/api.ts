@@ -38,6 +38,8 @@ export interface CollectionJob {
 export interface JobDetailResponse extends CollectionJob {
   latest_claim_worker_instance_id?: string | null;
   latest_claim_execution_origin?: ExecutionOrigin | null;
+  latest_worker_heartbeat_at?: string | null;
+  latest_worker_offline_detected_at?: string | null;
 }
 
 export interface ExecutionEvent {

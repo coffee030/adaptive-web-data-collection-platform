@@ -468,6 +468,38 @@ test('retry and dispatch fields stay distinct and events keep their persisted se
   await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('Rate limiting');
 });
 
+test('worker liveness preserves its recorded times independently of the job status', async ({ page }) => {
+  const worker = 'abd42ca0-8850-43bb-b50c-008a46cb76c4';
+  const heartbeat = '2026-11-27T02:00:00Z';
+  const offline = '2026-11-27T02:00:17Z';
+  const running: JobDetailResponse = { ...partialJob, status: 'running', finished_at: null,
+    latest_claim_worker_instance_id: worker, latest_claim_execution_origin: 'worker' };
+  await page.route(api + '/sources/' + sourceId, route => route.fulfill({ json: { source_name: 'Fixture source' } }));
+  await page.route(api + '/sources/' + sourceId + '/versions/' + profileId,
+    route => route.fulfill({ json: { version: 2 } }));
+  await mockDetail(page, running);
+  await page.goto(jobUrl);
+  const diagnostics = page.getByRole('region', { name: 'Execution and dispatch' });
+  await expect(diagnostics).toContainText(worker);
+  await expect(diagnostics).toContainText('No heartbeat recorded');
+  await expect(diagnostics.getByText('Worker marked offline (UTC)')).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Execution events in API order' })).toBeVisible();
+
+  await mockDetail(page, { ...running, latest_worker_heartbeat_at: heartbeat, latest_worker_offline_detected_at: offline });
+  await page.getByRole('button', { name: 'Refresh job' }).click();
+  await expect(diagnostics.getByText('Last worker heartbeat (UTC)').locator('..').locator('time')).toHaveAttribute('datetime', heartbeat);
+  await expect(diagnostics.getByText('Worker marked offline (UTC)').locator('..').locator('time')).toHaveAttribute('datetime', offline);
+  await expect(page.getByRole('region', { name: 'Run overview' })).toContainText('Running');
+
+  await mockDetail(page, { ...running, latest_claim_worker_instance_id: null, latest_claim_execution_origin: 'direct' });
+  await expect(page.getByRole('button', { name: 'Refresh job' })).toHaveAttribute('aria-disabled', 'false');
+  await page.getByRole('button', { name: 'Refresh job' }).click();
+  await expect(diagnostics).toContainText('Direct execution');
+  await expect(diagnostics.getByText('Last worker heartbeat (UTC)')).toHaveCount(0);
+  await expect(diagnostics.getByText('Worker marked offline (UTC)')).toHaveCount(0);
+});
+
+
 test('hidden pages suspend polling and failed refresh preserves the visible Job until recovery', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
