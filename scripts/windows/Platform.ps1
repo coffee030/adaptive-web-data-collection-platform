@@ -86,6 +86,7 @@ function Start-Platform {
     Stop-DisabledFixture
     if ($Harbourline) { Invoke-HarbourlineProvisioning }
     elseif ($DemoMode) { Invoke-DemoProvisioning }
+    if ($Harbourline -or $Pilot) { Invoke-PublicResearchProvisioning }
     Write-Step '[6/7] Starting the React frontend...'
     Start-ContainerFrontend
     Write-Step '[7/7] Preparing the browser...'
