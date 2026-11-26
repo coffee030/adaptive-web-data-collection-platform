@@ -1,4 +1,0 @@
-interface:
-  display_name: "FYP Quality Review"
-  short_description: "Review FYP changes for merge readiness"
-  default_prompt: "Use $fyp-quality-review to review this pull request for architecture and data integrity issues."

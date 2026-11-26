@@ -1,6 +1,6 @@
 # M22C controlled onboarding pilot
 
-Use the same reviewed product commit for both arms. The [original pilot checkpoint](M22C-Operator-Pilot.md) records the frozen study and prior technical rehearsal. For this release candidate, record the reviewed commit in `M22C_PRODUCT_SHA` before provisioning, and repeat the technical rehearsal on the actual pilot environment. Store results and raw artifacts under the private `.local/m22c` directory. Provisioning creates `onboarding-results.csv` from the [blank trial sheet](m22c-onboarding-results.csv).
+Use the same reviewed product commit for both arms. The [original pilot checkpoint](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/evaluation/M22C-Operator-Pilot.md) records the frozen study and prior technical rehearsal. For this release candidate, record the reviewed commit in `M22C_PRODUCT_SHA` before provisioning, and repeat the technical rehearsal on the actual pilot environment. Store results and raw artifacts under the private `.local/m22c` directory. Provisioning creates `onboarding-results.csv` from the [blank trial sheet](m22c-onboarding-results.csv).
 
 ## Prepare a fresh pilot environment
 
