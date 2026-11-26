@@ -107,6 +107,14 @@ function Initialize-HarbourlineImage {
     Write-Step '[PASS] Granite files passed pinned digest verification.'
 }
 
+function Invoke-PublicResearchProvisioning {
+    $public = Invoke-Compose @('exec', '-T', 'api', 'python', '-m', 'backend.intelligence.install_public_research') 145
+    if ($public.Code -ne 0) { Write-Step '[WARN] Public research setup needs attention in Data Operations.' }
+    foreach ($line in ($public.Out -split '\r?\n')) {
+        if ($line -match '^Public research:') { Write-Step $line }
+    }
+}
+
 function Invoke-HarbourlineProvisioning {
     Write-Step '[INFO] Preparing fictional creator data and validating the Core CSV Evidence.'
     $result = Invoke-Compose @('exec', '-T', 'api', 'python', '-m', 'backend.experiments.marketing_m2.harbourline_demo') 160
