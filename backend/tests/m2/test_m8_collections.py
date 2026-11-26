@@ -148,6 +148,39 @@ def run_children(worker, request):
     return [worker.execute(UUID(item["job"]["job_id"])) for item in request["jobs"]]
 
 
+@pytest.mark.usefixtures("rate_url")
+def test_request_with_a_held_or_cancelled_child(
+    client, article_site, sessions, tmp_path
+):
+    origin, _ = article_site
+    topic = create_topic(client)
+    binding = bind(client, topic, approved(client, origin, "cards"))
+    parent = response(client, "POST", REQUESTS, 201, new_intent(topic, binding))
+    parent_path = f"{REQUESTS}/{parent['id']}"
+    job_id = parent["jobs"][0]["job"]["job_id"]
+    control = f"/collection-jobs/{job_id}/control"
+    worker = JobExecutor(sessions, LocalEvidenceStore(tmp_path))
+    response(client, "POST", control, 200, {"action": "pause"})
+    assert response(client, "GET", parent_path, 200)["status"] == "paused"
+    export_path = f"{parent_path}/records/export?format=json"
+    assert (
+        response(client, "GET", export_path, 409)["error"]["code"]
+        == "record_export_pending"
+    )
+    response(client, "POST", control, 200, {"action": "resume"})
+    worker.jobs.claim(UUID(job_id))
+    response(client, "POST", control, 200, {"action": "pause"})
+    assert response(client, "GET", parent_path, 200)["status"] == "running"
+    assert (
+        response(client, "GET", export_path, 409)["error"]["code"]
+        == "record_export_pending"
+    )
+    response(client, "POST", control, 200, {"action": "cancel"})
+    cancelled = response(client, "GET", parent_path, 200)
+    assert cancelled["status"] == "cancelled" and cancelled["finished_at"]
+    assert response(client, "GET", export_path, 200) == []
+
+
 def test_catalog_crud_active_scope_and_invalid_binding(client, job_setup):
     topic = create_topic(client)
     topic_path = f"/topics/{topic['id']}"

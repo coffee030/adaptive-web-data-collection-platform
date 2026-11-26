@@ -28,9 +28,20 @@ from backend.persistence.profiles import (
 
 from .inputs import Entry, check_entry
 
-JobStatus = Literal["pending", "running", "succeeded", "partial", "failed"]
+JobStatus = Literal[
+    "pending",
+    "running",
+    "pausing",
+    "paused",
+    "cancelled",
+    "succeeded",
+    "partial",
+    "failed",
+]
+JobAction = Literal["pause", "resume", "cancel"]
 ExecutionOrigin = Literal["worker", "direct"]
-TERMINAL = frozenset({"succeeded", "partial", "failed"})
+ACTIVE_ATTEMPT = frozenset({"running", "pausing"})
+TERMINAL = frozenset({"succeeded", "partial", "failed", "cancelled"})
 ATTEMPT_EVENTS = frozenset(
     {
         "CLAIMED",
@@ -198,6 +209,42 @@ class Jobs:
         with self.sessions() as session:
             return job_from_row(self._get_row(session, job_id))
 
+    def control(self, job_id: UUID, action: JobAction) -> Job:
+        with self.sessions.begin() as session:
+            row = self._get_row(session, job_id, lock=True)
+            if row.status == "cancelled" and action == "cancel":
+                return job_from_row(row)
+            if row.status in TERMINAL:
+                raise ProfileError(
+                    "invalid_job_transition", "A finished job cannot be changed"
+                )
+            if action == "cancel":
+                row.status = "cancelled"
+                row.finished_at = database_now(session)
+                row.input_payload = None
+                row.lease_expires_at = None
+                row.next_attempt_at = None
+                row.dispatch_due_at = None
+                kind = "CANCELLED"
+            elif action == "pause":
+                if row.status in {"paused", "pausing"}:
+                    return job_from_row(row)
+                row.status = "pausing" if row.status == "running" else "paused"
+                row.dispatch_due_at = None
+                kind = "PAUSE_REQUESTED" if row.status == "pausing" else "PAUSED"
+            else:
+                if row.status not in {"paused", "pausing"}:
+                    return job_from_row(row)
+                if row.status == "pausing":
+                    row.status = "running"
+                else:
+                    row.status = "pending"
+                    now = database_now(session)
+                    row.dispatch_due_at = max(now, row.next_attempt_at or now)
+                kind = "RESUMED"
+            self._add_event(session, row, kind)
+            return job_from_row(row)
+
     def detail(self, job_id: UUID) -> JobDetail:
         query = (
             select(
@@ -328,7 +375,7 @@ class Jobs:
             row = self._get_row(session, job_id, lock=True)
             now = database_now(session)
             if (
-                row.status != "running"
+                row.status not in ACTIVE_ATTEMPT
                 or row.execution_attempt != attempt
                 or row.lease_expires_at <= now
             ):
@@ -388,7 +435,7 @@ class Jobs:
     @staticmethod
     def owns_attempt(session: Session, row: JobRow, attempt: int) -> bool:
         owns = (
-            row.status == "running"
+            row.status in ACTIVE_ATTEMPT
             and row.execution_attempt == attempt
             and row.lease_expires_at > database_now(session)
         )
@@ -407,15 +454,16 @@ class Jobs:
         *,
         kind: str = "RETRY_SCHEDULED",
         attempt_limit: int | None = None,
+        delay_from: datetime | None = None,
     ) -> Job:
         if row.execution_attempt >= (attempt_limit or self.attempt_limit(session, row)):
             return self._finish(session, row, "failed", error=error)
-        row.status = "pending"
+        row.status = "paused" if row.status == "pausing" else "pending"
         row.started_at = None
         row.lease_expires_at = None
         row.error = error.model_dump(mode="json")
-        row.next_attempt_at = database_now(session) + delay
-        row.dispatch_due_at = row.next_attempt_at
+        row.next_attempt_at = (delay_from or database_now(session)) + delay
+        row.dispatch_due_at = row.next_attempt_at if row.status == "pending" else None
         self._add_event(session, row, kind, error=error)
         return job_from_row(row)
 
@@ -436,7 +484,11 @@ class Jobs:
         counts: tuple[int, int, int] = (0, 0, 0),
         error: CollectionError | None = None,
     ) -> Job:
-        if row.status != "running" or status not in TERMINAL:
+        if row.status not in ACTIVE_ATTEMPT or status not in {
+            "succeeded",
+            "partial",
+            "failed",
+        }:
             raise ProfileError(
                 "invalid_job_transition", "A running job requires a terminal outcome"
             )

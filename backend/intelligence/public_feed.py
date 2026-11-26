@@ -195,7 +195,7 @@ def refresh(sessions, spec):
             job = session.get(JobRow, feed.pending)
             if job.status == "succeeded" and not job.invalid_count:
                 feed.published, feed.error = feed.pending, None
-            elif job.status in ("pending", "running"):
+            elif job.status in ("pending", "running", "pausing", "paused"):
                 return
             else:
                 feed.error, feed.next_attempt = (

@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Status, Timestamp } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
-import { jobPath, jobsPath, listJobs, type JobStatus } from '../collection-jobs/api';
+import { jobInProgress, jobPath, jobsPath, listJobs, type JobStatus } from '../collection-jobs/api';
 import { listRecords, recordPath, recordsForRequest, recordsPath } from '../results/api';
 import { clip, recordTitleFields } from '../results/presentation';
 import { listSources, sourcesPath } from '../sources/api';
@@ -96,11 +96,13 @@ const jobCountLabel = (count: number) => `${count} ${count === 1 ? 'job' : 'jobs
 function RequestRow({ request }: { request: CollectionRequest }) {
   const failed = request.jobs.filter(({ job }) => job.status === 'failed').length;
   const partial = request.jobs.filter(({ job }) => job.status === 'partial').length;
-  const active = request.jobs.filter(({ job }) => job.status === 'pending' || job.status === 'running').length;
+  const active = request.jobs.filter(({ job }) => jobInProgress(job.status)).length;
+  const paused = request.jobs.filter(({ job }) => job.status === 'paused').length;
   const accepted = request.jobs.reduce((total, { job }) => total + job.valid_count, 0);
   const jobLabel = [
     jobCountLabel(request.jobs.length),
     active ? `${active} active` : '',
+    paused ? `${paused} paused` : '',
     partial ? `${partial} partial` : '',
     failed ? `${failed} failed` : '',
   ].filter(Boolean).join(' · ');

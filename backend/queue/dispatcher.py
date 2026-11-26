@@ -15,7 +15,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.application.jobs import Jobs, database_now
+from backend.application.jobs import ACTIVE_ATTEMPT, Jobs, database_now
 from backend.core.contracts import CollectionError
 from backend.intelligence.indexing import INDEX_CLAIM_WINDOW, Indexing
 from backend.intelligence import commons_works, public_directory, public_feed
@@ -76,7 +76,7 @@ class Dispatcher:
             row = session.scalar(
                 select(JobRow)
                 .where(
-                    JobRow.status == "running",
+                    JobRow.status.in_(ACTIVE_ATTEMPT),
                     JobRow.lease_expires_at <= func.now(),
                 )
                 .order_by(JobRow.lease_expires_at, JobRow.id)
@@ -90,7 +90,12 @@ class Dispatcher:
             )
             self.jobs._add_event(session, row, "WORKER_LOST", error=error)
             self.jobs.retry(
-                session, row, error, timedelta(seconds=5), kind="RECOVERY_REQUESTED"
+                session,
+                row,
+                error,
+                timedelta(seconds=5),
+                kind="RECOVERY_REQUESTED",
+                delay_from=row.lease_expires_at,
             )
             return True
 
