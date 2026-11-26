@@ -14,6 +14,7 @@ import { sourcePath } from '../sources/api';
 import { requestPath, requestsPath, type CollectionRequest } from '../topic-collections/api';
 import { errorCategory, ErrorDetails, ResultCounts, statusLabels } from './presentation';
 import { loadJobContext, shortId } from './jobContext';
+import { useVisibleJobPolling } from './useVisibleJobPolling';
 
 export function JobDetail() {
   const { jobId = '' } = useParams();
@@ -52,20 +53,7 @@ function JobDetailPage({ id }: { id: string }) {
     heading?.scrollIntoView({ block: 'start' });
   }, [active, hasJob, location.hash, restoring]);
 
-  useEffect(() => {
-    if (!active || busy) return;
-    let timer: number | undefined;
-    function schedule() {
-      window.clearTimeout(timer);
-      if (document.visibilityState === 'visible') timer = window.setTimeout(poll, 3000);
-    }
-    schedule();
-    document.addEventListener('visibilitychange', schedule);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener('visibilitychange', schedule);
-    };
-  }, [active, busy, events.refreshError, poll, revision]);
+  useVisibleJobPolling(active, busy, poll);
 
   function refresh() {
     if (busy) return;

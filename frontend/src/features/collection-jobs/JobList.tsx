@@ -7,7 +7,8 @@ import { Loading, Pagination, RequestProblem, Status, Timestamp } from '../../co
 import { ResultCounts, statusLabels } from './presentation';
 import { requestsPath } from '../topic-collections/api';
 import { ContextLink, readOffset, useResultReturn } from '../results/resultNavigation';
-import { loadJobContext, shortId } from './jobContext';
+import { loadJobContext, shortId, type JobPin } from './jobContext';
+import { useVisibleJobPolling } from './useVisibleJobPolling';
 
 const pageSize = 20;
 const noJobs: CollectionJob[] = [];
@@ -17,14 +18,17 @@ export function JobList() {
   const status = jobStatuses.find(value => value === search.get('status')) ?? '';
   const order = search.get('order') === 'newest' ? 'newest' : 'oldest';
   const offset = readOffset(search);
+  const live = search.get('live') === '1';
   const load = useCallback((signal: AbortSignal) => listJobs(pageSize, offset, status, signal, order), [offset, status, order]);
-  const { result, retry } = useResource(load);
+  const { result, retry, refreshing, refreshError } = useResource(load, 0, true, true, true);
   const loaded = result.state === 'ready' ? result.data : noJobs;
   const jobs = useMemo(() => loaded.slice(0, pageSize), [loaded]);
-  const contextLoad = useCallback((signal: AbortSignal) => loadJobContext(jobs, signal), [jobs]);
+  const pins = JSON.stringify(jobs.map(({ source_id, profile_version_id }) => ({ source_id, profile_version_id })));
+  const contextLoad = useCallback((signal: AbortSignal) => loadJobContext(JSON.parse(pins) as JobPin[], signal), [pins]);
   const context = useResource(contextLoad, 0, false, jobs.length > 0).result;
   const toolbar = useRef<HTMLSelectElement>(null);
   useResultReturn(result.state === 'ready');
+  useVisibleJobPolling(live && result.state === 'ready', refreshing, retry);
 
   function changeSearch(key: string, value: string, resetOffset = false) {
     const next = new URLSearchParams(search);
@@ -60,9 +64,16 @@ export function JobList() {
             <option value="newest">Newest first</option>
           </select>
         </label>
-        <button type="button" onClick={() => { if (result.state !== 'loading') retry(); }}
-          aria-disabled={result.state === 'loading'}>Refresh jobs</button>
+        <label className="job-live-toggle"><input type="checkbox" checked={live} onChange={event => {
+          const next = new URLSearchParams(search);
+          if (event.target.checked) next.set('live', '1');
+          else next.delete('live');
+          setSearch(next, { replace: true, preventScrollReset: true });
+        }} /> Live updates</label>
+        <button type="button" onClick={() => { if (!refreshing) retry(); }}
+          aria-disabled={refreshing}>Refresh jobs</button>
       </div>
+      {refreshError && <p className="notice job-stale" role="status">Job list refresh failed. Showing the last loaded jobs.</p>}
       {result.state === 'loading' && <Loading>Loading jobs…</Loading>}
       {result.state === 'error' && <RequestProblem error={result.error} resource="jobs" retry={() => {
         toolbar.current?.focus();

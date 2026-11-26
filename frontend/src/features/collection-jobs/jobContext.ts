@@ -4,7 +4,9 @@ import type { CollectionJob } from './api';
 
 export const shortId = (id: string) => id.slice(0, 8);
 
-export async function loadJobContext(jobs: readonly CollectionJob[], signal: AbortSignal) {
+export type JobPin = Pick<CollectionJob, 'source_id' | 'profile_version_id'>;
+
+export async function loadJobContext(jobs: readonly JobPin[], signal: AbortSignal) {
   const metadataSignal = AbortSignal.any([signal, AbortSignal.timeout(4_000)]);
   const sources = new Map<string, Source>();
   const profiles = new Map<string, Profile>();
