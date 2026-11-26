@@ -201,7 +201,7 @@ def create_server(
                     next_work_offset=works["next_offset"],
                 )
             return {
-                **fields(result, "state observed expires criteria"),
+                **fields(result, "state observed expires criteria retrieval"),
                 **contributors,
                 "basis": "Published historical works",
                 "unavailable": [
