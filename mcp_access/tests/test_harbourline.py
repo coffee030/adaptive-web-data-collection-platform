@@ -19,6 +19,10 @@ def test_public_and_demo_tool_scopes():
             assert {tool.name for tool in tools} == {
                 "search_public_creators",
                 "search_public_works",
+                "search_market_creators",
+                "find_market_activity",
+                "compare_market_creators",
+                "market_activity_overview",
             }
             assert all(tool.annotations.read_only_hint for tool in tools)
         async with connection(BASE, "demo") as demo:

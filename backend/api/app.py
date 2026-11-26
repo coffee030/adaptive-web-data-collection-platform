@@ -28,6 +28,7 @@ from backend.core.inputs import InputError
 from backend.core.profiles import ProfileError
 from backend.intelligence.api import router as intelligence_router
 from backend.intelligence.directory_api import router as directory_router
+from backend.intelligence.research_api import router as research_router
 from backend.intelligence.works_api import router as historical_works_router
 from backend.intelligence.market_api import router as market_router
 from backend.intelligence.store import Config as IntelligenceConfig
@@ -207,6 +208,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     app.include_router(marketing_router, prefix="/api/v1")
     app.include_router(company_router, prefix="/api/v1")
     app.include_router(campaign_tracking_router, prefix="/api/v1")
+    app.include_router(research_router, prefix="/api/v1")
     app.include_router(intelligence_router, prefix="/api/v1")
     app.include_router(directory_router, prefix="/api/v1")
     app.include_router(historical_works_router, prefix="/api/v1")

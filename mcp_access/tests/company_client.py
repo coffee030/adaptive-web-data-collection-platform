@@ -50,7 +50,12 @@ async def exercise():
     }
     async with connection(base, "company", **settings) as member:
         tools = (await member.list_tools()).tools
-        assert len(tools) == 10 and all(
+        assert {
+            "get_research_findings",
+            "get_research_progress",
+            "get_campaign_performance",
+            "export_campaign_performance",
+        } <= {tool.name for tool in tools} and all(
             tool.annotations.read_only_hint for tool in tools
         )
         assert "change_campaign_budget" not in {tool.name for tool in tools}

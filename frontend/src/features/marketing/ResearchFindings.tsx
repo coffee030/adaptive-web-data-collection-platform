@@ -51,7 +51,8 @@ interface Strategy {
   reviewed: number;
   exclusions: Record<string, number>;
   candidates: Candidate[];
-  suggested_topics: string[];
+  topics: string[];
+  topic_basis: string;
 }
 
 export interface ResearchReport {
@@ -105,7 +106,9 @@ function EvidenceList({report}:{report:ResearchReport}) {
   </Panel>;
 }
 
-function Options({report}:{report:ResearchReport}) {
+type UseOption = (platform: CampaignRequest['platform'],budget: number) => void;
+
+function Options({report,onUse}:{report:ResearchReport;onUse:UseOption}) {
   const [index,setIndex] = useState(0);
   const option = report.strategies[index];
   if (!option) return null;
@@ -124,12 +127,13 @@ function Options({report}:{report:ResearchReport}) {
         {c.historical.median_views.value!=null && <p>Median seven-day views {Number(c.historical.median_views.value).toLocaleString()} · {c.historical.median_views.observations} measured posts.</p>}
         {c.limitations.length>0 && <p>{c.limitations.map(explain).join(' · ')}</p>}
       </details>)}
-      {option.suggested_topics.length>0 && <p>Suggested topics · {option.suggested_topics.join(', ')}</p>}
+      {option.topics.length>0 && <p>{option.topic_basis==='supplied'?'Topics in your brief':'Suggested topics'} · {option.topics.join(', ')}</p>}
+      <button className="studio-secondary" onClick={()=>onUse(option.platform,option.budget_minor)}>Use these constraints in the campaign plan</button>
     </div>
   </Panel>;
 }
 
-export function ResearchFindings({report}:{report:ResearchReport}) {
+export function ResearchFindings({report,onUse}:{report:ResearchReport;onUse:UseOption}) {
   const [view,setView] = useState<'sources'|'strategy'>('sources');
   const first=report.strategies[0];
   const quoted=first?.status==='optimal';
@@ -139,7 +143,7 @@ export function ResearchFindings({report}:{report:ResearchReport}) {
       {report.next_steps.length>0 && <ul>{report.next_steps.map(text=><li key={text}>{text}</li>)}</ul>}
     </section>
     <div className="rc-switch" aria-label="Report section"><button aria-pressed={view==='sources'} onClick={()=>setView('sources')}>Source evidence <span>{report.research.examples.length}</span></button><button aria-pressed={view==='strategy'} onClick={()=>setView('strategy')}>Compare strategies <span>{report.strategies.length}</span></button></div>
-    {view==='sources' ? <EvidenceList report={report}/> : <Options report={report}/>}
+    {view==='sources' ? <EvidenceList report={report}/> : <Options report={report} onUse={onUse}/>}
     <p className="rc-footnote">{report.outcome_basis} Last analyzed {date(report.analyzed_at)}.</p>
   </div>;
 }

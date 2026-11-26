@@ -379,6 +379,104 @@ def create_server(base: str) -> MCPServer:
             next_offset=next_offset if has_more and next_offset <= MAX_OFFSET else None,
         )
 
+    if os.environ.get("FYP_MCP_OPERATOR_TOKEN"):
+
+        @server.tool(annotations=READ_ONLY)
+        async def inspect_collection_queue(
+            status: Literal["pending", "running", "succeeded", "partial", "failed"]
+            | None = None,
+            limit: Limit = 10,
+            offset: Offset = 0,
+        ) -> Page:
+            """List recent Core collection jobs, accepted and invalid record counts, attempts, and bounded recovery reasons."""
+            return await page(
+                "/collection-jobs",
+                limit,
+                offset,
+                public_job,
+                **({"status": status} if status else {}),
+                order="newest",
+            )
+
+        @server.tool(annotations=READ_ONLY)
+        async def collection_execution_events(
+            job_id: UUID, limit: Limit = 10, offset: Offset = 0
+        ) -> Page:
+            """Inspect the execution timeline of a job using worker identities, attempt numbers, status and error codes."""
+            events = rows(
+                await get(f"/collection-jobs/{job_id}/events", missing="Collection job")
+            )
+            items = []
+            for event in events[offset : offset + limit]:
+                items.append(
+                    {
+                        **fields(
+                            event,
+                            "event_id job_id status occurred_at kind execution_attempt worker_instance_id execution_origin",
+                        ),
+                        "error_code": event["error"].get("code")
+                        if isinstance(event.get("error"), dict)
+                        else None,
+                    }
+                )
+            more = offset + limit < len(events)
+            return Page(
+                items=items,
+                limit=limit,
+                offset=offset,
+                has_more=more,
+                next_offset=offset + limit if more else None,
+            )
+
+        @server.tool(annotations=READ_ONLY)
+        async def get_operations_pulse(window: Literal["24h", "7d"] = "24h") -> Row:
+            """Read measured throughput, worker activity, completion latency, failures and record quality for the selected time window."""
+            return row(await get("/operations/pulse", window=window))
+
+        @server.tool(annotations=READ_ONLY)
+        async def inspect_market_publications() -> Row:
+            """Inspect authorized market source licenses, publication state, refresh timing and Core collection receipts."""
+            result = await get("/marketing/intelligence/operator/market/sources")
+            return {"sources": result} if isinstance(result, list) else row(result)
+
+        @server.tool(annotations=READ_ONLY)
+        async def inspect_public_research_feed(
+            feed: Literal["public-directory", "public-works"],
+        ) -> Row:
+            """Inspect a public research publication's most recent Core job receipt, accepted rows, freshness and next check."""
+            return row(await get(f"/marketing/intelligence/operator/{feed}/status"))
+
+        @server.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=False,
+                idempotentHint=True,
+                openWorldHint=True,
+            )
+        )
+        async def refresh_market_publication(
+            key: Annotated[str, Field(pattern=r"^[a-zA-Z0-9_.-]{1,80}$")],
+        ) -> Row:
+            """Request a refresh of a specifically approved market source. Respect its eligibility, due time and backoff."""
+            try:
+                async with (
+                    rest_client() as client,
+                    client.stream(
+                        "POST",
+                        f"{base}/marketing/intelligence/operator/market/sources/{key}/refresh",
+                        headers={"Accept-Encoding": "identity"},
+                    ) as response,
+                ):
+                    if response.status_code not in (200, 202):
+                        raise ToolError(
+                            f"Harbourline rejected the refresh (HTTP {response.status_code})."
+                        )
+                    return row(await response_json(response))
+            except (httpx2.RequestError, TimeoutError):
+                raise ToolError(
+                    "Inspect the current source status before retrying this refresh."
+                ) from None
+
     @server.tool(annotations=READ_ONLY)
     async def list_categories(limit: Limit = 10, offset: Offset = 0) -> Page:
         """List active categories and their stable IDs."""

@@ -1,6 +1,7 @@
 from alembic import context
 
 from backend.intelligence import public_directory  # noqa: F401
+from backend.intelligence.research_models import ResearchRunRow as ResearchRunRow
 from backend.intelligence import models as intelligence  # noqa: F401 — register intelligence tables
 from backend.marketing import company_models  # noqa: F401
 from backend.marketing import models as marketing  # noqa: F401 — register marketing tables

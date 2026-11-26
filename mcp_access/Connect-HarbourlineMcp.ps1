@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory)][string]$ApiBase,
     [PSCredential]$Credential,
-    [switch]$AllowBudgetEdits
+    [switch]$AllowBudgetEdits,
+    [switch]$AllowWorkspaceEdits
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,7 +28,7 @@ try {
         $cookie = [Net.Cookie]::new('harbourline_company_session', $env:HARBOURLINE_MCP_SESSION, '/api/v1/marketing')
         $handler.CookieContainer.Add($endpoint, $cookie)
     }
-    foreach ($name in 'HARBOURLINE_MCP_SESSION','HARBOURLINE_MCP_COMPANY_ID','HARBOURLINE_MCP_ALLOW_BUDGET_EDITS','HARBOURLINE_MCP_WORKSPACE') {
+    foreach ($name in 'HARBOURLINE_MCP_SESSION','HARBOURLINE_MCP_COMPANY_ID','HARBOURLINE_MCP_ALLOW_BUDGET_EDITS','HARBOURLINE_MCP_ALLOW_WORKSPACE_EDITS','HARBOURLINE_MCP_WORKSPACE') {
         [Environment]::SetEnvironmentVariable($name, $null, 'Process')
     }
     $login = @{
@@ -49,6 +50,7 @@ try {
     $env:HARBOURLINE_MCP_COMPANY_ID = $identity.id
     $env:HARBOURLINE_MCP_WORKSPACE = 'company'
     $env:HARBOURLINE_MCP_ALLOW_BUDGET_EDITS = if ($AllowBudgetEdits) { '1' } else { '0' }
+    $env:HARBOURLINE_MCP_ALLOW_WORKSPACE_EDITS = if ($AllowWorkspaceEdits) { '1' } else { '0' }
     Write-Host ('Connected to {0} as {1}. Start the trusted MCP host in this terminal.' -f $identity.name,$identity.username)
 }
 finally {
