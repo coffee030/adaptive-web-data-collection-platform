@@ -42,8 +42,8 @@ async function responseError(response: Response) {
   return new ApiError('http', response.status, code, fields);
 }
 
-export function apiGet<T>(path: string, signal: AbortSignal) {
-  return request<T>(path, signal);
+export function apiGet<T>(path: string, signal: AbortSignal, requestTimeout?: number) {
+  return request<T>(path, signal, {}, requestTimeout);
 }
 
 export function apiAttachment(path: string, signal: AbortSignal, mediaType: string) {
