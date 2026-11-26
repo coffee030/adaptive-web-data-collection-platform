@@ -338,7 +338,7 @@ function Options({ report, onUse }: { report: ResearchReport; onUse: UseOption }
         <p>
           {option.reviewed
             ? `${option.reviewed} creator profiles reviewed for this channel. ${option.selected.length} in the verified allocation.`
-            : 'This company has no authorized creator profiles on the selected channel. Public leads can guide outreach for quotes.'}
+            : 'No company-authorized creator profile matches this strategy on the selected channel.'}
         </p>
         {option.allocated_minor != null && (
           <p>
