@@ -133,3 +133,18 @@ button.operator-danger:hover { background: var(--error-surface); }
 .operator-form-block legend { padding:0 8px 0 0; font-weight:650; }
 .operator-form-block p { font-size:.875rem; color:var(--text-secondary); grid-column:1/-1; }
 @media(max-width:600px) { .operator-form-block { grid-template-columns:1fr; } }
+
+.operator-public-sources { max-width: 54rem; }
+.operator-public-sources .operator-dataset-form { padding-block: 16px; border-block: 1px solid var(--divider); }
+.operator-public-sources select { min-height: 40px; font: inherit; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); padding: 4px 8px; }
+.operator-source-control { display: grid; justify-items: start; gap: 12px; padding-block: 20px; }
+.operator-source-control h2, .operator-source-control h3, .operator-source-control p, .operator-source-status { margin: 0; }
+.operator-source-control h3 { margin-top: 12px; }
+.operator-source-status { width: 100%; }
+.operator-source-status > div { display: grid; grid-template-columns: minmax(9rem, 1fr) 2fr; gap: 6px 18px; padding-block: 10px; border-block-start: 1px solid var(--divider); }
+.operator-source-status dt { color: var(--text-secondary); }
+.operator-source-status dd { margin: 0; }
+.operator-source-management { width: 100%; border-block-start: 1px solid var(--divider); padding-block-start: 12px; }
+.operator-source-management summary { width: fit-content; cursor: pointer; }
+.operator-source-management .operator-research-toolbar { margin-block-start: 12px; }
+@media (max-width: 600px) { .operator-source-status > div { grid-template-columns: 1fr; } }

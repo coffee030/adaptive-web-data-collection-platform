@@ -376,26 +376,72 @@ def export_campaign(
             409, "campaign_changed", "Reload the latest saved campaign"
         )
     brief = row.draft["brief"]
+    evaluation = row.draft.get("evaluation")
+    budget = evaluation["budget_minor"] / 100 if evaluation else brief["budget"]
+    currency = evaluation["currency"] if evaluation else "HKD"
     rows = [
         ("Company", user.name),
         ("Campaign", brief["name"]),
-        ("Brief", brief["description"]),
-        ("Budget cap (HKD)", brief["budget"]),
-        ("Required creators", brief["creatorCount"]),
-        ("Platform", brief["platform"]),
-        ("Deliverable", brief["deliverable"]),
-        ("Mandatory notes", brief["required"]),
+        (
+            "Export scope",
+            "Company brief, saved planning inputs and scenario assumptions",
+        ),
+        ("Brief", evaluation["description"] if evaluation else brief["description"]),
+        (f"Budget cap ({currency})", budget),
+        (
+            "Minimum creators",
+            evaluation["minimum_creators"] if evaluation else brief["creatorCount"],
+        ),
+        (
+            "Maximum creators",
+            evaluation["maximum_creators"] if evaluation else brief["creatorCount"],
+        ),
+        ("Platform", evaluation["platform"] if evaluation else brief["platform"]),
+        (
+            "Deliverable",
+            evaluation["deliverable"] if evaluation else brief["deliverable"],
+        ),
+        ("Mandatory notes for manual review", brief["required"]),
         ("Optional notes", brief["preferred"]),
-        ("Required content evidence", brief["requiredFacts"]),
-        ("Preferred evidence", brief["preferredFacts"]),
+        (
+            "Required content evidence",
+            ", ".join(evaluation["required_facts"])
+            if evaluation
+            else brief.get("requiredFacts", ""),
+        ),
+        (
+            "Preferred evidence",
+            ", ".join(evaluation["preferred_facts"])
+            if evaluation
+            else brief.get("preferredFacts", ""),
+        ),
     ]
-    if row.draft.get("scenario"):
-        rows.append(("Scenario basis", "Customer supplied assumptions"))
+    if assumption := row.draft.get("scenario"):
         rows.extend(
-            (k.replace("_", " "), v)
-            for k, v in row.draft["scenario"].items()
-            if v is not None
+            [
+                ("Scenario basis", "Customer supplied assumptions"),
+                ("Scenario currency", assumption["currency"]),
+            ]
         )
+        fields = {
+            "impressions": "Impressions",
+            "click_rate": "Click rate (fraction)",
+            "conversion_rate": "Conversion rate (fraction)",
+            "contribution_margin": "Contribution margin (fraction)",
+            "value_per_conversion_minor": "Value per conversion",
+            "advertising_spend_minor": "Advertising spend",
+            "campaign_cost_minor": "Campaign cost",
+        }
+        for key, label in fields.items():
+            value = assumption.get(key)
+            if key == "campaign_cost_minor" and value is None:
+                value = assumption.get("spend_minor")
+            if value is not None:
+                rows.append(
+                    (f"{label} ({assumption['currency']})", value / 100)
+                    if key.endswith("_minor")
+                    else (label, value)
+                )
     output = io.StringIO()
     writer = csv.writer(output, quoting=csv.QUOTE_ALL)
     for name, value in rows:

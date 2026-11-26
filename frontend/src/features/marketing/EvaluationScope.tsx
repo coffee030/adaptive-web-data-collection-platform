@@ -1,4 +1,4 @@
-import { languageOptions, type CampaignResult } from './intelligence';
+import { languageOptions, platformOptions, type CampaignResult } from './intelligence';
 
 export const readable = (value: string) => {
   if (value.startsWith('required_fact_unverified:')) {
@@ -28,8 +28,9 @@ export const readable = (value: string) => {
 
 export function EvaluationScope({ result }: { result: CampaignResult }) {
   const scope = result.campaign.shortlist;
-  const reasons = new Map<string,number>();
-  if (result.plan.status === 'infeasible') {
+  const reviewed = result.reviewed_count ?? result.recommendations.length;
+  const reasons = new Map<string,number>(Object.entries(result.exclusions ?? {}));
+  if (result.plan.status === 'infeasible' && !result.exclusions) {
     for (const candidate of result.recommendations.filter(row=>!row.eligible)) {
       for (const reason of new Set(candidate.limitations)) {
         if (reason === 'target_market_evidence_unavailable' || reason === 'target_language_evidence_unavailable') continue;
@@ -38,9 +39,9 @@ export function EvaluationScope({ result }: { result: CampaignResult }) {
     }
   }
   const leading = [...reasons].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(0,3);
-  return <div className="hl-evaluated-scope"><p><strong>Evaluated scope</strong> · {scope ? 'Selected pool (' + scope.length + ')' : 'All creators'} · {result.recommendations.length} reviewed</p>
+  return <div className="hl-evaluated-scope"><p><strong>Evaluated scope</strong> · {scope ? 'Selected pool (' + scope.length + ')' : 'All creators'} · {reviewed} reviewed</p>
     {result.plan.status === 'infeasible' && (leading.length
       ? <><strong>Leading exclusions</strong><ul>{leading.map(([reason,count])=><li key={reason}>{readable(reason)} · {count} {count===1?'creator':'creators'}</li>)}</ul></>
-      : <p>{result.recommendations.length ? 'The available quotes and eligible creator count cannot meet this budget and required team size.' : 'No current records are available for this pool.'}</p>)}
+      : <p>{result.recommendations.length ? 'The available quotes and eligible creator count cannot meet this budget and required team size.' : 'This pool has no approved creator profile on '+platformOptions[result.campaign.platform]+'. Select a covered platform or request a profile, relevant historical content and a current quote.'}</p>)}
   </div>;
 }

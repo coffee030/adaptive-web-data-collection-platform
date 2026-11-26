@@ -48,7 +48,7 @@ export function WorkspaceNavigation() {
         <NavLink to={topicsPath}>Topics &amp; bindings</NavLink>
         <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink>
         <NavLink to={newJobPath} end className="nav-secondary">Single-source &amp; CSV</NavLink>
-        <NavLink to={directoryPath} className="nav-secondary">Public directory</NavLink>
+        <NavLink to={directoryPath} className="nav-secondary">Public research sources</NavLink>
         <NavLink to={researchPath} className="nav-secondary">Creator research</NavLink>
         <NavLink to={datasetsPath} className="nav-secondary">Intelligence datasets</NavLink>
       </div>

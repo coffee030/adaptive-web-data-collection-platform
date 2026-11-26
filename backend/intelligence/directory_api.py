@@ -6,8 +6,8 @@ from pydantic import BaseModel
 
 from backend.marketing.api import NonCacheableRoute, operator_store
 from backend.marketing.store import MarketingError
-from backend.persistence.models import JobRow, SourceRow
 from .api import CustomerScope, Store
+from .operator_receipt import publication_status
 from .public_directory import (
     DirectoryResults,
     DirectoryRow,
@@ -66,18 +66,7 @@ def directory_results(store, q):
 
 @router.get("/operator/public-directory/status", dependencies=operator)
 def status(request: Request):
-    with request.app.state.sessions() as session:
-        feed = session.get(DirectoryRow, 1)
-        if not feed:
-            return {"state": "unconfigured"}
-        source = session.get(SourceRow, feed.source_id)
-        job = session.get(JobRow, feed.pending) if feed.pending else None
-        return {
-            "state": source.approval_status,
-            "next_check": feed.next_attempt,
-            "error": feed.error,
-            "collection": job.status if job else None,
-        }
+    return publication_status(request, 1, snapshot)
 
 
 @router.post("/operator/public-directory/prepare", dependencies=operator)

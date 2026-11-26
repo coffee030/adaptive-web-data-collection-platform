@@ -29,7 +29,7 @@ const OperatorGate = lazy(async () => ({ default: (await import('../features/ope
 const CompanySetup = lazy(async () => ({ default: (await import('../features/operator/CompanyRegistry')).CompanySetup }));
 const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
 const IntelligenceDatasets = lazy(async () => ({ default: (await import('../features/operator/IntelligenceDatasets')).IntelligenceDatasets }));
-const PublicDirectoryOperations = lazy(async () => ({ default: (await import('../features/marketing/PublicCreatorDirectory')).PublicDirectoryOperations }));
+const PublicDirectoryOperations = lazy(async () => ({ default: (await import('../features/operator/PublicResearchSources')).PublicDirectoryOperations }));
 const CreatorResearch = lazy(async () => ({ default: (await import('../features/operator/CreatorResearch')).CreatorResearch }));
 const operatorPrefixes = [operationsPath, jobsPath, requestsPath, topicsPath, articlesPath, recordsPath, evidencePath, sourcesPath];
 const ProfilePage = lazy(async () => ({ default: (await import('../features/profiles/ProfilePage')).ProfilePage }));
@@ -60,7 +60,7 @@ function OperationsApp() {
   useEffect(() => {
     const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
       : pathname === '/operations/companies' ? 'Company setup'
-      : pathname === directoryPath ? 'Public creator directory'
+      : pathname === directoryPath ? 'Public research sources'
       : pathname === researchPath ? 'Creator research and refresh'
       : pathname === datasetsPath ? 'Intelligence datasets'
       : pathname === jobsPath ? 'Collection Jobs'
