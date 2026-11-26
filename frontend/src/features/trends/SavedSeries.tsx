@@ -38,6 +38,7 @@ export function SavedSeries({ provider, refreshProvider }: { provider: Provider;
   const [start, setStart] = useState(first);
   const [end, setEnd] = useState(last);
   const [rangeError, setRangeError] = useState('');
+  const [submittedHere, setSubmittedHere] = useState(false);
   const matches = selected.join(',') === submitted.join(',') && start === first && end === last;
   const show = submitted.length > 0 && matches && provider.authorized;
   const read = new URLSearchParams({ start: first, end: last });
@@ -56,7 +57,10 @@ export function SavedSeries({ provider, refreshProvider }: { provider: Provider;
       return;
     }
     setRangeError('');
-    if (matches) comparison.retry();
+    if (matches) {
+      setSubmittedHere(true);
+      comparison.retry();
+    }
     else {
       const next = new URLSearchParams({ view: 'saved', start, end });
       selected.forEach(id => next.append('watch_id', id));
@@ -87,6 +91,6 @@ export function SavedSeries({ provider, refreshProvider }: { provider: Provider;
         {rangeError && <p className="notice" role="alert">{rangeError}</p>}
       </> : <p className="notice">No saved series. Use Discover articles to choose an edition, date and article.</p>}</Resource>
     </section>
-    {show && <Resource state={comparison} label="dated pageviews">{result => <TrendComparison result={result} />}</Resource>}
+    {show && <Resource state={comparison} label="dated pageviews">{result => <TrendComparison result={result} submittedHere={submittedHere} />}</Resource>}
   </>;
 }

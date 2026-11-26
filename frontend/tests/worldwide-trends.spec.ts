@@ -144,4 +144,6 @@ test('compare exact dates including observed zero and missing; browser Back rest
   await expect(page.getByRole('checkbox',{name:/Compare First topic/})).toBeChecked();
   await expect(page.getByLabel('Through (UTC)')).toHaveValue(through);
   await expect(count).toBeFocused();
+  await page.getByRole('button',{name:'Compare selected (2)'}).click();
+  await expect(page.getByRole('heading',{name:'Daily article pageviews'})).toBeFocused();
 });

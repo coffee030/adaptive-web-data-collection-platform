@@ -10,16 +10,17 @@ import { actionProblem, articleTitle, number, trendBase, type Comparison, type P
 
 interface Selection { point: Point; day: string; title: string }
 
-export function TrendComparison({ result }: { result: Comparison }) {
+export function TrendComparison({ result, submittedHere }: { result: Comparison; submittedHere: boolean }) {
   const [selected, setSelected] = useState<Selection>();
   const heading = useRef<HTMLHeadingElement>(null);
   const summary = useRef<HTMLHeadingElement>(null);
   const location = useLocation();
   const navigation = useNavigationType();
-  useResultReturn(true);
+  const focusSummary = submittedHere || navigation === 'PUSH';
+  useResultReturn(!focusSummary);
   useEffect(() => {
-    if (navigation === 'PUSH') summary.current?.focus();
-  }, [navigation]);
+    if (focusSummary) summary.current?.focus();
+  }, [focusSummary]);
   const download = useAction(actionProblem, selected?.point.record_id);
   function show(value: Selection) {
     setSelected(value);
