@@ -132,7 +132,7 @@ export function IntelligenceDatasets() {
         <fieldset className="operator-form-block"><legend>Import an authorized file</legend>
           <p>Enter the dataset ID above, then select the partner's JSON delivery.</p>
           <label>Dataset JSON<input type="file" name="file" accept=".json,application/json" /></label>
-          <label className="operator-dataset-attest"><input name="grant" type="checkbox" />I reviewed the written grant and its permitted uses for this workspace.</label>
+          <label className="operator-dataset-attest"><input name="grant" type="checkbox" />I reviewed the written grant, including any permission to export a company plan.</label>
           <div><button type="submit" className="primary" value="import" disabled={pending}>Import dataset</button></div>
         </fieldset>
       </form>

@@ -104,7 +104,9 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       exportRequest.current = controller;
       setCheckingExport(true);
       try {
-        const blob = await apiAttachment('/marketing/companies/campaigns/'+campaignReceipt.id+'/export?version='+campaignReceipt.version,controller.signal,'text/csv');
+        const params = new URLSearchParams({ version:String(campaignReceipt.version) });
+        if (current?.allocation_export_receipt) params.set('allocation', current.allocation_export_receipt);
+        const blob = await apiAttachment('/marketing/companies/campaigns/'+campaignReceipt.id+'/export?'+params,controller.signal,'text/csv');
         const href = URL.createObjectURL(blob);
         const link = document.createElement('a'); link.href=href; link.download='harbourline-campaign.csv'; link.click();
         window.setTimeout(()=>URL.revokeObjectURL(href),1000);
@@ -161,8 +163,8 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     <p className="hl-crumb">{draft.brief.name || 'Campaign workspace'}</p>
     <div className="hl-page-heading"><div><h1>Campaign plan</h1><p>Review quoted allocations and test a different budget or candidate selection.</p></div>
       {draft.saved && <button type="button" className="hl-primary" disabled={campaignReceipt?.pending || checkingExport || running || Boolean(error) || (mode === 'demo' && !current)}
-        onClick={exportPlan}>{active?.status === 'infeasible' ? mode === 'demo' ? 'Export infeasible assessment CSV' : 'Export brief only (CSV)' : mode === 'demo' ? 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
-    {mode === 'partner' && draft.saved && <p className="hl-note">The CSV contains your campaign brief and scenario assumptions. Current creator evidence is available in this workspace.</p>}
+        onClick={exportPlan}>{mode === 'demo' || current?.allocation_export_receipt ? active?.status === 'infeasible' ? 'Export infeasible assessment CSV' : 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
+    {mode === 'partner' && draft.saved && <p className="hl-note">{current?.allocation_export_receipt ? 'Plan export includes the current allocation, fees and source references approved for your company.' : 'Export your campaign brief and scenario assumptions. Exporting creator allocations requires permission from the source owners.'}</p>}
     {exportError && <p role="alert">{exportError}</p>}
     {exported && <p role="status">CSV exported.</p>}
     {error && <IntelligenceError error={error} retry={retry} />}

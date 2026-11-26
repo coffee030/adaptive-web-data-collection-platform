@@ -158,7 +158,10 @@ def main() -> None:
             marketing.dispatch(publish_marketing)
             if partner_directory:
                 refresh_partner_files(intelligence, Path(partner_directory))
-            if intelligence.config.workspace or intelligence.config.public_demo_directory:
+            if (
+                intelligence.config.workspace
+                or intelligence.config.public_demo_directory
+            ):
                 public_directory.refresh(sessions)
                 public_feed.refresh(sessions, commons_works.feed())
             intelligence.maintain()
@@ -205,7 +208,10 @@ def main() -> None:
                     purge = monotonic() >= indexing_cleanup_due
                     intelligence.maintain(purge=purge)
                     if purge:
-                        if intelligence.config.workspace or intelligence.config.public_demo_directory:
+                        if (
+                            intelligence.config.workspace
+                            or intelligence.config.public_demo_directory
+                        ):
                             public_directory.refresh(sessions)
                             public_feed.refresh(sessions, commons_works.feed())
                         if partner_directory:

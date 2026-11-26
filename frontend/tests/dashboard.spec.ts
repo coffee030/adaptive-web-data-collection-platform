@@ -167,13 +167,13 @@ test('Narrow navigation exposes operations by keyboard and restores focus on Esc
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   const toggle = nav.getByRole('button', { name: 'Operations' });
   await expect(nav.getByRole('link', { name: 'New Collection' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Sources', exact:true })).toHaveCount(0);
   await toggle.focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Tab');
-  await expect(nav.getByRole('link', { name: 'Sources' })).toBeFocused();
-  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveCSS('outline-style', 'solid');
+  await expect(nav.getByRole('link', { name: 'Sources', exact:true })).toBeFocused();
+  await expect(nav.getByRole('link', { name: 'Sources', exact:true })).toHaveCSS('outline-style', 'solid');
   await page.keyboard.press('Escape');
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');

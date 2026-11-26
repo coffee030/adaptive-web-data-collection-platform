@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.application.jobs import database_now
 from backend.intelligence.contracts import Campaign, Ref, Scenario, StrictModel
+from backend.intelligence.plan_export import allocation_rows
 from backend.persistence.database import settings
 from .api import NonCacheableRoute, operator_store
 from .company_models import CompanyCampaignRow, CompanyRow, CompanySessionRow, MemberRow
@@ -428,9 +429,14 @@ def save_campaign(
 
 @router.get("/campaigns/{campaign_id}/export")
 def export_campaign(
-    campaign_id: UUID, version: int, user: User, session: Database
+    campaign_id: UUID,
+    version: int,
+    request: Request,
+    user: User,
+    session: Database,
+    allocation: Annotated[str | None, Query(pattern=r"^[a-f0-9]{64}$")] = None,
 ) -> Response:
-    row = session.get(CompanyCampaignRow, (user.id, campaign_id))
+    row = session.get(CompanyCampaignRow, (user.id, campaign_id), with_for_update=True)
     if row is None:
         raise MarketingError(404, "campaign_unavailable", "Campaign unavailable")
     if row.version != version:
@@ -446,7 +452,9 @@ def export_campaign(
         ("Campaign", brief["name"]),
         (
             "Export scope",
-            "Company brief, saved planning inputs and scenario assumptions",
+            "Company brief and authorized allocation"
+            if allocation
+            else "Company brief, saved planning inputs and scenario assumptions",
         ),
         ("Brief", evaluation["description"] if evaluation else brief["description"]),
         (f"Budget cap ({currency})", budget),
@@ -478,6 +486,20 @@ def export_campaign(
             else brief.get("preferredFacts", ""),
         ),
     ]
+    if allocation:
+        if not evaluation:
+            raise MarketingError(409, "evaluation_required", "Evaluate the saved brief")
+        rows.extend(
+            allocation_rows(
+                request.app.state.intelligence, user.id, evaluation, allocation
+            )
+        )
+        rows.append(
+            (
+                "Manual requirements review",
+                "Pending" if brief["required"].strip() else "None specified",
+            )
+        )
     if assumption := row.draft.get("scenario"):
         rows.extend(
             [

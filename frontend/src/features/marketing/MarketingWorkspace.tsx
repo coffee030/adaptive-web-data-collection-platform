@@ -48,7 +48,7 @@ function Home({ capability, serverDemo, apiMode }: { capability: ReactNode; serv
       <aside className="hl-home-brief"><FolderOpenIcon aria-hidden="true"/><h2>{research.title || 'Your research shortlist'}</h2><p>{research.leads.length ? research.leads.length+' saved '+(research.leads.length===1?'lead':'leads') : 'Save a contributor to compare their work and prepare a request for rates.'}</p><Link to={path('research-plan')}>Open research shortlist →</Link></aside></div>}
     {!apiMode && !demo && <section className="hl-availability">{capability}{mode==='partner' && <div className="hl-actions">{serverDemo && <Link to="/demo/connected">Open backend demo</Link>}<Link to="/demo">Open fictional demo</Link></div>}</section>}
     <section className="hl-campaigns"><div className="hl-row-between"><h2>{directory && mode === 'server-demo' ? 'Fictional campaign practice' : 'Campaign drafts'}</h2>{directory && campaignAction}{!demo && draft.saved && <button onClick={()=>{openDraft();navigate(path('advisor'));}}>Start another campaign</button>}</div>
-      {draft.saved ? <div className="hl-draft-row"><Link to={path('advisor')}>{draft.brief.name}</Link><span>{fee(draft.brief.budget)} budget · {draft.brief.creatorCount} creator slots</span></div>
+      {draft.saved ? <div className="hl-draft-row"><Link to={path('advisor')}>{draft.brief.name}</Link><span>{fee(draft.brief.budget)} budget · {draft.brief.creatorCount} {draft.brief.creatorCount===1?'creator slot':'creator slots'}</span></div>
       : <p>Start a campaign to save a brief, shortlist and budget.</p>}
       {saved.map(item=><button className="hl-text-button" key={item.key} onClick={()=>{openDraft(item.key);navigate(path('advisor'));}}>{item.name}</button>)}
     </section>

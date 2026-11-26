@@ -41,7 +41,9 @@ def company_works(
 
 @router.get("/operator/public-works/status", dependencies=operator)
 def status(request: Request):
-    return publication_status(request, commons_works.feed().row_id, work_search.snapshot)
+    return publication_status(
+        request, commons_works.feed().row_id, work_search.snapshot
+    )
 
 
 @router.post("/operator/public-works/prepare", dependencies=operator)

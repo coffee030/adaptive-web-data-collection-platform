@@ -196,6 +196,8 @@ class IntelligenceStore:
                 "Dataset grant does not permit this workspace use",
             )
         payload = body.model_dump(mode="json")
+        if not body.grant.company_plan_export:
+            payload["grant"].pop("company_plan_export", None)
         payload["records"].sort(key=lambda item: item["id"])
         digest = sha256(
             json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()

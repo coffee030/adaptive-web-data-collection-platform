@@ -116,3 +116,7 @@
 .hl-source-figure img { width:auto; max-width:100%; max-height:225px; border-radius:5px; }
 .hl-source-figure figcaption { margin-top:6px; font-size:12px; color:var(--hl-muted); }
 .hl-evidence-notice > a { display:inline-flex; margin:5px 14px 5px 0; }
+
+.hl-collected-source { margin:12px 0; overflow-wrap:anywhere; }
+.hl-collected-source dl { padding:8px 0 0; }
+.hl-collected-source dd { margin:0 0 8px; color:var(--hl-muted); }

@@ -107,6 +107,7 @@ export interface Recommendation {
   limitations: string[];
 }
 export interface CampaignResult {
+  allocation_export_receipt?: string | null;
   reviewed_count?: number;
   exclusions?: Record<string,number>;
   revision: string;

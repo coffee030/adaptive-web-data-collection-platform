@@ -61,7 +61,11 @@ export function ResearchPlan({isolated}:{isolated:boolean}) {
     {!people.length && <div className="hl-evidence-notice"><strong>Your shortlist is empty.</strong><p>Save contributors from their published works or a source-linked identity record.</p></div>}
     {(directory.result.state==='error'||works.result.state==='error') && <p role="alert">Some sources could not be checked. <button onClick={()=>{directory.retry();works.retry();}}>Retry source checks</button></p>}
     {people.map(({id,items})=><article className="hl-shortlisted-lead" key={id}><div className="hl-row-between"><h3>{items[0]?.name??(pending?'Checking source…':'Evidence unavailable')}</h3><button onClick={()=>toggle(id)} aria-label={'Remove '+(items[0]?.name??id)}>Remove</button></div>
-      {items.length>0 && <><p>{items[0]!.evidence}</p>{(items[0]!.reading || items[0]!.excerpt) && <p className="hl-result-excerpt">{items[0]!.reading || items[0]!.excerpt}</p>}<small>{items.length} {items.length===1?'source record':'source records'} · {Array.from(new Set(items.map(w=>w.platform))).join(' / ')}</small> <SourceLink url={items[0]!.source}>Source revision ↗</SourceLink></>}</article>)}
+      {items.length>0 && <><p>{items[0]!.evidence}</p>{(items[0]!.reading || items[0]!.excerpt) && <p className="hl-result-excerpt">{items[0]!.reading || items[0]!.excerpt}</p>}<small>{items.length} {items.length===1?'source record':'source records'} · {Array.from(new Set(items.map(w=>w.platform))).join(' / ')}</small> <SourceLink url={items[0]!.source}>Source revision ↗</SourceLink>
+      {items[0]!.excerpt && <details className="hl-collected-source"><summary>Inspect saved work and attribution</summary>
+        {items.map(item=><section key={item.source}><h4>{item.date} · {item.platform}</h4>
+          <p>{item.reading || item.excerpt}</p><small>{item.attribution} · <SourceLink url={item.source}>Source revision</SourceLink> · <SourceLink url={item.textLicense}>Description license</SourceLink></small>
+        </section>)}</details>}</>}</article>)}
       {ready.length>=2 && <section className="hl-source-comparison"><h2>Compare documented work</h2><TableRegion label="Public research comparison"><table><thead><tr><th>Contributor</th><th>Records</th><th>Platform or source</th><th>Documented dates</th></tr></thead><tbody>{ready.map(({id,items})=>{
         const dates=items.map(w=>w.date.slice(0,4)).filter(Boolean).sort();
         return <tr key={id}><th scope="row">{items[0]!.name}</th><td>{items.length}</td><td>{[...new Set(items.map(w=>w.platform))].join(', ')}</td><td>{[...new Set([dates[0],dates.at(-1)])].join('–')}</td></tr>;
@@ -80,7 +84,8 @@ export function ResearchPlan({isolated}:{isolated:boolean}) {
       {notice && <p role="status">{notice}</p>}
       {company && <><p>Campaign Advisor checks your company’s eligible content and firm quotes. Public leads remain available in this research shortlist.</p>
         {brief.title && !draft.saved ? <button disabled={campaignReceipt?.pending} onClick={()=>{
-          saveBrief({...draft.brief,name:brief.title,description:brief.objective||brief.title,budget:brief.budget??draft.brief.budget});
+          saveBrief({...draft.brief,name:brief.title,description:brief.objective||brief.title,budget:brief.budget??draft.brief.budget,
+            required:[draft.brief.required,brief.deliverable && 'Requested deliverable · '+brief.deliverable].filter(Boolean).join('\n')});
           navigate(path('advisor')+'#edit-requirements');
         }}>Use saved research brief in Advisor</button> : <Link to={path('advisor')}>Open company Campaign Advisor →</Link>}</>}
     </aside></div>

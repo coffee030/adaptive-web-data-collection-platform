@@ -4,6 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from hashlib import sha256
 from math import log1p
 from pathlib import Path
 from typing import Literal
@@ -82,6 +83,7 @@ class CampaignResult(BaseModel):
     retrieval: Literal["granite_int8", "character_tfidf"]
     model_version: str | None
     indexing: Literal["ready", "preparing", "fallback"]
+    allocation_export_receipt: str | None = None
     reviewed_count: int
     exclusions: dict[str, int]
     categories: Categories
@@ -372,7 +374,31 @@ def recommend(
         indexing = "preparing"
     else:
         indexing = "ready"
+    export_receipt = None
+    if mode == "partner" and candidates:
+        evaluated = {item.creator.id for item in candidates}
+        grants = [
+            dataset.body.grant
+            for dataset in catalog.snapshot.datasets
+            if any(
+                row.creator_id in evaluated
+                and getattr(row, "platform", campaign.platform) == campaign.platform
+                and row.observed_at <= catalog.snapshot.as_of
+                for row in dataset.body.records
+            )
+        ]
+        if grants and all(grant.company_plan_export for grant in grants):
+            reviewed = "\n".join(
+                (
+                    catalog.snapshot.revision,
+                    campaign.model_dump_json(),
+                    method,
+                    plan.model_dump_json(),
+                )
+            )
+            export_receipt = sha256(reviewed.encode()).hexdigest()
     return CampaignResult(
+        allocation_export_receipt=export_receipt,
         state="empty"
         if not candidates
         else ("available" if plan.status == "optimal" else "incomplete"),

@@ -50,6 +50,7 @@ class Grant(StrictModel):
     academic_demo: bool = False
     pilot_analytics: bool = False
     commercial_display: bool = False
+    company_plan_export: bool = False
 
     def allows(self, mode: Mode) -> bool:
         if mode == "demo":

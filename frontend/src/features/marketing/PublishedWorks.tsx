@@ -21,7 +21,10 @@ export function WorkEvidence({work,author}:{work:PublishedWork;author:string}) {
       <small>{work.visual_evidence.source_language} · Transcribed from the <SourceLink url={work.revision_url}>archived photograph</SourceLink>.</small>
     </section>}
     {work.pageviews && <p>{work.pageviews.count.toLocaleString('en-HK')} views of this Commons file page · {work.pageviews.month} · <SourceLink url={work.pageviews.source_url}>View measurement</SourceLink></p>}
-    <div className="hl-source-links"><SourceLink url={work.revision_url}>Source revision ↗</SourceLink>
+    <details className="hl-collected-source"><summary>Collected source details</summary><dl>
+      <dt>Credited contributor</dt><dd>{author}</dd><dt>Archived record</dt><dd>{work.record_id}</dd><dt>Collection evidence</dt><dd>{work.evidence_id}</dd>
+      <dt>Description</dt><dd>Formatted or shortened from the linked revision. <SourceLink url={work.text_license_url}>Description license</SourceLink></dd></dl></details>
+    <div className="hl-source-links"><SourceLink url={work.archive_url}>Archive page ↗</SourceLink><SourceLink url={work.revision_url}>Source revision ↗</SourceLink>
       {work.original_url && work.original_url!==work.archive_url && <SourceLink url={work.original_url}>Original publication ↗</SourceLink>}
       <SourceLink url={work.license_url}>{work.license}</SourceLink><SourceLink url={work.text_license_url}>Description license</SourceLink></div>
   </section>;
@@ -48,7 +51,7 @@ export function PublishedWorks({isolated,query,preview=false}:{isolated:boolean;
     return platforms.join(' · ');
   }
   return <section className="hl-published" aria-label="Published work results">
-    <header className="hl-section-bar"><div><h2>{preview?'Research leads':'Published work matches'}</h2><p>{preview?'Historical sources for the suggested search.':all.length+' credited contributors'+(query?' for “'+query+'”':'')}</p></div>
+    <header className="hl-section-bar"><div><h2>{preview?'Research leads':'Published work matches'}</h2><p>{preview?'Historical sources for the suggested search.':all.length+' credited '+(all.length===1?'contributor':'contributors')+(query?' for “'+query+'”':'')}</p></div>
       {preview ? <Link to={path('directory')+'?'+new URLSearchParams({q:query})}>View results →</Link> : brief.leads.length>0 && <Link to={path('research-plan')}>Open research shortlist ({brief.leads.length}) →</Link>}</header>
     {!preview && result.data.criteria && <p className="hl-note">{result.data.criteria} {result.data.retrieval==='evidence_filter_with_granite' && 'Matching works are ordered by multilingual relevance.'}</p>}
     {!all.length && <div className="hl-evidence-notice"><strong>No published work matched this search.</strong><p>Try a place, dish or contributor name. Public identity records can help you find someone to investigate.</p>
@@ -65,5 +68,6 @@ export function PublishedWorks({isolated,query,preview=false}:{isolated:boolean;
           <SourceLink url={person.profile_url}>Contributor profile ↗</SourceLink></div>}
       </li>;
     })}</ul>
+    {!!contributors.length && <p className="hl-note">Description excerpts are formatted from the credited <SourceLink url="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA sources</SourceLink>. Each work links to its revision and media license.</p>}
   </section>;
 }
