@@ -1,0 +1,93 @@
+{
+  "observed": "2026-11-26T06:50:22.392Z",
+  "records": [
+    {
+      "item": "Q107994588",
+      "name": "Mama Cheung",
+      "local_name": "張媽媽廚房Mama Cheung",
+      "description": "Hong Kong YouTuber who makes videos about cooking",
+      "local_description": "",
+      "revision": "2561263761"
+    },
+    {
+      "item": "Q104173819",
+      "name": "Sunny Lam",
+      "local_name": "晴天林",
+      "description": "Hong Kong singer-songwriter",
+      "local_description": "香港YouTuber",
+      "revision": "2561260885"
+    },
+    {
+      "item": "Q83612827",
+      "name": "Pomato",
+      "local_name": "小薯茄",
+      "description": "an online video production team based in Hong Kong",
+      "local_description": "香港網上短片製作團隊",
+      "revision": "2572690577"
+    },
+    {
+      "item": "Q46865242",
+      "name": "Smilingboris",
+      "local_name": "笑波子",
+      "description": "Hong Kong YouTuber",
+      "local_description": "香港YouTuber",
+      "revision": "2549064137"
+    },
+    {
+      "item": "Q108830064",
+      "name": "Boris Wong",
+      "local_name": "黃浚銘",
+      "description": "Hong Kong YouTuber",
+      "local_description": "香港YouTuber",
+      "revision": "2518697651"
+    },
+    {
+      "item": "Q88180477",
+      "name": "Christy Choi",
+      "local_name": "蔡曉童",
+      "description": "Hong Kong actress and YouTuber",
+      "local_description": "香港女演員、YouTuber",
+      "revision": "2527354846"
+    },
+    {
+      "item": "Q68069111",
+      "name": "Sabrina Ng",
+      "local_name": "吳冰",
+      "description": "Hong Kong actress",
+      "local_description": "香港女演員",
+      "revision": "2544321579"
+    },
+    {
+      "item": "Q88071155",
+      "name": "Tang Lai Ying",
+      "local_name": "鄧麗英",
+      "description": "Hong Kong actress, singer and YouTuber",
+      "local_description": "香港女演員、歌手、YouTuber",
+      "revision": "2529856934"
+    },
+    {
+      "item": "Q87068866",
+      "name": "Rik Ching",
+      "local_name": "程仁富",
+      "description": "Hong Kong actor and YouTuber",
+      "local_description": "香港男藝人",
+      "revision": "2527355250"
+    },
+    {
+      "item": "Q30946117",
+      "name": "Mira",
+      "local_name": "嚴嘉欣",
+      "description": "Hong Kong internet celebrity",
+      "local_description": "香港網紅",
+      "revision": "2483842286"
+    },
+    {
+      "item": "Q112720537",
+      "name": "Tommy Tsang",
+      "local_name": "曾達恩",
+      "description": "Hong Kong male YouTuber",
+      "local_description": "香港男性YouTuber",
+      "revision": "2536363981"
+    }
+  ]
+}

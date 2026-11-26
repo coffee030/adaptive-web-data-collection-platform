@@ -1,6 +1,7 @@
 import { ApiError, apiGet } from '../../lib/api';
 
 export interface MarketingCapability {
+  company_accounts?: boolean;
   provider: 'youtube_data_api';
   policy_url: string;
   permission_status: 'additional_permission_pending';

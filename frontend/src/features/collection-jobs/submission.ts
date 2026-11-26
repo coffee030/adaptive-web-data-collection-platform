@@ -33,7 +33,7 @@ export function retainJobSubmission(intent: Submission) {
   outstanding = intent;
   if (intent.storageKey) {
     try { sessionStorage.setItem(outstandingKey, intent.storageKey); }
-    catch { /* The open workspace still holds the original submission in memory. */ }
+    catch {}
   }
 }
 
@@ -42,7 +42,7 @@ export function resolveJobSubmission(intent: Submission) {
   outstanding = undefined;
   forgetRequestIntent(intent);
   try { sessionStorage.removeItem(outstandingKey); }
-  catch { /* Storage may be unavailable for this tab. */ }
+  catch {}
 }
 
 export function submissionError(error: unknown): { message: string; uncertain: boolean } {

@@ -41,7 +41,7 @@ class PilotHandler(FixtureHandler):
         )
 
     def log_message(self, format, *args):
-        pass  # Record one receipt for each HTTP response.
+        pass
 
 
 if __name__ == "__main__":

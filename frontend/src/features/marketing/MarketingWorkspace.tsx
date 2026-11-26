@@ -2,7 +2,7 @@ import { useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { Link, NavLink, Route, Routes, ScrollRestoration, useLocation, useNavigate } from 'react-router';
 import { Loading, RequestProblem } from '../../components/feedback';
 import { useResource } from '../../lib/useResource';
-import { getMarketingCapability } from './api';
+import { getMarketingCapability, type MarketingCapability } from './api';
 import { Advisor } from './Advisor';
 import { ConnectedPlan } from './ConnectedPlan';
 import type { DataMode } from './intelligence';
@@ -12,58 +12,41 @@ import { CreatorExplorer } from './CreatorExplorer';
 import { fee } from './contracts';
 import { CatalogUpdates } from './CatalogUpdates';
 import { MarketingDraft, useMarketing, type WorkspaceMode } from './workspace';
+import { CompanyControls } from './CompanyAccess';
+import { OverviewAnalytics } from './Overview';
+import { PublicCreatorDirectory } from './PublicCreatorDirectory';
 import './marketing.css';
+import './analytics.css';
 
-function Home({ capability, serverDemo }: { capability: ReactNode; serverDemo: boolean }) {
+function Home({ capability, serverDemo, apiMode }: { capability: ReactNode; serverDemo: boolean; apiMode?: DataMode }) {
   const { draft, demo, mode, path, otherDrafts, openDraft } = useMarketing();
-  const saved = otherDrafts();
   const navigate = useNavigate();
-
-  function search(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const query = String(new FormData(event.currentTarget).get('query') ?? '').trim();
-    navigate(query ? path('creators') + '?' + new URLSearchParams({ q: query }) : path('creators'));
-  }
-
-  return <div className="hl-home hl-page">
-    <section className="hl-home-intro">
-      <div>
-        <h1>Plan a creator campaign</h1>
-        <p>Describe your campaign, review creator evidence and build a plan for your Hong Kong launch.</p>
-        <div className="hl-actions"><Link className="hl-button hl-primary" to={path('advisor')}>{draft.saved ? 'Open Campaign Advisor' : 'Start a campaign'}</Link>
-          <Link className="hl-button" to={path('creators')}>Explore creators</Link></div>
-      </div>
-      <aside className="hl-home-aside" aria-label="Draft and data availability">
-        <h2>{draft.saved ? 'Current campaign draft' : 'Campaign drafts'}</h2>
-        {draft.saved ? <><Link className="hl-campaign-link" to={path('advisor')}>{draft.brief.name}</Link>
-          <p>{fee(draft.brief.budget)} budget · {draft.brief.creatorCount} creator slots</p></> : <p>Start a brief to keep your campaign scope and planning assumptions in this browser.</p>}
-        {!demo && draft.saved && <button type="button" onClick={() => { openDraft(); navigate(path('advisor')); }}>Start another campaign</button>}
-        {!demo && saved.length > 0 && <div className="hl-home-state"><h3>Other saved campaigns</h3>
-          {saved.map(item => <p key={item.key}><button type="button" onClick={() => { openDraft(item.key); navigate(path('advisor')); }}>{item.name}</button></p>)}</div>}
-        {demo ? <div className="hl-home-state"><strong>Fictional demo</strong><p>Sample creators, quotes and evidence use a Sheung Wan coffee launch.</p></div>
-          : <div className="hl-home-state">{capability}{mode === 'partner' && <div className="hl-actions">
-              {serverDemo && <Link to="/demo/connected">Open backend demo</Link>}
-              <Link to="/demo">Open fictional demo <span aria-hidden="true">↗</span></Link>
-            </div>}</div>}
-      </aside>
-    </section>
-    <section className="hl-home-search" aria-labelledby="hl-home-search-heading">
-      <h2 id="hl-home-search-heading">Search creators</h2>
-      <form role="search" aria-label="Search creators" onSubmit={search}>
-        <label className="hl-sr" htmlFor="hl-home-query">Creator name, handle or topic</label>
-        <input id="hl-home-query" name="query" placeholder="Creator name, handle or topic" maxLength={100} />
-        <button type="submit">Search</button>
-      </form>
+  const saved = otherDrafts();
+  return <div className="hl-page hl-overview">
+    <div className="hl-page-heading"><div><h1>Workspace overview</h1><p>Creator coverage and campaign activity in your workspace.</p></div>
+      <Link className="hl-button hl-primary" to={path('advisor')}>{draft.saved ? 'Open Campaign Advisor' : 'Start a campaign'} <span aria-hidden="true">↗</span></Link></div>
+    <OverviewAnalytics mode={apiMode}/>
+    {!apiMode && !demo && <section className="hl-availability">{capability}{mode==='partner' && <div className="hl-actions">{serverDemo && <Link to="/demo/connected">Open backend demo</Link>}<Link to="/demo">Open fictional demo</Link></div>}</section>}
+    <section className="hl-campaigns"><div className="hl-row-between"><h2>Campaign drafts</h2>{!demo && draft.saved && <button onClick={()=>{openDraft();navigate(path('advisor'));}}>Start another campaign</button>}</div>
+      {draft.saved ? <div className="hl-draft-row"><Link to={path('advisor')}>{draft.brief.name}</Link><span>{fee(draft.brief.budget)} budget · {draft.brief.creatorCount} creator slots</span></div>
+      : <p>Start a campaign to save a brief, shortlist and budget.</p>}
+      {saved.map(item=><button className="hl-text-button" key={item.key} onClick={()=>{openDraft(item.key);navigate(path('advisor'));}}>{item.name}</button>)}
     </section>
   </div>;
 }
 
-function MarketingShell() {
+function MarketingShell({ capabilityRequest }: { capabilityRequest: ReturnType<typeof useResource<MarketingCapability>> }) {
   const { demo, mode, draft, path, storageFailed } = useMarketing();
   const { pathname } = useLocation();
   const lastPath = useRef(pathname);
   const main = useRef<HTMLElement>(null);
-  const { result, retry } = useResource(getMarketingCapability, 0, false, !demo);
+  const { result, retry } = capabilityRequest;
+  const navigate = useNavigate();
+  function search(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = String(new FormData(event.currentTarget).get('query') ?? '').trim();
+    navigate(path('creators') + (query ? '?' + new URLSearchParams({q:query}) : ''));
+  }
   const serverDemo = result.state === 'ready' && result.data.demo_intelligence === 'available';
   const apiMode: DataMode | undefined = result.state === 'ready'
     ? mode === 'server-demo' && serverDemo ? 'demo'
@@ -93,19 +76,21 @@ function MarketingShell() {
     : <div className="hl-state" role="status"><strong>Live creator intelligence unavailable</strong>
       <p>Current YouTube permissions cover approved research only. Customer recommendations require eligible data.</p></div>;
 
-  return <div className="harbour">
+  return <div className="harbour dark">
     <ScrollRestoration />
     <a className="skip-link" href="#harbour-main" onClick={event => { event.preventDefault(); main.current?.focus(); }}>Skip to main content</a>
-    <header className="hl-topbar">
-      <Link to={path()}><Brand /></Link>
-      <nav aria-label="Marketing workspace"><NavLink end to={path()}>Workspace</NavLink><NavLink to={path('advisor')}>Campaign Advisor</NavLink>
-        <NavLink to={creatorPath}>Creator Explorer</NavLink><NavLink to={path('plan')}>Campaign plan</NavLink></nav>
-      {mode !== 'partner' && <div className="hl-mode"><strong>{demo ? 'Fictional demo' : 'Fictional backend demo'}</strong><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? "/workspace" : "/"}>Live workspace</Link></div>}
-    </header>
+    <header className="hl-navigation"><div className="hl-navigation-top"><Link className="hl-wordmark" to={path()}><Brand/></Link>
+      {pathname !== path('creators') && <form role="search" aria-label="Workspace search" onSubmit={search}><input name="query" aria-label="Creator name, handle or topic" placeholder="Search creators or topics" minLength={2} maxLength={100}/><button aria-label="Search creators" type="submit">↵</button></form>}
+      <CompanyControls/>{mode !== 'partner' && <div className="hl-mode"><strong>{demo ? 'Fictional demo' : 'Fictional backend demo'}</strong><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : '/'}>Live workspace</Link></div>}
+    </div><div className="hl-nav-rule"><nav aria-label="Marketing workspace">
+      <NavLink end to={path()}>Workspace</NavLink><NavLink aria-label="Creator Explorer" to={creatorPath}><span className="hl-nav-prefix">Creator </span><span className="hl-nav-desktop">Explorer</span><span className="hl-nav-mobile">Creators</span></NavLink>
+      {apiMode==='partner' && <NavLink aria-label="Public directory" to={path('directory')}><span className="hl-nav-prefix">Public </span>Directory</NavLink>}
+      <NavLink aria-label="Campaign Advisor" to={path('advisor')}><span className="hl-nav-prefix">Campaign </span>Advisor</NavLink><NavLink aria-label="Campaign plan" to={path('plan')}><span className="hl-nav-desktop">Campaign plan</span><span className="hl-nav-mobile">Plan</span></NavLink></nav></div></header>
     <main id="harbour-main" tabIndex={-1} ref={main}>
       {storageFailed && <p className="hl-storage" role="alert">This browser could not save the draft. Open work stays available for this session.</p>}
-      <CatalogUpdates mode={pathname === path() ? undefined : apiMode}><Routes>
-        <Route path={path()} element={<Home capability={capability} serverDemo={serverDemo} />} />
+      <CatalogUpdates mode={apiMode}><Routes>
+        <Route path={path()} element={<Home capability={capability} serverDemo={serverDemo} apiMode={apiMode} />} />
+        {mode === 'partner' && <Route path={path('directory')} element={apiMode ? <PublicCreatorDirectory/> : capability}/>}
         <Route path={path('advisor')} element={<Advisor capability={capability} mode={apiMode} />} />
         <Route path={path('creators')} element={<CreatorExplorer capability={capability} mode={apiMode} />} />
         <Route path={path('plan')} element={apiMode ? <ConnectedPlan mode={apiMode} />
@@ -117,5 +102,8 @@ function MarketingShell() {
 }
 
 export function MarketingWorkspace({ mode }: { mode: WorkspaceMode }) {
-  return <MarketingDraft mode={mode} key={mode}><MarketingShell /></MarketingDraft>;
+  const capabilityRequest = useResource(getMarketingCapability, 0, false, mode !== 'sample');
+  const { result } = capabilityRequest;
+  if (mode === 'partner' && result.state === 'loading') return <Loading>Opening workspace…</Loading>;
+  return <MarketingDraft mode={mode} key={mode} companyEnabled={result.state === 'ready' && result.data.company_accounts}><MarketingShell capabilityRequest={capabilityRequest} /></MarketingDraft>;
 }

@@ -1,12 +1,26 @@
-# Adaptive Scalable and Observable Web Data Collection Platform
+# Harbourline
 
-This final-year project is a reusable web data collection platform. An authorised operator chooses a topic, approved sources and a keyword, and the Core applies a reviewed extraction profile to each source within its access limits. A partner can receive validated records as CSV or JSON and trace each result back to the captured source page.
+Harbourline helps Hong Kong businesses and agencies research creators, compare the evidence behind a recommendation and plan a campaign within confirmed quotes. It runs locally on the **Adaptive Scalable and Observable Web Data Collection Platform**, the reusable FYP Core for approved collection, validation and evidence. [System overview](docs/architecture/System-Overview.md)
 
-The downstream industry application is open. The Core runs on a trusted local machine and also supports controlled HTML and allowlisted CSV inputs.
+## Start on Windows
 
-[System overview](docs/architecture/System-Overview.md) · [Synthetic Demo](#synthetic-demo) · [Windows Normal-mode setup](docs/setup/Windows-One-Click-Setup.md#get-started) · [Live publisher evidence](docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#timeout-validation-and-final-acceptance-on-20-november-2026-utc)
+Extract the release into a writable local folder and run the launcher for your workspace. See [first-time setup](docs/setup/Beginner-Windows-Setup.md) for Windows and Docker requirements.
 
-## Quick start on Windows
+### Harbourline Marketing Intelligence Demo
+
+Double-click **`Start-Harbourline-Demo.bat`** to open the connected Creator Explorer, Campaign Advisor and Plan Builder with fictional data. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use `-HarbourlineTextOnly` to rehearse that mode deliberately.
+
+The demo includes a bundled fictional marketing library and one controlled CSV collected by the Core. The latter enters the fictional marketing dataset after separate Source authorization and Profile approval, validated Records, and a verified raw Evidence match. The demo grants cover academic demonstration. Partner data requires its own authorization and dataset onboarding.
+
+Open the printed connected workspace URL. Run `Stop-Platform.bat -Demo` to stop the owned services and retain state. Run the Harbourline launcher again to reuse the same settings, model cache and data.
+
+### Private partner pilot on Windows
+
+Double-click **Start-Harbourline-Pilot.bat** on a trusted Windows workstation. Open the printed URL, normally [127.0.0.1:5199](http://127.0.0.1:5199/). From the sign-in screen, open **Operator setup**. Use the credential in `.local-pilot/harbourline-operator.token` to create a company and its first administrator. Give that person their credentials privately. Administrators use their company menu to add or revoke individual team accounts.
+
+In **Data Operations → Intelligence datasets**, load companies and select the **Dataset destination** before importing independently authorized partner records. Customers sign in with individual accounts. Saved campaigns, shortlists and scenario assumptions belong to their company. Use separate browser profiles on shared machines. On upgrade, operators may explicitly assign the prior pilot to a company after verifying grants. That step ends the shared customer login for those datasets. Run `Diagnose-Platform.bat -Pilot` for diagnostics and `Stop-Platform.bat -Pilot` to stop services. [Partner data and company contracts](docs/contracts/Marketing-M2-intelligence.md)
+
+## Run the collection Core on Windows
 
 Extract the release ZIP into a writable local NTFS folder, or clone the release checkout. Double-click `Start-Platform.bat` for Normal mode or `Start-FYP-Demo.bat` for the bundled Demo. Start handles the same prerequisite checks as Setup. If Windows requires a restart, run the same launcher afterward.
 
@@ -36,21 +50,7 @@ The PowerShell commands for operating the same Demo are available as well.
 
 Open the printed URL, normally [127.0.0.1:5198](http://127.0.0.1:5198/). The first successful Start prepares three fictional topics with 18 validated Records, verifiable Evidence, Article History and CSV/JSON downloads. Demo has its own settings and Docker volumes. [Presentation walkthrough](docs/evaluation/M16-FYP-Presentation-Runbook.md)
 
-The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B verified successful Jobs and detail evidence for Welsh Government, Scottish Fiscal Commission and Economics Observatory. The FTC and New York Fed candidates were unsupported under the conditions evaluated in M10. [Shared Request evidence trace](docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#record-to-detail-evidence-verification) · [M10 real website feasibility](docs/evaluation/M10-Real-Website-Feasibility.md)
-
-### Harbourline Marketing Intelligence Demo
-
-Double-click **`Start-Harbourline-Demo.bat`** to open the connected Creator Explorer, Campaign Advisor and Plan Builder with fictional data. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use `-HarbourlineTextOnly` to rehearse that mode deliberately.
-
-The demo includes a bundled fictional marketing library and one controlled CSV collected by the Core. The latter enters the fictional marketing dataset after separate Source authorization and Profile approval, validated Records, and a verified raw Evidence match. The demo grants cover academic demonstration. Partner data requires its own authorization and dataset onboarding.
-
-Open the printed connected workspace URL. Run `Stop-Platform.bat -Demo` to stop the owned services and retain state. Run the Harbourline launcher again to reuse the same settings, model cache and data.
-
-### Private partner pilot on Windows
-
-Double-click **Start-Harbourline-Pilot.bat** on the trusted pilot workstation. It starts a separate, empty local partner workspace with its own database, model cache and private settings in `.local-pilot`. Open the printed URL, normally [127.0.0.1:5199](http://127.0.0.1:5199/). When a creator or campaign request asks for sign-in, use the username **partner** and the password from `.local-pilot/partner-password.txt`. The operator gives this password to the authorized participant. Use separate browser profiles for customers and operators and close the participant's private browsing window after a shared-machine session.
-
-Operators open `/operations/intelligence-datasets` from the pilot URL, choose **Partner**, and use the operator token from `.local-pilot/harbourline-operator.token` to import and inspect each independently authorized dataset. For automated refresh, the operator can supply updated grant-checked JSON in the workspace folder under `.local-pilot/partner-refresh`. Core Data Operations prompts for the username **operator** and the same operator token. Use `Diagnose-Platform.bat -Pilot` for diagnostics and `Stop-Platform.bat -Pilot` for shutdown. Keep the workstation and private settings under operator control. The pilot provides one shared customer workspace per installation. [Supported import rows, grants, and limits](docs/contracts/Marketing-M2-intelligence.md)
+The Synthetic Demo uses bundled fixtures. In a separate Normal environment, M18B verified successful Jobs and detail evidence for Welsh Government, Scottish Fiscal Commission and Economics Observatory. The FTC and New York Fed candidates were unsupported under the conditions evaluated in M10. [Shared Request evidence trace](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/evaluation/M18B-Live-Multi-Source-Acceptance.md#record-to-detail-evidence-verification) · [M10 real website feasibility](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/evaluation/M10-Real-Website-Feasibility.md)
 
 ## Collect by topic
 
@@ -60,7 +60,7 @@ Operators open `/operations/intelligence-datasets` from the pilot URL, choose **
 4. **Review results.** In the collection request, check the child job statuses and select **View request records**. Inspect an accepted record, then select **View capture evidence** to see its capture details and SHA-256. If the profile stores article history, open **Article history** to inspect versions and observations. Use a child job's **Quarantine** link to see rejected records.
 5. **Export records.** After the child jobs finish, select **Download CSV** or **Download JSON** on the request page. To export a single source job, open its **Job details** and use the download buttons there.
 
-For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-source collection and CSV import**. The [example data guide](docs/demo/M5.5-dashboard-demo-runbook.md) provides the settings and inputs for the bundled HTML and CSV samples.
+For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-source collection and CSV import**. The [example data guide](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/demo/M5.5-dashboard-demo-runbook.md) provides the settings and inputs for the bundled HTML and CSV samples.
 
 ## Record exports
 
@@ -70,13 +70,11 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 
 ## Documentation
 
+- [Historical FYP evaluations, figures and acceptance evidence](docs/evaluation/Academic-Evidence.md)
+
 - [Marketing M1 backend and research API](docs/contracts/Marketing-M1-youtube-research.md)
 - [Marketing M2 intelligence, onboarding, and frontend contracts](docs/contracts/Marketing-M2-intelligence.md)
 - [Topic collection and article history](docs/contracts/M8-data-identity-collection-management.md)
 - [Windows setup and troubleshooting](docs/setup/Windows-One-Click-Setup.md)
-- [Example data and manual Docker Compose setup](docs/demo/M5.5-dashboard-demo-runbook.md)
-- [Development and testing](docs/demo/M5-core-demo-runbook.md)
-- [Clean-checkout and Compose verification](docs/evaluation/Clean-Checkout-Acceptance.md)
-- [Core release verification matrix](docs/evaluation/Final-Core-Readiness.md)
 - [FYP presentation runbook](docs/evaluation/M16-FYP-Presentation-Runbook.md)
 - [Local Codex MCP setup and presenter walkthrough](docs/setup/Windows-MCP-Access.md#four-minute-presenter-walkthrough)

@@ -42,7 +42,7 @@ Each accepted update replaces that dataset under its existing grant. Use the new
 
 Discover supported workspaces with `GET /api/v1/marketing/capabilities`. The `permission_status` field describes YouTube. The `customer_intelligence` and `demo_intelligence` fields describe the independent workspaces. The M1 research intake remains separate.
 
-The routes below use `/api/v1/marketing/intelligence/{mode}`, where mode is `demo` or `partner`. The demo requires a deployment opt-in. Partner reads accept a server-held customer bearer token or the dedicated browser sign-in over the existing loopback boundary. Start-Harbourline-Pilot.bat provisions the latter in a separate private workspace. Configure MARKETING_PILOT_PASSWORD to enable the same sign-in in a manual deployment. Use at least 24 characters and keep it distinct from both bearer tokens. In this mode Core routes require the operator credential. Health and marketing capabilities remain public on loopback. The customer token cannot import or withdraw data. Keep it in the application's trusted host or server layer.
+The routes below use `/api/v1/marketing/intelligence/{mode}`. Demo reads require deployment opt-in. Company reads use the current member’s expiring HttpOnly session. Company membership determines the scope on each request. The legacy Basic or bearer credential reads only the configured earlier shared pilot until an operator claims it for a company. Core operations require the operator credential on the pilot. Health and capabilities remain public on loopback.
 
 | Method and path | Contract |
 | --- | --- |
@@ -85,7 +85,7 @@ History uses the latest permitted observation per post at the same seven-day win
 
 ## Local setup and verification
 
-Apply migrations through `0013`. Enable `MARKETING_DEMO_ENABLED=1` for the demo. To serve authorized partner data, configure a private `MARKETING_PARTNER_WORKSPACE` and a `MARKETING_CUSTOMER_TOKEN` of at least 24 characters. Use a separate `MARKETING_OPERATOR_TOKEN` for `PUT`, `GET`, and `DELETE` on `/api/v1/marketing/intelligence/operator/{mode}/datasets/{dataset_id}`. The demo seed command produces the existing fictional research fixture as an operator import. The demo is independent of the Core's regular launcher data.
+Apply all migrations with `alembic upgrade head`. Enable `MARKETING_DEMO_ENABLED=1` for the demo. To serve authorized partner data, configure a private `MARKETING_PARTNER_WORKSPACE` and a `MARKETING_CUSTOMER_TOKEN` of at least 24 characters. Use a separate `MARKETING_OPERATOR_TOKEN` for `PUT`, `GET`, and `DELETE` on `/api/v1/marketing/intelligence/operator/{mode}/datasets/{dataset_id}`. The demo seed command produces the existing fictional research fixture as an operator import. The demo is independent of the Core's regular launcher data.
 
 ```text
 python -m backend.experiments.marketing_m2.demo_dataset
@@ -95,3 +95,11 @@ python -m backend.intelligence.fetch_model .local/marketing-granite
 Granite Embedding 97M Multilingual R2 uses IBM's Apache-2.0 ONNX INT8 CPU artifact at revision `835ad14087e140460703cf0fae09f97d469d65c2`. The download command checks the pinned sizes and SHA-256 digests before publishing the graph and tokenizer. Inference is local and requires no network. In a native deployment install `backend/requirements-marketing-onnx.txt` and set `MARKETING_MODEL_DIR` for the API, worker and dispatcher. For Compose set `MARKETING_ONNX=1` and `MARKETING_MODEL_HOST_DIR`, then include `compose.marketing-onnx.yaml` alongside `compose.yaml`. The model mount is read-only. The regular deployment uses character TF-IDF with no extra dependencies. [Pinned IBM model and license](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2/tree/835ad14087e140460703cf0fae09f97d469d65c2)
 
 The lexical index is prepared during import. The dispatcher advances pending embeddings with durable lease claims, one active indexing job, bounded batches, and retry backoff. API and worker each load the graph on demand and reuse it within their process. The pilot bounds each dataset to 128 records and each workspace to 64 active datasets and 800 records. The engine uses the fictional multilingual fixture for engineering verification. Recommendation quality on partner data and physical acceptance on an 8 GB machine remain unverified.
+
+## Company accounts and campaign records
+
+Start the private pilot on loopback. In Data Operations, load the company directory or create a company and first administrator using the system operator credential. Each account belongs to one company. Administrators can create and remove members in that company. Removing membership deletes its sessions. Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Random session identifiers are stored as SHA-256 digests and expire after twelve hours. Core and dataset operations retain separate operator permissions.
+
+Under `/api/v1/marketing/companies`, operators use `GET/POST /registry`, account holders use `POST/GET/DELETE /session`, and administrators use `GET/POST /members` and `DELETE /members/{username}`. Company campaigns use `GET /campaigns`, `PUT /campaigns/{id}` with the previously read version (zero for a new campaign), and `GET /campaigns/{id}/export?version=…`. A stale write or stale export returns 409. CSV contains customer-authored campaign data and assumptions. Catalog evidence is fetched again under the current grant.
+
+Select the destination company in Data Operations for private intake. Its identifier is also the inbox subdirectory under `.local-pilot/partner-refresh` for versioned deliveries. Operators create the private subdirectory before arranging delivery. To assign the earlier pilot to one company and disable its shared credentials, select **Assign the earlier shared pilot to this company** when creating that company. Verify the existing grant covers these participants. Existing browser drafts are never automatically copied into a company.

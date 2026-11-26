@@ -59,6 +59,8 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: 'Shortlist Fixture Street Bowl', exact: true }).click();
   await page.getByRole('button', { name: 'Shortlist Fixture Tasting Table', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Shortlist Fixture Tasting Table', exact: true })).toHaveText('Shortlisted');
+  await expect(page.getByRole('button', { name: 'Compare shortlist' })).toBeInViewport();
   await page.getByRole('button', { name: 'Compare shortlist' }).click();
   await expect(page.getByRole('dialog')).toContainText('Fixture Tasting Table');
   await page.keyboard.press('Escape');

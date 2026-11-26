@@ -158,7 +158,7 @@ def delayed_https(tmp_path_factory):
             try:
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError, ssl.SSLError):
-                pass  # The timed-out client has already closed its connection.
+                pass
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certificate, key)
@@ -199,8 +199,6 @@ def test_real_curl_transfer_deadline(
             },
         )
 
-    # Substitute only the test destination and CA. The request still goes through
-    # SearchRequests, the production curl transport, hostname and peer verification.
     monkeypatch.setattr(public_network, "Session", fixture_session)
     monkeypatch.setattr(
         web_adapter, "resolve_public", lambda host, seconds: ("127.0.0.1",)

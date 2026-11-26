@@ -133,7 +133,6 @@ def test_reference(scope, key, hop, replay):
     assert result.actual_attempts == result.reserved_requests == len(calls)
     assert [r.state for r in result.requests] == ["transport_attempt"] * len(calls)
     config = as_config(result.proposal)
-    # Score the selectors with Core on both details. Beta is an offline holdout.
     traversal = SearchTraversal(source, config, Rate(), lambda: source)
     listing = CapturedInput(fixture_html(results).encode(), ORIGIN + results)
     assert [link.url for link in traversal._links(listing)] == [

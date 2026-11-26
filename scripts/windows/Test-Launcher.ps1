@@ -387,7 +387,6 @@ Test-Case 'One-click Demo skips overlapping Windows routes and Docker networks' 
 }
 $script:Local = $OriginalLocal
 Write-Host "$($Count - $Failures)/$Count launcher tests passed."
-# Remove the disposable generated credential while keeping the sanitized test log.
 $testConfig = Join-Path (Join-Path $testRoot ('space ' + [char]0x6E2C + [char]0x8A66)) 'launcher.env'
 [IO.File]::Delete($testConfig)
 if ($Failures) { exit 1 }

@@ -14,7 +14,7 @@ test('live workspace saves a brief and keeps restricted data and the demo out of
     return route.fulfill({ status: 403, json: { error: { code: 'commercial_permission_pending' } } });
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Plan a creator campaign' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace overview' })).toBeVisible();
   await expect(page.getByText('Live creator intelligence unavailable', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Data Operations' })).toHaveCount(0);
   await page.getByRole('link', { name: 'Start a campaign' }).click();

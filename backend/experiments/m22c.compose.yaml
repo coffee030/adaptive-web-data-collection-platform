@@ -1,4 +1,3 @@
-# Use with compose.yaml and compose.fixture.yaml in a dedicated project.
 services:
   api:
     image: ${M22C_BACKEND_IMAGE:-collection-backend:m21c-f0ba4a3}

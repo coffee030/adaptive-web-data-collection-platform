@@ -293,6 +293,25 @@ def test_customer_end_to_end_and_permission_isolation(
             params={"language": "yue", "market": "HK", "query": "affordable"},
         ).json()
         assert len(discovery["creators"]) == 3
+        weeks = discovery["activity"]
+        assert len(weeks) == 12
+        published = datetime.fromisoformat(
+            next(
+                item["published_at"]
+                for item in payload["records"]
+                if item["kind"] == "content"
+            )
+        ).date()
+        week_start = (published - timedelta(days=published.weekday())).isoformat()
+        observed_posts = sum(item["post_count"] for item in discovery["creators"])
+        assert observed_posts > 0
+        assert [week for week in weeks if week["posts"]] == [
+            {"start": week_start, "posts": observed_posts}
+        ]
+        partner_weeks = client.get(BASE + "/partner/creators", headers=CUSTOMER).json()[
+            "activity"
+        ]
+        assert all(week["posts"] == 0 for week in partner_weeks)
         for item in discovery["creators"]:
             assert "affordable" in item["preview"]["data"]["text"].lower()
             assert item["preview"]["evidence"]["origin"] == "synthetic"

@@ -29,7 +29,6 @@ LOGGER = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def worker_executor() -> JobExecutor:
-    # Called on the first task in the execution process, after prefork.
     return JobExecutor(
         session_factory(make_engine(database_url())),
         LocalEvidenceStore(evidence_path()),

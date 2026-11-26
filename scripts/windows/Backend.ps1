@@ -39,7 +39,6 @@ function Confirm-DockerOwnership {
         $listed = Invoke-Docker $arguments
         if ($listed.Code -ne 0) { return $false }
         $existing = @($listed.Out -split '\r?\n' | Where-Object { $_ })
-        # Also check physical volume and network names for unlabeled collisions.
         $names = switch ($kind) {
             'volume' {
                 @($project + '_postgres_data'; $project + '_redis_data'; $project + '_evidence_data')

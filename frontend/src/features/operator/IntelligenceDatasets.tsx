@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Loading, Status, Timestamp } from '../../components/feedback';
 import { ApiError, apiLocal } from '../../lib/api';
+import { CompanyRegistry } from './CompanyRegistry';
 import { operationsPath } from './OperationsTasks';
 
 interface DatasetStatus { dataset_id: string; state: string; record_count: number; imported_at: string; expires_at: string | null; refresh_error?: string | null }
@@ -23,6 +24,7 @@ export function IntelligenceDatasets() {
   const [notice,setNotice] = useState('');
   const [directory,setDirectory] = useState<string[]>();
   const [more,setMore] = useState(false);
+  const [company,setCompany] = useState('');
   const [datasetId,setDatasetId] = useState('');
   const [pending,setPending] = useState(false);
   const request = useRef<AbortController>(undefined);
@@ -46,16 +48,19 @@ export function IntelligenceDatasets() {
     if (action === 'import' && !form.has('grant')) {
       setError('Confirm you reviewed the written grant and its permitted uses before importing.'); return;
     }
-    if (action === 'withdraw' && !window.confirm('Withdraw this dataset and remove its stored evidence and search index?')) return;
+    if (action === 'withdraw' && !window.confirm('Withdraw ' + id + ' and remove its stored evidence and search index?')) return;
 
     const controller = new AbortController();
     request.current = controller; setPending(true);
     const base = '/marketing/intelligence/operator/' + mode + '/datasets';
-    const endpoint = base + '/' + encodeURIComponent(id);
+    const target = new URLSearchParams();
+    if (mode === 'partner' && company) target.set('company',company);
+    const endpoint = base + '/' + encodeURIComponent(id) + (target.size ? '?' + target : '');
     try {
       if (listing) {
         const after = action === 'more' ? directory?.at(-1) : undefined;
-        const ids = await apiLocal<string[]>(base + (after ? '?after=' + encodeURIComponent(after) : ''),token,controller.signal);
+        if (after) target.set('after',after);
+        const ids = await apiLocal<string[]>(base + (target.size ? '?' + target : ''),token,controller.signal);
         setDirectory(previous => after ? [...(previous ?? []), ...ids] : ids);
         setMore(ids.length === 50);
       } else if (action === 'withdraw') {
@@ -96,6 +101,10 @@ export function IntelligenceDatasets() {
     <header className="page-heading"><h1>Intelligence datasets</h1>
       <p>Import a grant-backed partner dataset or an explicitly fictional dataset. Review its status or withdraw it from intelligence reads.</p></header>
     {!loopback ? <p>Open this workspace on 127.0.0.1 to use a local marketing operator token.</p> : <>
+      <CompanyRegistry selected={company} onSelect={id=>{
+        request.current?.abort();request.current=undefined;setPending(false);setCompany(id);setDatasetId('');
+        setDirectory(undefined);setMore(false);setResult(undefined);setNotice('');setError('');
+      }}/>
       <form className="operator-dataset-form" onSubmit={submit} onChange={event => {
         request.current?.abort(); request.current = undefined; setPending(false);
         setResult(undefined); setNotice(''); setError('');
@@ -106,20 +115,26 @@ export function IntelligenceDatasets() {
           if (field.name === 'mode') setDatasetId('');
         }
       }}>
-        <label>Workspace<select name="mode"><option value="partner">Partner data</option><option value="demo">Fictional demo</option></select></label>
-        <label>Dataset ID<input name="dataset" value={datasetId} onChange={event => setDatasetId(event.target.value)} minLength={1} maxLength={64} pattern={'[A-Za-z0-9][A-Za-z0-9_.\\-]{0,63}'} /></label>
-        <label>Marketing operator token<input type="password" name="token" required minLength={24} maxLength={512} autoComplete="off" /></label>
-        <label>Dataset JSON<input type="file" name="file" accept=".json,application/json" /></label>
-        <label className="operator-dataset-attest"><input name="grant" type="checkbox" />I reviewed the written grant and its permitted uses for this workspace.</label>
-        <div className="operator-research-toolbar">
-          <button type="submit" value="list" disabled={pending}>List datasets</button>
-          <button type="submit" value="inspect" disabled={pending}>Inspect dataset</button>
-          <button type="submit" value="import" disabled={pending}>Import dataset</button>
-          <button type="submit" value="withdraw" disabled={pending}>Withdraw dataset</button></div>
-        {directory && <div><label>Registered datasets<select value={directory.includes(datasetId) ? datasetId : ''} onChange={event => setDatasetId(event.target.value)}>
+        <fieldset className="operator-form-block"><legend>Dataset access</legend>
+          <label>Workspace<select name="mode"><option value="partner">Partner data</option><option value="demo">Fictional demo</option></select></label>
+          <label>Marketing operator token<input type="password" name="token" required minLength={24} maxLength={512} autoComplete="off" /></label>
+          <div><button type="submit" value="list" disabled={pending}>List datasets</button></div>
+        </fieldset>
+        <fieldset className="operator-form-block"><legend>Find a dataset</legend>
+          {directory && <div><label>Registered datasets<select value={directory.includes(datasetId) ? datasetId : ''} onChange={event => setDatasetId(event.target.value)}>
           <option value="">{directory.length ? 'Choose a dataset to inspect' : 'No registered datasets'}</option>
           {directory.map(id => <option key={id}>{id}</option>)}</select></label>
           {more && <button type="submit" value="more" disabled={pending}>Load more datasets</button>}</div>}
+          <label>Dataset ID<input name="dataset" value={datasetId} onChange={event => setDatasetId(event.target.value)} minLength={1} maxLength={64} pattern={'[A-Za-z0-9][A-Za-z0-9_.\\-]{0,63}'} /></label>
+          <div className="operator-research-toolbar"><button type="submit" value="inspect" disabled={pending}>Inspect dataset</button>
+            <button type="submit" className="operator-danger" value="withdraw" disabled={pending || !datasetId}>Withdraw dataset</button></div>
+        </fieldset>
+        <fieldset className="operator-form-block"><legend>Import an authorized file</legend>
+          <p>Enter the dataset ID above, then select the partner's JSON delivery.</p>
+          <label>Dataset JSON<input type="file" name="file" accept=".json,application/json" /></label>
+          <label className="operator-dataset-attest"><input name="grant" type="checkbox" />I reviewed the written grant and its permitted uses for this workspace.</label>
+          <div><button type="submit" className="primary" value="import" disabled={pending}>Import dataset</button></div>
+        </fieldset>
       </form>
       {pending && <Loading>Contacting the dataset service…</Loading>}
       {error && <p role="alert" className="notice">{error}</p>}

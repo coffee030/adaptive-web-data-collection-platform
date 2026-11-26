@@ -95,7 +95,7 @@ function Start-Platform {
     if (!$NoBrowser) { Open-PlatformBrowser $url }
     if ($Harbourline) { Write-Step '[SUCCESS] Harbourline Fictional Demo is ready!' }
     elseif ($Pilot) {
-        Write-Step "[SUCCESS] Private partner workspace is ready. Sign in as partner with the password in $Local/partner-password.txt."
+        Write-Step "[SUCCESS] Harbourline is ready. Sign in with your company account. For initial setup, open Data Operations and create a company and administrator."
         Write-Step "[INFO] Data Operations uses the separate credential in $Local/harbourline-operator.token."
     }
     elseif ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
@@ -232,7 +232,7 @@ catch {
             Stop-WithError 'RUN-002' 'Launcher Could Not Complete' 'Windows reported an unexpected launcher error.' `
                 'The log identifies the failed script location. Check writable project folders and supported prerequisites.' `
                 @('Run Diagnose-Platform.bat and share the launcher report with your teammate.')
-        } catch { }
+        } catch {}
     }
 }
 finally {

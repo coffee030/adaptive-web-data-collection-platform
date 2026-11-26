@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef, useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router';
+import { apiAttachment } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, measureText } from './IntelligenceEvidence';
 import { useEvaluation } from './useEvaluation';
@@ -64,7 +65,7 @@ function Assumptions({ mode, quoted }: { mode: DataMode; quoted?: number }) {
 }
 
 export function ConnectedPlan({ mode }: { mode: DataMode }) {
-  const { path, draft } = useMarketing();
+  const { path, draft, campaignReceipt } = useMarketing();
   const { current, evaluate, running, error, retry } = useEvaluation(mode);
   const [pool, setPool] = useState<string[]>();
   const included = pool ?? current?.campaign.shortlist ?? (current?.plan.selected.length
@@ -96,6 +97,21 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
   async function exportPlan() {
     setExportError('');
     setExported(false);
+    if (campaignReceipt) {
+      if (campaignReceipt.pending || exportRequest.current) return;
+      const controller = new AbortController();
+      exportRequest.current = controller;
+      setCheckingExport(true);
+      try {
+        const blob = await apiAttachment('/marketing/companies/campaigns/'+campaignReceipt.id+'/export?version='+campaignReceipt.version,controller.signal,'text/csv');
+        const href = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href=href; link.download='harbourline-campaign.csv'; link.click();
+        window.setTimeout(()=>URL.revokeObjectURL(href),1000);
+        setExported(true);
+      } catch { if (!controller.signal.aborted) setExportError('Could not export this campaign. Check your sign-in and reopen its latest saved version.'); }
+      finally { exportRequest.current=undefined; if (!controller.signal.aborted) setCheckingExport(false); }
+      return;
+    }
     if (mode === 'demo') {
       if (!current || exportRequest.current) return;
       const controller = new AbortController();
@@ -143,7 +159,7 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
   return <div className="hl-page hl-plan">
     <p className="hl-crumb">{draft.brief.name || 'Campaign workspace'}</p>
     <div className="hl-page-heading"><div><h1>Campaign plan</h1><p>Review quoted allocations and test a different budget or candidate selection.</p></div>
-      {draft.saved && <button type="button" className="hl-primary" disabled={checkingExport || running || Boolean(error) || (mode === 'demo' && !current)}
+      {draft.saved && <button type="button" className="hl-primary" disabled={campaignReceipt?.pending || checkingExport || running || Boolean(error) || (mode === 'demo' && !current)}
         onClick={exportPlan}>{mode === 'demo' ? 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
     {exportError && <p role="alert">{exportError}</p>}
     {exported && <p role="status">CSV exported.</p>}
@@ -157,6 +173,10 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       </form>
       {!running && !error && <section className={`hl-decision ${confirmed === undefined || manual ? 'hl-warning' : ''}`} aria-label="Confirmed selection">
         <strong>{status}</strong><p>{confirmed === undefined ? 'Confirmed spend unavailable.' : amount(confirmed) + ' confirmed for ' + selected.length + (selected.length === 1 ? ' creator allocation.' : ' creator allocations.')}</p>
+        {confirmed !== undefined && <div className="hl-budget-usage">
+          {current.campaign.budget_minor > 0 && <meter aria-label="Confirmed creator spend against the budget" min={0} max={current.campaign.budget_minor} value={confirmed}/>}
+          {amount(current.campaign.budget_minor - confirmed)} remaining of {amount(current.campaign.budget_minor)}
+        </div>}
         {current.unavailable_shortlist_ids.length > 0 && <p>{current.unavailable_shortlist_ids.length} selected creators are unavailable.</p>}</section>}
       {selected.length > 0 && <section className="hl-plan-lines"><h2>Selected allocations</h2>
         {selected.map(candidate => <article className="hl-selection-row" key={candidate.creator_id}><h3>{candidate.name}</h3>

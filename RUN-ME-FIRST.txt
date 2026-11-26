@@ -1,19 +1,19 @@
-Adaptive Scalable and Observable Web Data Collection Platform
+Harbourline · Local setup for Windows
 
-Extract the complete ZIP into a writable local NTFS folder.
+Extract the complete project into a writable local NTFS folder.
 
-Double-click Start-FYP-Demo.bat to try the bundled Synthetic Demo.
-Double-click Start-Platform.bat for an empty Normal workspace.
-Windows may request approval to install WSL 2 or Docker Desktop.
-If Windows requests a restart, double-click the same file afterward.
-Copy the printed localhost URL if the browser does not open.
+Open Start-Harbourline-Demo.bat to explore fictional creators and campaign plans.
+Open Start-Harbourline-Pilot.bat for the operational company workspace.
+The launcher prints the local URL and initial access instructions.
 
-To stop, use Stop-Platform.bat. For Demo, run Stop-Platform.bat -Demo
-from PowerShell. Stop keeps the data. To diagnose a problem, run
-Diagnose-Platform.bat or Diagnose-Platform.bat -Demo.
+Start-FYP-Demo.bat opens the separate Core teaching demonstration.
+Start-Platform.bat opens the general-purpose collection platform.
 
-Ordinary use requires Windows 11 x64, hardware virtualization, WSL 2,
-Docker Desktop, a web browser, first-run internet and free disk space.
-Allow about 8 GB RAM. Host Node.js and Python are optional.
+Use a Windows 11 x64 workstation with hardware virtualization, WSL 2,
+Docker Desktop, a browser, disk space and first-run internet access.
+If Windows requires a restart during setup, run the launcher again.
+Host Node.js and Python are optional developer tools.
 
-Start with docs/setup/Beginner-Windows-Setup.md.
+Stop-Platform.bat -Demo and Stop-Platform.bat -Pilot retain their respective
+data volumes. Diagnose-Platform.bat accepts the same mode switches.
+See README.md for settings, credentials, operating limits and troubleshooting.

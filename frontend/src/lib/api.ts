@@ -14,11 +14,12 @@ export class ApiError extends Error {
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '');
 const timeoutMs = 10_000;
+let activeCompany: string | undefined;
+export function setCompanyScope(id: string | undefined) { activeCompany = id; }
 
 async function responseError(response: Response) {
   const body: unknown = await response.json().catch(() => null);
   const error = (body as { error?: { code?: unknown; fields?: unknown } } | null)?.error;
-  // Do not render arbitrary proxy HTML, untrusted messages, or raw response bodies.
   const code = typeof error?.code === 'string' && /^[a-z][a-z_]{0,127}$/.test(error.code)
     ? error.code
     : undefined;
@@ -91,11 +92,13 @@ async function request<T>(path: string, signal: AbortSignal, init?: RequestInit,
   const timeout = AbortSignal.timeout(requestTimeout);
   const combinedSignal = AbortSignal.any([signal, timeout]);
   try {
+    const companyScoped = path.startsWith('/marketing/intelligence/partner/') || (path.startsWith('/marketing/companies/') && path !== '/marketing/companies/session');
+    const companyHeader: Record<string,string> = companyScoped && activeCompany ? { 'X-Harbourline-Company': activeCompany } : {};
     const response = await fetch(`${target}${path}`, {
       ...init,
       signal: combinedSignal,
       cache: 'no-store',
-      headers: { Accept: 'application/json', ...init?.headers },
+      headers: { Accept: 'application/json', ...companyHeader, ...init?.headers },
     });
     if (!response.ok) throw await responseError(response);
     try {

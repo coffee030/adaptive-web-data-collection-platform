@@ -141,6 +141,7 @@ export function Overview() {
     <header className="overview-title">
       <h1>Data Collection Overview</h1>
     </header>
+    <OperationsTasks />
     <TopicDirectory />
     <section className="collection-activity" aria-labelledby="request-ledger-title">
       <div className="overview-section-heading">
@@ -174,7 +175,6 @@ export function Overview() {
         </ol>
       </> : <p className="overview-empty">No collection requests yet</p>}</OverviewResource>
     </section>
-    <OperationsTasks />
     <div className="overview-followup">
       <section className="overview-diagnostics" aria-labelledby="recent-jobs-title">
         <div className="overview-section-heading">

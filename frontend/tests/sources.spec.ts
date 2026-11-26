@@ -194,7 +194,6 @@ for (const status of [409, 422, 503]) {
 
 test('a request deadline preserves the policy and offers safe replay', async ({ page }) => {
   await page.route(url => url.pathname === api, () => {
-    // Leave the HTTP request open until the browser API client cancels it.
   });
   await page.goto('/sources/new');
   await fillSource(page);

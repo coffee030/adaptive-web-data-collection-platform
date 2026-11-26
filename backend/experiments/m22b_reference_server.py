@@ -54,7 +54,7 @@ class ReferenceHandler(FixtureHandler):
         )
 
     def log_message(self, format, *args):
-        pass  # log_request emits one attributable row per response.
+        pass
 
 
 if __name__ == "__main__":

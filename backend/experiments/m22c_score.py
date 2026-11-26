@@ -77,7 +77,6 @@ def configured_search(source, config, prefix, keyword):
     if markup is None:
         return result | {"status": "missing", "fixture_status": 404}
 
-    # Inspect the actual page independently of the operator's selectors.
     hrefs = set(html.fromstring(markup).xpath("//a/@href"))
     slugs = KEY[prefix.rstrip("/").rsplit("/", 1)[1]]
     count = sum(f"{prefix}detail/{slug}" in hrefs for slug, *_ in slugs)
@@ -113,7 +112,6 @@ def score(source, config, prefix, keyword):
             errors.append(exc.error.code)
     else:
         errors.append("missing_assigned_search_origin")
-    # A duplicate correct href is an extra link, with no additional credit.
     correct = set(urls) & expected.keys()
     field_count = 0
     for url, required in expected.items():
@@ -130,8 +128,6 @@ def score(source, config, prefix, keyword):
         if outcome.valid:
             payload = outcome.valid[0].payload
         else:
-            # A bad field must not erase a correct value in the other required
-            # field. Use Core ingestion again on each original field separately.
             candidate = candidates[0]
             payload = {}
             for field in config.record_schema.fields:
@@ -174,8 +170,6 @@ def proposal_config(proposal):
     ]
     if schema["identity_field"] in omitted:
         schema["identity_field"] = None
-    # The omitted mappings receive no credit. Core requires a schema entry for
-    # every supplied mapping, so only mapped fields enter typed ingestion.
     return ExtractionConfiguration(
         config_schema_version="1",
         record_schema=schema,
@@ -196,7 +190,6 @@ def score_proposal(source, raw, prefix, keyword):
     try:
         config, omitted = proposal_config(proposal)
     except ValidationError:
-        # Keyword entry construction uses only the proposal's validated search.
         entry_config = ExtractionConfiguration.model_construct(search=proposal.search)
         return {
             "unscored": "Proposal has no replayable Core record configuration",

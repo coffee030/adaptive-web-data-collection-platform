@@ -8,27 +8,39 @@ import { sourcesPath } from '../sources/api';
 import { topicsPath } from '../topic-collections/api';
 
 export const operationsPath = '/operations';
-export const datasetsPath = '/operations/intelligence-datasets';
-export const researchPath = '/operations/creator-research';
+export const datasetsPath = operationsPath + '/intelligence-datasets';
+export const researchPath = operationsPath + '/creator-research';
+export const directoryPath = operationsPath + '/public-directory';
+
 const checkHealth = (signal: AbortSignal) => apiGet<{ status: string }>('/health', signal);
+
+const workflows: { label: string; description: string; actions: [string, string][] }[] = [
+  { label: 'Creator data', description: 'Maintain the records available for creator research.',
+    actions: [[datasetsPath, 'Intelligence datasets'], [directoryPath, 'Public creator directory'], [researchPath, 'Creator research and refresh']] },
+  { label: 'Source setup', description: 'Approve a source and its extraction rules before collecting.',
+    actions: [[sourcesPath, 'Manage sources'], [topicsPath, 'Review topic bindings']] },
+  { label: 'Collection & quality', description: 'Start a collection or trace a result back to its evidence.',
+    actions: [[newJobPath, 'Single-source collection and CSV'], [jobsPath, 'Collection Jobs'], [recordsPath, 'Browse validated records']] },
+];
 
 export function OperationsTasks() {
   const { result, retry } = useResource(checkHealth);
   return <section className="operations-tasks" aria-labelledby="operations-tasks-title">
-    <h2 id="operations-tasks-title">Data Operations tasks</h2>
-    <div className="operations-task-grid">
-      <div><h3>Authorise and configure</h3><p>Check access permissions and review source profiles before collection.</p>
-        <Link to={sourcesPath}>Manage sources</Link><Link to={topicsPath}>Review topic bindings</Link></div>
-      <div><h3>Collect and import</h3><p>Run an approved source or import an authorised CSV dataset.</p>
-        <Link to={newJobPath}>Single-source collection and CSV</Link><Link to={researchPath}>Creator research and refresh</Link><Link to={datasetsPath}>Intelligence datasets</Link></div>
-      <div><h3>Review data quality</h3><p>Inspect jobs, quarantine outcomes, validated records and their evidence.</p>
-        <Link to={jobsPath}>Collection Jobs</Link><Link to={recordsPath}>Browse validated records</Link></div>
+    <div className="operations-section-heading">
+      <h2 id="operations-tasks-title">Operations desk</h2>
+      <div className="operations-health" role="status">
+        {result.state === 'loading' ? <Loading>Checking API and database health…</Loading>
+          : result.state === 'ready' && result.data.status === 'ok'
+            ? <span className="operations-health-ok">API and database available</span>
+            : <span>API and database health unavailable</span>}
+        <button type="button" disabled={result.state === 'loading'} onClick={retry}>Check health</button>
+      </div>
     </div>
-    <div className="operations-health">
-      {result.state === 'loading' ? <Loading>Checking API and database health…</Loading>
-       : result.state === 'error' ? <><strong role="status">API and database health unavailable</strong><button type="button" onClick={retry}>Check health</button></>
-       : <><strong>{result.data.status === 'ok' ? 'API and database available' : 'API health could not be verified'}</strong>
-          <span>Worker activity is visible through collection jobs.</span><button type="button" onClick={retry}>Check health</button></>}
-    </div>
+    <dl className="operations-workflows">{workflows.map(group => <div key={group.label}>
+      <dt>{group.label}</dt>
+      <dd>{group.description}</dd>
+      <dd className="operations-actions">{group.actions.map(([url, label]) =>
+        <Link key={url} to={url}>{label}<span aria-hidden="true">↗</span></Link>)}</dd>
+    </div>)}</dl>
   </section>;
 }

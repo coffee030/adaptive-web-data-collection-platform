@@ -4,6 +4,10 @@
 !index.html
 !tsconfig*.json
 !vite.config.ts
+!postcss.config.cjs
+!tailwind.config.cjs
+!public/licenses/Geist.txt
+!public/licenses/Tremor.txt
 !src/
 !src/**
 !Dockerfile

@@ -51,7 +51,7 @@ def publish_articles(
 
     if not projected:
         return
-    session.flush()  # Observations refer to the just-staged Generic Records.
+    session.flush()
     # Acquire identity locks in a global order across concurrent publications.
     for identity_hash, observations in sorted(projected.items()):
         projection = observations[0][0]

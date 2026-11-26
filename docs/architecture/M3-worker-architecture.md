@@ -2,7 +2,7 @@
 
 FastAPI creates a Collection Job and writes input, pinned Profile Version and hash, dispatch time, and creation event in one PostgreSQL transaction. API 201 confirms persistence. The Dispatcher is the only polling process and publishes JSON tasks from committed Jobs. Each payload carries only the Job UUID. Celery supplies a task ID and expiration. Redis provides broker transport, and PostgreSQL stores Jobs, dispatch, retries, and results.
 
-The M5 review covers the full system, archived contracts, and verified capacity and access boundaries. [M5 Core Architecture Review](M5-core-architecture-review.md)
+The M5 review covers the full system, archived contracts, and verified capacity and access boundaries. [M5 Core Architecture Review](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/architecture/M5-core-architecture-review.md)
 
 ```mermaid
 flowchart LR

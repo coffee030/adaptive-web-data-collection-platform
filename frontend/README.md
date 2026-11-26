@@ -1,15 +1,20 @@
-# Harbourline frontend alpha
+# Harbourline frontend
 
-Harbourline is the marketing workspace for Hong Kong businesses and agencies on the Adaptive Scalable and Observable Web Data Collection Platform. The approved collection Core remains available in Data Operations. The marketing workspace is a downstream product alpha. Alignment against the formal FYP Proposal and teammate review are pending.
+The React application serves the marketing workspace and the separate Data Operations console. The marketing home uses the running API to determine which modes are available. The local pilot opens at `/`. The connected fictional demo opens at `/demo/connected`. [Windows launch instructions](../README.md)
 
-## Open the workspace
+Customers can research creators, inspect content and source evidence, compare candidates, save a campaign, recalculate its budget and export the supported report. The Advisor returns checked requirements, ranked evidence and a selection based on firm quotes. Data without a current authorization or usable quote cannot substantiate a priced recommendation. Outcome scenarios use the customer's explicit assumptions. [Intelligence contract](../docs/contracts/Marketing-M2-intelligence.md)
 
-- `/` opens Harbourline. Campaign briefs, search context and draft plans are saved in the current browser.
-- `/demo` opens the bundled fictional Instagram sample. `/demo/connected` opens the M2 backend demo when enabled. Live, bundled and backend demo drafts use separate storage keys.
-- `/operations` opens the local Data Operations workspace. Existing source, profile, binding, job, record, quarantine, evidence and export links continue to work. The Windows Synthetic Demo launcher continues to open its Core Overview at `/`.
-- `/operations/creator-research` opens the approved local YouTube research controls. Enter the deployment's marketing operator token for that page session. The frontend sends it through the same-origin proxy. Access and permission decisions are enforced by the backend.
+## Operations
 
-Use the existing Compose or Windows launcher to start the stack. For local React development with the Core API running, run the existing commands from this directory.
+Open `/operations` to manage creator intake, review source permissions, run collections and investigate validation or processing. The Core retains its original job, record, quarantine, evidence and export routes. The operator credential is separate from company sign-in.
+
+- `/operations/intelligence-datasets` manages companies, imports granted data, inspects processing and withdraws datasets.
+- `/operations/public-directory` reviews the shared directory source and its mapping before enabling scheduled intake.
+- `/operations/creator-research` manages restricted YouTube research and refresh. This source requires its own permissions.
+
+## Local development
+
+Start the API in an isolated development environment. Run the following commands from this directory.
 
 ```powershell
 npm ci
@@ -17,14 +22,4 @@ $env:API_PROXY_TARGET = 'http://127.0.0.1:8000'
 npm run dev -- --port 5173
 ```
 
-- `/operations/intelligence-datasets` imports, inspects and withdraws M2 datasets under the operator token. The import JSON supplies the grant and record evidence.
-
-## Supported data and permissions
-
-The live workspace reads `GET /api/v1/marketing/capabilities`. Marketing M1 YouTube access covers approved research. Its commercial intake rejects requests. Research payloads are displayed in the operator research page and held for that page session. Disabled research, authorization failures, partial coverage and expiry are shown from the API or supplied timestamps.
-
-Marketing M2 connects creator search and profile reads, comparison, processing status, campaign evaluations with cited evidence and ranking factors, exact budget allocation and assumption-based scenarios. The connected demo consumes the backend's synthetic dataset. Enable and seed it using the [M2 deployment instructions](../docs/contracts/Marketing-M2-intelligence.md#local-setup-and-verification). Catalog errors and permission denials are shown with retry. Connected allocations use the current session’s evidence. Reopen the brief to evaluate again after a reload or expiry. The bundled sample remains an explicit choice.
-
-Start-Harbourline-Pilot.bat provisions a trusted loopback partner workspace. The browser authenticates customer reads using a dedicated sign-in. Data Operations uses a separate credential. An external trusted host may instead supply the server-held customer bearer token. Partner CSV exports include user-authored draft fields. The fictional demo can export its sampled allocation. Trained outcome forecasting is deferred.
-
-`npm run build` checks TypeScript and creates the production frontend. `npm test` runs the Playwright browser suite. Use `M4_REAL_API=1` and `API_PROXY_TARGET` against an isolated test API to exercise the integration tests.
+`npm run build` checks TypeScript and creates the production frontend. `npm test` runs the Playwright browser suite. Set `M4_REAL_API=1` and `API_PROXY_TARGET` to exercise integration tests against an isolated backend. The Core supports a separate local approval mode for trusted operator actions. [Operator setup](../docs/setup/Windows-One-Click-Setup.md)

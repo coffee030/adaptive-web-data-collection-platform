@@ -58,7 +58,6 @@ def requested(monkeypatch):
             False,
         )
 
-    # The transport is in memory. No resolver or socket is used by this replay.
     monkeypatch.setattr(web_adapter, "resolve_public", lambda *_: ("8.8.8.8",))
     monkeypatch.setattr(web_adapter, "_get", response)
     return requests
@@ -172,7 +171,6 @@ def test_preselected_path_shares_budget_and_passes_profile_checks(
     assert requested == ["/robots.txt", *pages, expected_search, expected_detail]
     assert traversal.requests.remaining == 0
 
-    # Offline link recall and value checks do not spend additional HTTP requests.
     listing = fixture_html(expected_search)
     assert listing is not None
     assert f"{scope}/detail/about" in listing
@@ -282,7 +280,6 @@ def test_first_sample_accepts_nonempty_wrong_title_and_misses_later_wrong_link(
     tmp_path, requested, monkeypatch
 ):
     config = configuration("cards", f"{CARDS}/search", "q", 4)
-    # Keep only the first anchor per row and deliberately select the site-wide heading.
     raw = config.model_dump()
     raw["search"]["detail_link_selector"] = "a:first-child"
     raw["item_selector"] = "html"
@@ -309,7 +306,6 @@ def test_first_sample_accepts_nonempty_wrong_title_and_misses_later_wrong_link(
     assert preview["title"] != EXPECTED[0][0]
     assert len(requested) == 6
 
-    # A second row pointing to a permitted About page is still semantically wrong.
     traversal = traversal_for(source, wrong)
     links = list(traversal._links(CapturedInput(listing_body, search_url)))
     assert [link.url for link in links] == [

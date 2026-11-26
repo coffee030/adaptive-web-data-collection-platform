@@ -1,16 +1,16 @@
 :root {
   color-scheme: light dark;
-  --page: light-dark(#F4F6FB, #0C1424);
-  --surface: light-dark(#FFFFFF, #172237);
-  --navigation-surface: light-dark(#FAFBFF, #101B2E);
-  --text: light-dark(#17233B, #E9EFFB);
-  --text-secondary: light-dark(#576781, #AFBCD2);
-  --divider: light-dark(#D8E1EF, #344158);
-  --control-border: light-dark(#74839D, #70809D);
-  --accent: light-dark(#375DDD, #7090FF);
-  --accent-ink: light-dark(#2B4CBF, #9BB0FF);
-  --on-accent: light-dark(#FFFFFF, #10182C);
-  --selected: light-dark(#E8EEFF, #24385B);
+  --page: light-dark(#F4F6FB, #141a1c);
+  --surface: light-dark(#FFFFFF, #1e2628);
+  --navigation-surface: light-dark(#FAFBFF, #192123);
+  --text: light-dark(#17233B, #edf3ef);
+  --text-secondary: light-dark(#576781, #afbfbb);
+  --divider: light-dark(#D8E1EF, #364447);
+  --control-border: light-dark(#74839D, #778781);
+  --accent: light-dark(#375DDD, #78d5bc);
+  --accent-ink: light-dark(#2B4CBF, #8adcc6);
+  --on-accent: light-dark(#FFFFFF, #102620);
+  --selected: light-dark(#E8EEFF, #233b34);
   --success: light-dark(#19704A, #79D4A8);
   --warning: light-dark(#875807, #F4C16A);
   --error: light-dark(#A93048, #FF9BAA);

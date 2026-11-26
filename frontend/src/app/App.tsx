@@ -22,10 +22,11 @@ import { RequestDetails, RequestList } from '../features/topic-collections/Reque
 import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
-import { datasetsPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
+import { datasetsPath, directoryPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
 
 const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
 const IntelligenceDatasets = lazy(async () => ({ default: (await import('../features/operator/IntelligenceDatasets')).IntelligenceDatasets }));
+const PublicDirectoryOperations = lazy(async () => ({ default: (await import('../features/marketing/PublicCreatorDirectory')).PublicDirectoryOperations }));
 const CreatorResearch = lazy(async () => ({ default: (await import('../features/operator/CreatorResearch')).CreatorResearch }));
 const operatorPrefixes = [operationsPath, jobsPath, requestsPath, topicsPath, articlesPath, recordsPath, evidencePath, sourcesPath];
 const ProfilePage = lazy(async () => ({ default: (await import('../features/profiles/ProfilePage')).ProfilePage }));
@@ -54,6 +55,7 @@ function OperationsApp() {
 
   useEffect(() => {
     const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
+      : pathname === directoryPath ? 'Public creator directory'
       : pathname === researchPath ? 'Creator research and refresh'
       : pathname === datasetsPath ? 'Intelligence datasets'
       : pathname === jobsPath ? 'Collection Jobs'
@@ -103,6 +105,7 @@ function OperationsApp() {
             {__PLATFORM_SYNTHETIC_DEMO__ && <Route path="/" element={<Overview />} />}
             <Route path={operationsPath} element={<Overview />} />
             <Route path={datasetsPath} element={operatorRoute(<IntelligenceDatasets />)} />
+            <Route path={directoryPath} element={operatorRoute(<PublicDirectoryOperations />)} />
             <Route path={researchPath} element={operatorRoute(<CreatorResearch />)} />
             <Route path={jobsPath} element={<JobList />} />
             <Route path={newJobPath} element={<JobCreate />} />

@@ -1,5 +1,4 @@
 @echo off
-rem Pass -Demo to select the isolated Synthetic Demo environment.
 setlocal DisableDelayedExpansion
 "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "%~dp0scripts\windows\Platform.ps1" -Action Diagnose %*
 set "launcher_exit=%errorlevel%"

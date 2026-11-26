@@ -6,10 +6,11 @@ import stat
 from pathlib import Path
 
 from pydantic import AwareDatetime, ValidationError
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from backend.application.jobs import database_now
 from backend.marketing.store import MarketingError
+from backend.marketing.company_models import CompanyRow
 
 from .contracts import ImportDataset, StrictModel
 from .models import DatasetRow
@@ -27,7 +28,13 @@ class PartnerUpdate(StrictModel):
 def refresh_partner_files(store: IntelligenceStore, directory: Path) -> None:
     if not valid_workspace(store.config):
         return
-    scope = Scope("partner", store.config.workspace)
+    with store.sessions() as session:
+        companies = list(session.scalars(select(CompanyRow.id)))
+    for workspace in dict.fromkeys([store.config.workspace, *companies]):
+        _refresh_workspace(store, directory, Scope("partner", workspace))
+
+
+def _refresh_workspace(store: IntelligenceStore, directory: Path, scope: Scope) -> None:
     folder = directory / scope.workspace
     try:
         if not stat.S_ISDIR(folder.lstat().st_mode):

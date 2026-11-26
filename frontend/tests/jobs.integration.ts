@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 import type { CollectionJob, ExecutionEvent, JobDetailResponse } from '../src/features/collection-jobs/api';
 import type { GenericRecord } from '../src/features/results/api';
 import type { CollectionRequest } from '../src/features/topic-collections/api';
-import { captureM15 } from './m15Capture';
 
 const api = '/api/v1';
 const jobsPath = '/collection-jobs';
@@ -20,7 +19,6 @@ test('a fresh Normal database has an empty jobs ledger', async ({ page, request 
   await expect(page.getByText('No eligible sources')).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('status')).toContainText('No collection jobs yet');
-  await captureM15(page, 'normal-empty');
 });
 
 test('existing Synthetic presets link persisted child Jobs back to Requests and captures', async ({ page, request }) => {

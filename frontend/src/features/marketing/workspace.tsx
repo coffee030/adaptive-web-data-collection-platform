@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { CompanyGate, type Company } from './CompanyAccess';
+import { CompanyCampaigns } from './CompanyCampaigns';
 import { blankBrief, type Brief, type PlanLine } from './contracts';
 import type { CampaignRequest, ScenarioRequest } from './intelligence';
 import { demoBrief, demoCreators } from './demo/fixture';
 
 export type WorkspaceMode = 'partner' | 'sample' | 'server-demo';
 
-interface Draft {
+export interface Draft {
   brief: Brief;
   saved: boolean;
   shortlist: string[];
@@ -46,6 +48,11 @@ function useDraft(mode: WorkspaceMode, key: string, first: boolean) {
     catch { setStorageFailed(true); }
   }, [draft, key]);
 
+  return useDraftActions(mode,draft,setDraft,storageFailed);
+}
+
+export function useDraftActions(mode: WorkspaceMode, draft: Draft, setDraft: React.Dispatch<React.SetStateAction<Draft>>, storageFailed: boolean) {
+  const demo = mode === 'sample';
   const base = mode === 'server-demo' ? '/demo/connected' : demo ? '/demo' : '';
   function path(page = '') {
     return mode === 'partner' && !page && __PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : base + '/' + page;
@@ -63,11 +70,13 @@ function useDraft(mode: WorkspaceMode, key: string, first: boolean) {
 }
 
 interface CampaignNavigation {
+  company?: Company;
+  campaignReceipt?: { id:string; version:number; pending:boolean };
   otherDrafts: () => { key: string; name: string }[];
   openDraft: (key?: string) => void;
 }
 
-const DraftContext = createContext<(ReturnType<typeof useDraft> & CampaignNavigation) | null>(null);
+export const DraftContext = createContext<(ReturnType<typeof useDraftActions> & CampaignNavigation) | null>(null);
 
 function ActiveDraft({ mode, draftKey, first, children, navigation }: {
   mode: WorkspaceMode; draftKey: string; first: boolean; children: ReactNode; navigation: CampaignNavigation;
@@ -76,7 +85,12 @@ function ActiveDraft({ mode, draftKey, first, children, navigation }: {
   return <DraftContext.Provider value={{ ...value, ...navigation }}>{children}</DraftContext.Provider>;
 }
 
-export function MarketingDraft({ mode, children }: { mode: WorkspaceMode; children: ReactNode }) {
+export function MarketingDraft({ mode, companyEnabled, children }: { mode: WorkspaceMode; companyEnabled?: boolean; children: ReactNode }) {
+  if (mode==='partner' && companyEnabled) return <CompanyGate>{company=><CompanyCampaigns key={company.id+'/'+company.username} company={company}>{children}</CompanyCampaigns>}</CompanyGate>;
+  return <LocalDraft mode={mode}>{children}</LocalDraft>;
+}
+
+function LocalDraft({ mode, children }: { mode: WorkspaceMode; children: ReactNode }) {
   const base = 'harbourline-draft-v1-' + (mode === 'sample' ? 'demo' : mode === 'partner' ? 'live' : 'server-demo');
   const pointer = base + '/active';
   const belongs = (key: string | null): key is string => key === base || Boolean(key?.startsWith(base + '/campaign/'));
@@ -88,14 +102,14 @@ export function MarketingDraft({ mode, children }: { mode: WorkspaceMode; childr
   });
   useEffect(() => {
     try { sessionStorage.setItem(pointer, active); }
-    catch { /* Browser storage may be unavailable. */ }
+    catch {}
   }, [pointer, active]);
   function openDraft(key = base + '/campaign/' + crypto.randomUUID()) {
     if (!belongs(key)) return;
     setActive(key);
     try {
       localStorage.setItem(pointer, key);
-    } catch { /* The active draft stays available in this tab. */ }
+    } catch {}
   }
   function otherDrafts() {
     try {

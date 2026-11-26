@@ -26,9 +26,11 @@ from backend.core.evidence import LocalEvidenceStore
 from backend.core.inputs import InputError
 from backend.core.profiles import ProfileError
 from backend.intelligence.api import router as intelligence_router
+from backend.intelligence.directory_api import router as directory_router
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.intelligence.store import IntelligenceStore
 from backend.marketing.api import router as marketing_router
+from backend.marketing.company_api import router as company_router
 from backend.marketing.pilot_access import require_core_operator
 from backend.marketing.store import MarketingError, ResearchSettings, ResearchStore
 from backend.persistence.database import (
@@ -197,7 +199,9 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     ):
         app.include_router(router, prefix="/api/v1", dependencies=core_access)
     app.include_router(marketing_router, prefix="/api/v1")
+    app.include_router(company_router, prefix="/api/v1")
     app.include_router(intelligence_router, prefix="/api/v1")
+    app.include_router(directory_router, prefix="/api/v1")
 
     @app.get("/api/v1/health", response_model=dict[str, str], tags=["health"])
     def health(request: Request):

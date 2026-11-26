@@ -1,0 +1,14 @@
+.hl-company-access { display:grid; align-content:center; justify-items:center; }
+.hl-company-access .hl-page { width:min(100%,32rem); padding:2rem; }
+.hl-company-access h1 { margin:2rem 0 1.5rem; font-size:2rem; }
+.hl-company-access .hl-form-grid { grid-template-columns:1fr; }
+.hl-company-access .hl-brand { font-size:1.3rem; }
+.hl-company-saving { position:fixed; bottom:1rem; right:1rem; padding:.45rem .75rem; color:white; background:#243140; z-index:9; font-size:.875rem; }
+.hl-company-menu { display:inline-flex; min-width:0; }
+.hl-company-menu > button { max-width:100%; overflow-wrap:anywhere; }
+.hl-company-menu ul { display:grid; gap:.5rem; padding-inline-start:1rem; }
+.hl-company-menu li button { margin-inline-start:.5rem; }
+.hl-company-menu .hl-members { padding:0; list-style:none; margin:.65rem 0 1.4rem; }
+.hl-members li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--hl-line); overflow-wrap:anywhere; }
+.hl-company-menu .hl-form-grid { margin:.75rem 0 1.5rem; align-items:end; }
+.hl-company-access.harbour .hl-page { max-width:32rem; margin-inline:auto; }

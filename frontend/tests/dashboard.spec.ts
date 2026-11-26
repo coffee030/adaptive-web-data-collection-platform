@@ -196,10 +196,11 @@ test('System theme reacts, and manual light and dark persist across routes and r
   await page.goto('/operations');
   const theme = page.getByRole('combobox', { name: 'Theme' });
   const root = page.locator('html');
-  await expect(theme).toHaveValue('system');
+  await expect(theme).toHaveValue('dark');
+  await theme.selectOption('system');
   await expect(root).toHaveCSS('background-color', 'rgb(244, 246, 251)');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(root).toHaveCSS('background-color', 'rgb(12, 20, 36)');
+  await expect(root).toHaveCSS('background-color', 'rgb(20, 26, 28)');
   await theme.selectOption('light');
   await expect(root).toHaveCSS('background-color', 'rgb(244, 246, 251)');
   await page.reload();
@@ -209,7 +210,7 @@ test('System theme reacts, and manual light and dark persist across routes and r
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Data Explorer' }).click();
   await page.reload();
   await expect(theme).toHaveValue('dark');
-  await expect(root).toHaveCSS('background-color', 'rgb(12, 20, 36)');
+  await expect(root).toHaveCSS('background-color', 'rgb(20, 26, 28)');
   await theme.selectOption('system');
   await expect(root).toHaveCSS('background-color', 'rgb(244, 246, 251)');
 });

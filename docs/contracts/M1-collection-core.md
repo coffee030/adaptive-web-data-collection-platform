@@ -1,6 +1,6 @@
 # M1 Collection Core Contracts and Architecture
 
-This document turns the M0 concepts into a controlled Python library. It retains the M0 ADR's modular monolith, Scrapling HTTP and parsing, separate Source and Profile approval, and versioned ingestion. M1 verifies these boundaries with a synchronous `CollectionRunner`. Jobs, Tasks, and durable dispatch were left for later milestones. [M0 conceptual contracts](M0-core-contracts.md) [M0 ADR](../decisions/M0-architecture-decisions.md)
+This document turns the M0 concepts into a controlled Python library. It retains the M0 ADR's modular monolith, Scrapling HTTP and parsing, separate Source and Profile approval, and versioned ingestion. M1 verifies these boundaries with a synchronous `CollectionRunner`. Jobs, Tasks, and durable dispatch were left for later milestones. [M0 conceptual contracts](M0-core-contracts.md) [M0 ADR](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/decisions/M0-architecture-decisions.md)
 
 ## Sources and Profiles
 

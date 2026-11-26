@@ -118,7 +118,7 @@ export interface CampaignResult {
   campaign: CampaignRequest;
 }
 interface ScopeResult { mode: DataMode }
-interface CatalogResult extends ScopeResult { state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
+interface CatalogResult extends ScopeResult { activity?: { start: string; posts: number }[]; state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
 export interface ComparisonResult extends ScopeResult { state: 'available' | 'empty' | 'incomplete'; creators: CreatorDetail[]; unavailable_ids: string[] }
 interface ProcessingResult extends ScopeResult { revision: string; state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
 export interface ScenarioRequest {

@@ -19,13 +19,13 @@ function WorkspaceProcessing({ mode }: { mode: DataMode }) {
     return () => clearTimeout(timer);
   }, [preparing, retry]);
   if (result.state === 'loading') return <p role="status" className="hl-note">Checking research coverage…</p>;
-  if (result.state === 'error') return <p className="hl-note">Index status unavailable. <button type="button" onClick={retry}>Refresh coverage</button></p>;
+  if (result.state === 'error') return <p className="hl-note">Search coverage unavailable. <button type="button" onClick={retry}>Refresh coverage</button></p>;
   const { data } = result;
   return <p role="status" className="hl-note">{data.state === 'preparing'
-    ? `Semantic indexing in progress · ${data.indexed_datasets} of ${data.eligible_datasets} datasets indexed. Text results are available.`
-    : data.state === 'fallback' ? 'Text retrieval is active.'
-    : data.state === 'empty' ? 'No eligible datasets are currently available.'
-    : `${data.indexed_datasets} of ${data.eligible_datasets} eligible datasets indexed.`}</p>;
+    ? 'Updating creator research. Text search is available.'
+    : data.state === 'fallback' ? 'Text search is available.'
+    : data.state === 'empty' ? 'No approved creator data is available yet.'
+    : 'Creator research is ready.'}</p>;
 }
 
 function Coverage({ creator }: { creator: CreatorSummary }) {
@@ -123,8 +123,11 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
   }, [serial,setDraft]);
 
   useEffect(() => {
-    if (selected && matchMedia('(max-width: 760px)').matches) inspector.current?.focus();
-  }, [selected]);
+    if (selected && inspector.current && matchMedia('(max-width: 760px)').matches) {
+      inspector.current.focus({ preventScroll: true });
+      inspector.current.scrollIntoView({ block: 'start' });
+    }
+  }, [selected, request.result.state]);
 
   const data = request.result.state === 'ready' ? request.result.data : undefined;
   const savedOnly = params.get('shortlist') === '1';
@@ -139,11 +142,12 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
   }
   function closeProfile() {
     change('creator','');
-    window.requestAnimationFrame(() => document.getElementById('profile-trigger-' + selected)?.focus({preventScroll:true}));
+    window.requestAnimationFrame(() => document.getElementById('profile-trigger-' + selected)?.focus());
   }
   function save(creator: CreatorSummary) {
     const { creator_id: id, name } = creator.profile.data;
-    return <button type="button" aria-pressed={draft.shortlist.includes(id)} aria-label={'Shortlist ' + name} onClick={() => toggleShortlist(id)}>Shortlist</button>;
+    const saved = draft.shortlist.includes(id);
+    return <button type="button" aria-pressed={saved} aria-label={'Shortlist ' + name} onClick={() => toggleShortlist(id)}>{saved ? 'Shortlisted' : 'Shortlist'}</button>;
   }
   return <div className="hl-page hl-explore"><RefreshOnFocus refresh={request.retry} />
     <div className="hl-page-heading"><div><h1>Creator Explorer</h1><p>Search eligible profiles and review creator-authored content.</p></div>
@@ -179,13 +183,13 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
               <p className="hl-note">{platformOptions[row.preview.data.platform]} · {date(row.preview.data.published_at)}</p>
               <blockquote>{row.preview.data.text}</blockquote>
             </> : <p>Historical post preview unavailable.</p>}
-            <p>{row.post_count} historical posts</p><Coverage creator={row} /><div className="hl-actions"><button type="button"
+            <p>{row.post_count} historical {row.post_count === 1 ? 'post' : 'posts'}</p><Coverage creator={row} /><div className="hl-actions"><button type="button"
               id={'profile-trigger-' + row.profile.data.creator_id} onClick={() => change('creator',row.profile.data.creator_id)}>Inspect content</button>{save(row)}</div>
           </article>)}</div>}
       </div>
       {selected && <div className="hl-inspector-slot" tabIndex={-1} ref={inspector}><RecordInspector mode={mode} id={selected} close={closeProfile} /></div>}
     </div>}
-    {data && <div className="hl-short-bar"><strong>{draft.shortlist.length} shortlisted{draft.shortlist.length > 12 && ' · Keep up to 12 to compare'}</strong><div className="hl-actions">
+    {data && <div className="hl-short-bar" data-active={draft.shortlist.length > 0 && !selected}><strong>{draft.shortlist.length} shortlisted{draft.shortlist.length > 12 && ' · Keep up to 12 to compare'}</strong><div className="hl-actions">
       <button type="button" disabled={draft.shortlist.length < 2 || draft.shortlist.length > 12} onClick={() => setCompare([...draft.shortlist])}>Compare shortlist</button>
       <Link className="hl-button" to={path('advisor')}>Open Campaign Advisor</Link></div></div>}
     {compare && <CompareRecords ids={compare} mode={mode} platform={platform ?? ''} close={() => setCompare(undefined)} />}

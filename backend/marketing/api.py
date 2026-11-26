@@ -76,6 +76,9 @@ Operator = Annotated[ResearchStore, Depends(operator_store)]
 def capabilities(request: Request) -> Capability:
     config = request.app.state.intelligence.config
     return Capability(
+        company_accounts=bool(
+            settings().get("MARKETING_PILOT_PASSWORD") and partner_token(config)
+        ),
         customer_intelligence="available" if partner_token(config) else "unavailable",
         demo_intelligence="available" if config.demo_enabled else "unavailable",
     )

@@ -14,9 +14,7 @@ export function ThemeSelect() {
     else document.documentElement.dataset.theme = next;
     try {
       localStorage.setItem('collection-theme', next);
-    } catch {
-      // The theme still applies for this session.
-    }
+    } catch {}
   }
 
   return <label className="theme-control">

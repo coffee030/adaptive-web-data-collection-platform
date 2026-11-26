@@ -1,4 +1,3 @@
-# Opt-in override for the controlled reference integration.
 services:
   api:
     image: ${M22B_BACKEND_IMAGE:-collection-backend:m22b}
