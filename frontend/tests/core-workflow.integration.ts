@@ -5,10 +5,11 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import type { CollectionJob, ExecutionEvent, JobInput } from '../src/features/collection-jobs/api';
+import type { CollectionJob, ExecutionEvent, JobDetailResponse, JobInput } from '../src/features/collection-jobs/api';
 import type { Profile, Report } from '../src/features/profiles/api';
 import type { EvidenceMetadata, GenericRecord, QuarantineEntry } from '../src/features/results/api';
 import type { Source } from '../src/features/sources/api';
+import { durableJobFields } from './job-readback';
 
 const api = '/api/v1';
 const jobs = '/collection-jobs';
@@ -439,7 +440,10 @@ for (const adapter of ['web', 'csv'] as const) {
       console.log('M15 broker recovery', recoveredDispatch.job_id, recoveredDispatch.dispatch_attempts);
       const before = [sourcePath, profile.apiPath, jobPath, jobPath + '/events', recordsPath,
         jobPath + '/quarantine', evidencePath];
-      const snapshot = await Promise.all(before.map(route => get(request, route)));
+      const readSnapshot = (route: string) => route === jobPath
+        ? get<JobDetailResponse>(request, route).then(durableJobFields)
+        : get(request, route);
+      const snapshot = await Promise.all(before.map(readSnapshot));
       await page.goto(profile.path);
       await page.getByRole('link', { name: 'New Collection Job' }).click();
       await page.getByRole('textbox', { name: 'CSV content' }).fill(csv);
@@ -459,7 +463,7 @@ for (const adapter of ['web', 'csv'] as const) {
         compose('up', '-d', '--no-build', '--no-recreate', '--wait', 'postgres', 'api');
       }
       await expect.poll(async () => (await request.get(api + '/health')).ok(), { timeout: 20_000 }).toBe(true);
-      expect(await Promise.all(before.map(route => get(request, route)))).toEqual(snapshot);
+      expect(await Promise.all(before.map(readSnapshot))).toEqual(snapshot);
       const recovered = jobResponse(page);
       await page.getByRole('button', { name: 'Retry submission' }).click();
       const reply = await recovered;
