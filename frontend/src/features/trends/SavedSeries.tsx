@@ -60,7 +60,7 @@ export function SavedSeries({ provider, refreshProvider }: { provider: Provider;
     else {
       const next = new URLSearchParams({ view: 'saved', start, end });
       selected.forEach(id => next.append('watch_id', id));
-      setParams(next);
+      setParams(next, { preventScrollReset: true });
     }
   }
 

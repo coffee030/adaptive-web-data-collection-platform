@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigationType } from 'react-router';
 import { TableRegion, Timestamp } from '../../components/feedback';
 import { apiAttachment } from '../../lib/api';
 import { jobPath } from '../collection-jobs/api';
@@ -13,8 +13,13 @@ interface Selection { point: Point; day: string; title: string }
 export function TrendComparison({ result }: { result: Comparison }) {
   const [selected, setSelected] = useState<Selection>();
   const heading = useRef<HTMLHeadingElement>(null);
+  const summary = useRef<HTMLHeadingElement>(null);
   const location = useLocation();
+  const navigation = useNavigationType();
   useResultReturn(true);
+  useEffect(() => {
+    if (navigation === 'PUSH') summary.current?.focus();
+  }, [navigation]);
   const download = useAction(actionProblem, selected?.point.record_id);
   function show(value: Selection) {
     setSelected(value);
@@ -40,7 +45,7 @@ export function TrendComparison({ result }: { result: Comparison }) {
   }
 
   return <section className="panel operator-sheet" aria-labelledby="trend-values">
-    <div className="panel-heading"><h2 id="trend-values">Daily article pageviews</h2><span>{result.days[0]} – {result.days.at(-1)} UTC</span></div>
+    <div className="panel-heading"><h2 id="trend-values" ref={summary} tabIndex={-1}>Daily article pageviews</h2><span>{result.days[0]} – {result.days.at(-1)} UTC</span></div>
     <p className="trend-note">Select a count to inspect its source. Zero is an observed count. “Missing” means no published observation for that day.</p>
     {selected && <section className="operator-review trend-point">
       <h3 ref={heading} tabIndex={-1}>Evidence for {selected.title} on {selected.day} UTC</h3>

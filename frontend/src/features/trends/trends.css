@@ -26,7 +26,8 @@
 .trend-schedule dt, .trend-grid small { color: var(--text-secondary); font-weight: 400; }
 .trend-schedule dd { margin: 0 0 var(--xs); }
 .trend-grid th[scope=col]:not(:first-child) { min-width: 10rem; }
-.trend-grid th:first-child { white-space: nowrap; }
+.trend-grid th:first-child { position: sticky; inset-inline-start: 0; z-index: 1; white-space: nowrap; background: var(--surface); }
+.trend-grid thead th:first-child { background: var(--page); }
 .trend-grid small { display: block; }
 .trend-grid td { vertical-align: middle; font-variant-numeric: tabular-nums; }
 .trend-grid .trend-count { min-height: 32px; padding: 0 .35rem; border: 0; background: transparent; color: var(--accent-ink); text-decoration: underline; }
@@ -35,4 +36,5 @@
   .trend-controls { align-items: stretch; flex-direction: column; }
   .trend-controls input { width: 100%; }
   .trend-grid .trend-count, .trend-workspace summary { min-height: 44px; align-content: center; }
+  .trend-grid .trend-count { min-width: 44px; }
 }
