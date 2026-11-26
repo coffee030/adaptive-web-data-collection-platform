@@ -124,7 +124,16 @@ def snapshot(client, paths):
     for path in paths:
         response = client.get(path)
         assert response.status_code == 200, response.text
-        result[path] = response.json()
+        data = response.json()
+        if re.fullmatch(r"/api/v1/collection-jobs/[0-9a-f-]+", path):
+            heartbeat = data.pop("latest_worker_heartbeat_at")
+            offline = data.pop("latest_worker_offline_detected_at")
+            if heartbeat is not None:
+                heartbeat = datetime.fromisoformat(heartbeat)
+            if offline is not None:
+                assert heartbeat is not None
+                assert datetime.fromisoformat(offline) >= heartbeat
+        result[path] = data
     return result
 
 
@@ -888,11 +897,6 @@ def test_m20_worker_attempt_identity_survives_recovery_and_restart(compose):
             assert active[path]["status"] == "running"
             assert active[path]["latest_claim_worker_instance_id"] == worker_b
             assert active[captures] == active[records] == []
-            stale_job = {
-                key: value
-                for key, value in stale_claim.items()
-                if not key.startswith("latest_claim_")
-            }
             probe = compose_command(
                 prefix,
                 "exec",
@@ -901,15 +905,15 @@ def test_m20_worker_attempt_identity_survives_recovery_and_restart(compose):
                 "python",
                 "-c",
                 "import sys; from backend.application.execution import JobExecutor; "
-                "from backend.application.jobs import Job; "
+                "from backend.application.jobs import JobDetail; "
                 "from backend.core.contracts import CollectionRunResult; "
                 "from backend.core.evidence import LocalEvidenceStore; "
                 "from backend.persistence.database import database_url, evidence_path, make_engine, session_factory; "
-                "old = Job.model_validate_json(sys.argv[1]); "
+                "old = JobDetail.model_validate_json(sys.argv[1]); "
                 "result = CollectionRunResult(run_id=str(old.job_id), profile_version_id=str(old.profile_version_id), status='completed'); "
                 "executor = JobExecutor(session_factory(make_engine(database_url())), LocalEvidenceStore(evidence_path())); "
                 "current = executor._publish(old, result); print(current.status, current.execution_attempt)",
-                json.dumps(stale_job),
+                json.dumps(stale_claim),
             )
             assert probe.strip() == b"running 2"
             assert snapshot(client, running_paths) == active

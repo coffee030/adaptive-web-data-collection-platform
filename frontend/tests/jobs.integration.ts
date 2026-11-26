@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { CollectionJob, ExecutionEvent, JobDetailResponse } from '../src/features/collection-jobs/api';
 import type { GenericRecord } from '../src/features/results/api';
 import type { CollectionRequest } from '../src/features/topic-collections/api';
+import { durableJobFields } from './job-readback';
 
 const api = '/api/v1';
 const jobsPath = '/collection-jobs';
@@ -91,7 +92,7 @@ test('lists PostgreSQL-backed jobs and follows one through events and records', 
     latest_claim_execution_origin,
     latest_claim_worker_instance_id,
     ...detail
-  }: JobDetailResponse = await detailResponse.json();
+  } = durableJobFields(await detailResponse.json() as JobDetailResponse);
   expect(detail).toEqual(job);
   const latestClaim = events.filter(event => event.kind === 'CLAIMED').at(-1);
   expect(latestClaim).toBeDefined();
