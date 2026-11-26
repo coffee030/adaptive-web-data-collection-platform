@@ -1,4 +1,3 @@
-import os
 from http.server import ThreadingHTTPServer
 from threading import Thread
 from uuid import UUID, uuid4
@@ -13,12 +12,8 @@ from backend.core.evidence import LocalEvidenceStore
 from backend.tests.rendered_fixture import DIGEST, Fixture
 
 
-@pytest.mark.skipif(
-    not os.environ.get("CORE_RENDER_BROWSER"),
-    reason="Requires a provisioned sandboxed Chromium and pinned playwright-core",
-)
-@pytest.mark.parametrize("withdraw", ["source", "profile"])
-def test_withdrawal_before_rendered_publication(
+@pytest.mark.parametrize("withdraw", ["source", "profile", None])
+def test_rendered_publication_rechecks_permission(
     pg_engine, sessions, monkeypatch, tmp_path, withdraw
 ):
     with ThreadingHTTPServer(("127.0.0.1", 0), Fixture) as server:
@@ -62,16 +57,28 @@ def test_withdrawal_before_rendered_publication(
                 assert len(result.records) == 10 and result.evidence.rendered_dom
                 if withdraw == "source":
                     executor.profiles.set_authorization(claim.source_id, "revoked")
-                else:
+                elif withdraw == "profile":
                     executor.profiles.retire(claim.source_id, claim.profile_version_id)
                 final = executor._publish(claim, result)
-                assert final.status == "failed"
-                assert final.error.code == "render_authorization_changed"
                 route = "/api/v1/collection-jobs/" + job["job_id"]
-                assert client.get(route + "/evidence-pages").json() == []
-                assert (
-                    client.get("/api/v1/records?job_id=" + job["job_id"]).json() == []
-                )
+                pages = client.get(route + "/evidence-pages").json()
+                records = client.get("/api/v1/records?job_id=" + job["job_id"]).json()
+                if withdraw:
+                    assert final.status == "failed"
+                    assert final.error.code == "render_authorization_changed"
+                    assert pages == [] and records == []
+                else:
+                    assert final.status == "succeeded"
+                    assert len(records) == 10
+                    [page] = pages
+                    assert page[
+                        "rendered_dom"
+                    ] == result.evidence.rendered_dom.model_dump(mode="json")
+                    assert page["content_hash"] == result.evidence.content_hash
+                    assert (
+                        client.get("/api/v1/evidence/" + page["evidence_id"]).json()
+                        == page
+                    )
         finally:
             server.shutdown()
             thread.join()

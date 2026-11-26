@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 from dataclasses import replace
 
 import pytest
@@ -122,10 +121,6 @@ def test_script_and_http_csp_fail_before_browser(monkeypatch):
     )
 
 
-@pytest.mark.skipif(
-    not os.environ.get("CORE_RENDER_BROWSER"),
-    reason="Requires a provisioned sandboxed Chromium and pinned playwright-core",
-)
 def test_actual_offline_rendering_recovery_and_integrity(
     monkeypatch, tmp_path, cards_config, controlled_site
 ):
