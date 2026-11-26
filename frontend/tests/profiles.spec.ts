@@ -255,7 +255,7 @@ test('empty preview, invalid selector response and failing report', async ({ pag
     status: 400, json: { error: { code: 'invalid_selector' } },
   }));
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('selector could not be parsed');
+  await expect(page.getByRole('alert')).toContainText('A selector is invalid. Review its type and syntax in the profile.');
   await page.getByRole('button', { name: 'Validate sample' }).click();
   await expect(page.getByRole('heading', { name: 'Validation failed' })).toBeVisible();
   await expect(page.getByText('Expected a string', { exact: false })).toBeVisible();
