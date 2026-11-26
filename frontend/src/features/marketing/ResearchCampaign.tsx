@@ -14,6 +14,7 @@ import {
   type CampaignRequest,
 } from './intelligence';
 import { ResearchFindings, type BusinessBrief, type ResearchReport } from './ResearchFindings';
+import { ScenarioFields, readScenario } from './ScenarioFields';
 import { useMarketing, type Draft } from './workspace';
 import './research-campaign.css';
 
@@ -369,7 +370,7 @@ function SavedCampaignBrief({
     const unavailable = [403, 404, 422].includes(result.error.status ?? 0);
     return (
       <Panel title={unavailable ? 'Campaign unavailable' : 'Could not open the saved campaign'}>
-        <p role="alert">
+        <p role="alert" className="rc-inset">
           {unavailable
             ? 'This campaign link is unavailable in your company workspace.'
             : result.error.kind === 'timeout'
@@ -462,16 +463,6 @@ function BriefForm({
   const [requireLanguage, setRequireLanguage] = useState(
     initialCampaign?.require_language ?? false,
   );
-  const assumptions = initial?.scenario;
-  const [impressions, setImpressions] = useState(
-    assumptions?.impressions != null ? String(assumptions.impressions) : '',
-  );
-  const [clickRate, setClickRate] = useState(
-    assumptions?.click_rate != null ? String(100 * Number(assumptions.click_rate)) : '',
-  );
-  const [conversionRate, setConversionRate] = useState(
-    assumptions?.conversion_rate != null ? String(100 * Number(assumptions.conversion_rate)) : '',
-  );
   const fetchOptions = useCallback(
     (signal: AbortSignal) => briefOptions('partner', channel, signal),
     [channel],
@@ -560,7 +551,7 @@ function BriefForm({
       }));
     }
   }, [awaitingSave, campaignReceipt, send, setDraft]);
-  function submit(event: FormEvent) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || awaitingSave) return;
     const terms = (value: string) => [
@@ -609,13 +600,7 @@ function BriefForm({
       budget_minor: Math.round(Number(budget) * 100),
       currency: 'HKD',
     };
-    const scenario = {
-      ...assumptions,
-      currency: 'HKD' as const,
-      impressions: impressions === '' ? undefined : Number(impressions),
-      click_rate: clickRate === '' ? undefined : String(Number(clickRate) / 100),
-      conversion_rate: conversionRate === '' ? undefined : String(Number(conversionRate) / 100),
-    };
+    const scenario = readScenario(event.currentTarget);
     const brief: BusinessBrief = {
       product: product.trim(),
       audience: audience.trim(),
@@ -982,39 +967,7 @@ function BriefForm({
           <summary>Outcome assumptions (optional)</summary>
           <p>Enter your own assumptions to calculate a scenario. Leave unknown inputs blank.</p>
           <div className="rc-triplet">
-            <label>
-              Impressions
-              <input
-                type="number"
-                min="0"
-                max="1000000000000"
-                step="1"
-                value={impressions}
-                onChange={(e) => setImpressions(e.target.value)}
-              />
-            </label>
-            <label>
-              Click rate (%)
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step=".0001"
-                value={clickRate}
-                onChange={(e) => setClickRate(e.target.value)}
-              />
-            </label>
-            <label>
-              Conversion rate (%)
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step=".0001"
-                value={conversionRate}
-                onChange={(e) => setConversionRate(e.target.value)}
-              />
-            </label>
+            <ScenarioFields input={initial?.scenario} />
           </div>
         </details>
         {error && (

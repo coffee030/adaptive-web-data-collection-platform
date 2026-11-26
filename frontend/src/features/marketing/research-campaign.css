@@ -400,4 +400,17 @@
   .rc-strategy-table {
     min-width: 560px;
   }
+  .rc-coverage-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .rc-coverage-table :is(th, td) {
+    padding: 8px 4px;
+    white-space: normal;
+    font-size: 0.78rem;
+  }
+  .rc-coverage-table th:first-child {
+    width: 33%;
+  }
 }

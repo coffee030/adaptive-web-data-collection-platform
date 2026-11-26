@@ -241,13 +241,13 @@ function EvidenceList({ report }: { report: ResearchReport }) {
             tabIndex={0}
             className="studio-table-scroll"
           >
-            <table className="studio-table">
+            <table className="studio-table rc-coverage-table">
               <thead>
                 <tr>
                   <th>Platform</th>
                   <th>Creators</th>
                   <th>Activities</th>
-                  <th>With measurements</th>
+                  <th aria-label="Activities with measurements">Measured</th>
                 </tr>
               </thead>
               <tbody>
