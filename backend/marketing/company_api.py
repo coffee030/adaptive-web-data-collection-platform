@@ -85,6 +85,23 @@ class CampaignBrief(StrictModel):
     categoryLabels: str = ""
 
 
+ResearchLead = Annotated[
+    str, Field(pattern=r"^(wikidata:Q[0-9]{1,15}|commons:[0-9a-f]{32})$")
+]
+WorkId = Annotated[str, Field(pattern=r"^[0-9]{1,20}$")]
+
+
+class ResearchBrief(StrictModel):
+    title: str = Field(max_length=160)
+    objective: str = Field(max_length=1000)
+    deliverable: str = Field(max_length=160)
+    budget: int | None = Field(default=None, ge=0, le=10000000)
+    leads: list[ResearchLead] = Field(max_length=40)
+    works: dict[ResearchLead, Annotated[list[WorkId], Field(max_length=128)]] = Field(
+        default_factory=dict, max_length=40
+    )
+
+
 class CampaignDraft(StrictModel):
     brief: CampaignBrief
     saved: bool
@@ -93,6 +110,7 @@ class CampaignDraft(StrictModel):
     explorer: str = Field(max_length=2000)
     evaluation: Campaign | None = None
     scenario: Scenario | None = None
+    research: ResearchBrief | None = None
 
 
 class Revision(StrictModel):

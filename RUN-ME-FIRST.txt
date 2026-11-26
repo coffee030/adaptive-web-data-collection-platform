@@ -2,7 +2,10 @@ Harbourline · Local setup for Windows
 
 Extract the complete project into a writable local NTFS folder.
 
-Open Start-Harbourline-Demo.bat for password-free public directory research and fictional campaign practice.
+Open Start-Harbourline-Demo.bat to research Hong Kong creators without an account.
+Choose Search public directory. Open a matching contributor to inspect dated evidence.
+Save two contributors to compare published works and export a brief from Research shortlist.
+The separate fictional campaign practice area includes sample creator quotes.
 Open Start-Harbourline-Pilot.bat for saved company campaigns. Sign in with an account from your administrator.
 First-time visitors can choose Try the demo without an account. Operators can choose Operator setup to create a company.
 The launcher prints the local URL and initial access instructions.

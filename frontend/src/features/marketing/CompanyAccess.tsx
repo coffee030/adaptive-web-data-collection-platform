@@ -82,20 +82,21 @@ export function CompanyGate({ children }: { children: (company: Company) => Reac
     } catch (cause) { setError(accountProblem(cause)); } finally { setPending(false); }
   }
   if (account) return <>{children(account)}</>;
-  return <main className="harbour dark hl-company-access"><section className="hl-page hl-entry"><Brand/><h1>Company pilot</h1>
-    <p>Sign in to research creators and reopen campaigns saved by your company.</p>
+  return <main className="harbour dark hl-company-access hl-pilot-entry"><section className="hl-page hl-entry"><div className="hl-entry-intro"><Brand/><h1>Company pilot</h1>
+    <p>Research Hong Kong creators and plan campaigns with your team.</p>
+    {(account === null || error) && <WorkspaceDestination destination="demo"/>}</div>
+    <div className="hl-signin-column"><h2>Company sign in</h2><p>Use the account provided by your company administrator.</p>
     {expired && <p role="status">Your company session ended. Sign in again to reopen your saved campaigns.</p>}
     {account === null ? <form className="hl-form-grid" onSubmit={login}><AccountFields />
       <div><button className="hl-primary" disabled={pending}>Sign in</button></div></form> : !error && <p role="status">Opening your company workspace…</p>}
     {error && <p role="alert">{error} {account === undefined && <button onClick={()=>setAttempt(value=>value+1)}>Retry</button>}</p>}
     {(account === null || error) && <>
-      <WorkspaceDestination destination="demo"/>
       <details className="hl-account-help"><summary>How do I get an account?</summary>
         <p>Ask your company administrator to open the company menu, choose Add a team member and send you your account details privately. For a new company, ask the person running this workstation to create the first administrator.</p>
       </details>
       <p className="hl-entry-operator"><Link to="/operations/companies">Operator setup</Link> · Create a company or its first administrator.</p>
     </>}
-  </section></main>;
+  </div></section></main>;
 }
 
 export function CompanyControls() {

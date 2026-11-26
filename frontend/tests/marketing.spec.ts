@@ -24,7 +24,7 @@ test('live workspace saves a brief and keeps restricted data and the demo out of
   await expect(page.getByRole('heading', { name: 'Harbour launch' })).toBeVisible();
   await expect(page.getByText('Live creator intelligence unavailable', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Creator Explorer' }).click();
-  await page.getByRole('textbox', { name: 'Creator name, handle or topic' }).fill('café');
+  await page.getByRole('search', { name: 'Search creators' }).getByRole('textbox').fill('café');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByText(/Eligible creator search is currently unavailable/)).toBeVisible();
   await expect(page.getByText('Mira Lau')).toHaveCount(0);
@@ -173,4 +173,41 @@ test('a signed-out company visitor can try a sample or find the correct provisio
   await expect(page.getByRole('link', { name: 'Operator setup' })).toHaveAttribute('href', '/operations/companies');
   await page.getByRole('link', { name: 'Try the demo without an account' }).click();
   await expect(page.getByText('Fictional demo', { exact: true })).toBeVisible();
+});
+
+test('research shortlist pins matched works and checks current evidence before export', async ({page})=>{
+  const id='a'.repeat(32);
+  const work={id:'17',title:'Controlled lunch menu',date:'2020-01-14',excerpt:'A menu description from the test collection.',
+    excerpt_language:'en',platform:'Controlled archive',revision_url:'https://example.org/revision/17',
+    archive_url:'https://example.org/archive/17',license:'Controlled license',license_url:'https://example.org/license',text_license_url:'https://example.org/license'};
+  let withdrawn=false;
+  await page.route(capabilityPath,r=>r.fulfill({json:{...capability,customer_intelligence:'available'}}));
+  await page.route('**/partner/processing',r=>r.fulfill({json:{mode:'partner',revision:'one',state:'ready'}}));
+  await page.route('**/partner/public-directory?**',r=>r.fulfill({json:{state:'available',profiles:[]}}));
+  await page.route('**/partner/public-works?**',r=>{
+    const query=new URL(r.request().url()).searchParams.get('q');
+    const matches=query ? [work] : [work,{...work,id:'99',title:'Unrelated archive work'}];
+    return r.fulfill({json:{state:withdrawn?'unavailable':'available',contributors:withdrawn?[]:[
+      {id,name:'Controlled photographer',match_basis:'historical_topic',matched_works:matches},
+    ]}});
+  });
+  await page.goto('/directory?q=lunch');
+  await page.getByRole('button',{name:'Save to shortlist · Controlled photographer'}).click();
+  await page.getByRole('link',{name:'Research shortlist',exact:true}).click();
+  await expect(page.getByText('Controlled lunch menu',{exact:true})).toBeVisible();
+  await expect(page.getByText('Unrelated archive work')).toHaveCount(0);
+  await page.getByLabel('Campaign name',{exact:true}).fill('Research request');
+  await page.getByLabel('Planning budget (HK$)').fill('12000');
+  const exportButton=page.getByRole('button',{name:'Export research brief CSV'});
+  await expect(exportButton).toBeDisabled();
+  await page.getByRole('button',{name:'Save research brief'}).click();
+  await page.reload();
+  await expect(page.getByLabel('Campaign name')).toHaveValue('Research request');
+  withdrawn=true;
+  const downloaded=page.waitForEvent('download');
+  await exportButton.click();
+  const csv=await readFile((await (await downloaded).path())!, 'utf8');
+  expect(csv).toContain('Current public evidence unavailable');
+  expect(csv).toContain('12000');
+  expect(csv).not.toContain(work.title);
 });

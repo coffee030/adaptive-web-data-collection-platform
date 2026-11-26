@@ -6,8 +6,13 @@ import { useResource } from '../../lib/useResource';
 import { Overlay } from './components';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, RefreshOnFocus, SourcePost, SourceRef, SurveyEvidence, measureText } from './IntelligenceEvidence';
 import { catalog, compareCreators, creatorDetail, processing, visibleFor, amount, isFresh, deliverableOptions, date, languageOptions, platformOptions, type CreatorDetail,
-  type CreatorSummary, type DataMode, type Platform } from './intelligence';
+  type CreatorSummary, type DataMode, type MatchBasis, type Platform } from './intelligence';
 import { useMarketing } from './workspace';
+
+const matchLabels: Record<MatchBasis, string> = {
+  name: 'Creator name', description: 'Profile description', post_text: 'Historical post text',
+  reviewed_topic: 'Reviewed topic evidence', related_content: 'Related historical content',
+};
 
 function WorkspaceProcessing({ mode }: { mode: DataMode }) {
   const load = useCallback((signal: AbortSignal) => processing(mode, signal), [mode]);
@@ -139,6 +144,7 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
   const rows = data?.creators.filter(row => visibleFor(mode,row.profile.evidence)
     && (!savedOnly || draft.shortlist.includes(row.profile.data.creator_id))) ?? [];
   if (params.get('sort') === 'posts') rows.sort((a,b) => b.post_count - a.post_count);
+  else if (params.get('sort') === 'name') rows.sort((a,b)=>a.profile.data.name.localeCompare(b.profile.data.name));
   function change(key: string, value: string) {
     const next = new URLSearchParams(params);
     if (['q', 'language', 'market', 'platform', 'shortlist'].includes(key)) next.delete('creator');
@@ -152,10 +158,10 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
   function save(creator: CreatorSummary) {
     const { creator_id: id, name } = creator.profile.data;
     const saved = draft.shortlist.includes(id);
-    return <button type="button" aria-pressed={saved} aria-label={'Shortlist ' + name} onClick={() => toggleShortlist(id)}>{saved ? 'Shortlisted' : 'Shortlist'}</button>;
+    return <button type="button" aria-pressed={saved} aria-label={(saved ? 'Shortlisted ' : 'Shortlist ') + name} onClick={() => toggleShortlist(id)}>{saved ? 'Shortlisted' : 'Shortlist'}</button>;
   }
   return <div className="hl-page hl-explore"><RefreshOnFocus refresh={request.retry} />
-    <div className="hl-page-heading"><div><h1>Creator Explorer</h1><p>Search for words in creator names, descriptions and historical posts.</p></div>
+    <div className="hl-page-heading"><div><h1>Creator Explorer</h1><p>Find eligible creators by name, topic or evidence from their published posts.</p></div>
       <div className="hl-views"><button type="button" aria-pressed={view === 'desk'} onClick={() => change('view','desk')}>Research desk</button>
         <button type="button" aria-pressed={view === 'gallery'} onClick={() => change('view','gallery')}>Content gallery</button></div></div>
     <div className="hl-explore-tools"><form role="search" aria-label="Search creators" onSubmit={event => {
@@ -167,7 +173,7 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
       <label>Language<select value={params.get('language') ?? ''} onChange={event => change('language',event.target.value)}><option value="">All languages</option>
         {Object.entries(languageOptions).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Market<select value={params.get('market') ?? ''} onChange={event => change('market',event.target.value)}><option value="">All markets</option><option value="HK">Hong Kong survey evidence</option></select></label>
-      <label>Sort<select value={params.get('sort') ?? ''} onChange={event => change('sort',event.target.value)}><option value="">Name</option><option value="posts">Historical content count</option></select></label>
+      <label>Sort<select value={params.get('sort') ?? ''} onChange={event => change('sort',event.target.value)}><option value="">{query ? 'Best evidence match' : 'Default order'}</option><option value="name">Name</option><option value="posts">Historical content count</option></select></label>
     </div>
     <label className="hl-check"><input type="checkbox" checked={savedOnly}
       onChange={event => change('shortlist', event.target.checked ? '1' : '')} />Only shortlisted creators</label></details>
@@ -175,17 +181,18 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
     {request.result.state === 'error' && <IntelligenceError error={request.result.error} retry={request.retry} />}
     {data && <div className={selected ? 'hl-explore-body hl-has-inspector' : 'hl-explore-body'}>
       <div className="hl-results">
+        {query && data.retrieval && data.retrieval!=='browse' && <p className="hl-note">{data.retrieval==='granite_int8'?'Multilingual content search':'Text similarity search'} · {rows.length} {rows.length===1?'creator':'creators'}</p>}
         {rows.length === 0 ? <div className="hl-empty"><h2>No matching creators</h2><p>{query ? <>No results for “{query}” with these filters. Try a creator name or a specific word from a post.</> : 'Broaden the filters or turn off the shortlist filter.'}</p>
           {mode === 'partner' && <Link to={path('directory')+(query ? '?q='+encodeURIComponent(query) : '')}>Search the public directory</Link>}
-          {mode === 'demo' && query && <button onClick={() => setParams({q:'sunscreen'}, {preventScrollReset:true})}>Search “sunscreen” in the demo</button>}
+          {mode === 'demo' && __HARBOURLINE_INSTALLATION__==='demo' && query && <Link to={path('directory')+'?q='+encodeURIComponent(query)}>Research this topic in published works</Link>}
           <button type="button" onClick={() => setParams({}, { preventScrollReset:true })}>Clear search and filters</button></div>
           : view === 'desk' ? <TableRegion label="Eligible creator results"><table className="hl-api-table"><thead><tr>
             <th scope="col">Creator</th><th scope="col">Posts</th><th scope="col">Firm quote</th><th scope="col">Shortlist</th></tr></thead>
             <tbody>{rows.map(row => <tr key={row.profile.data.creator_id}><th scope="row"><button type="button" className="hl-text-button"
-              id={'profile-trigger-' + row.profile.data.creator_id} onClick={() => change('creator',row.profile.data.creator_id)}>{row.profile.data.name}</button>{row.preview && visibleFor(mode,row.preview.evidence) && <span className="hl-result-excerpt">{row.preview.data.text}</span>}</th>
+              id={'profile-trigger-' + row.profile.data.creator_id} onClick={() => change('creator',row.profile.data.creator_id)}>{row.profile.data.name}</button>{query && row.match_basis && <small className="hl-result-excerpt">{matchLabels[row.match_basis]}</small>}{row.preview && visibleFor(mode,row.preview.evidence) && <span className="hl-result-excerpt">{row.preview.data.text}</span>}</th>
               <td>{row.post_count}</td><td>{row.pricing === 'available' ? 'Available' : 'Missing'}</td><td>{save(row)}</td></tr>)}</tbody></table></TableRegion>
           : <div className="hl-gallery hl-text-gallery">{rows.map(row => <article key={row.profile.data.creator_id}>
-            <h2>{row.profile.data.name}</h2>{row.preview && visibleFor(mode,row.preview.evidence) ? <>
+            <h2>{row.profile.data.name}</h2>{query && row.match_basis && <small>{matchLabels[row.match_basis]}</small>}{row.preview && visibleFor(mode,row.preview.evidence) ? <>
               <p className="hl-note">{platformOptions[row.preview.data.platform]} · {date(row.preview.data.published_at)}</p>
               <blockquote>{row.preview.data.text}</blockquote>
             </> : <p>Historical post preview unavailable.</p>}

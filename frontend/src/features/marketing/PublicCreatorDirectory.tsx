@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { getOperatorCredential, apiGet, apiLocal, ApiError } from '../../lib/api';
-import { useResource } from '../../lib/useResource';
+import { getOperatorCredential, apiLocal, ApiError } from '../../lib/api';
+import { publicPath, usePublicResults, type Directory, type PublicProfile } from './publicResearch';
+import { PublishedWorks } from './PublishedWorks';
+import { SaveResearchLead } from './ResearchBrief';
 import './public-directory.css';
 import { TableRegion } from '../../components/feedback';
 
-interface PublicProfile { record_id: string; evidence_id: string; item: string; revision: string; name: string; local_name: string; description: string; local_description: string }
-interface Directory { state: 'available' | 'unavailable' | 'expired'; observed: string | null; expires: string | null; retrieval: string; profiles: PublicProfile[] }
 interface Preview { observed: string; source_id: string; profile_id: string; report_id: string | null; count: number; example: PublicProfile }
 interface SourceStatus { state: string; error?: string; collection?: string; next_check?: string }
 const license = 'https://www.wikidata.org/wiki/Wikidata:Licensing';
@@ -15,30 +15,26 @@ const date = (value: string) => new Date(value).toLocaleDateString('en-HK',{day:
 export function PublicCreatorDirectory({ isolatedDemo = false }: { isolatedDemo?: boolean }) {
   const [params,setParams] = useSearchParams();
   const query = params.get('q') ?? '';
-  const endpoint = isolatedDemo ? 'public-research/directory' : 'partner/public-directory';
-  const load = useCallback((signal: AbortSignal) => apiGet<Directory>('/marketing/intelligence/'+endpoint+'?q='+encodeURIComponent(query),signal),[endpoint,query]);
-  const { result,retry } = useResource(load);
-  const [ids,setIds] = useState<string[]>([]);
-  const [comparing,setComparing] = useState(false);
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') retry(); };
-    const timer = window.setInterval(refresh,30000);
-    window.addEventListener('focus',refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus',refresh); };
-  },[retry]);
-  const data = result.state === 'ready' ? result.data : undefined;
-  const expires = data?.expires;
-  useEffect(() => {
-    if (!expires || data?.state !== 'available') return;
-    const timer = window.setTimeout(retry,Math.max(1,Date.parse(expires)-Date.now()));
-    return () => window.clearTimeout(timer);
-  },[data?.state,expires,retry]);
+  const {result,retry} = usePublicResults<Directory>(publicPath(isolatedDemo,'directory',query));
+  const data = result.state==='ready' ? result.data : undefined;
+  const ids=params.getAll('compare');
+  const comparing=params.get('view')==='compare';
+  function setIds(next:string[]) {
+    const changed=new URLSearchParams(params);
+    changed.delete('compare'); next.forEach(id=>changed.append('compare',id));
+    setParams(changed,{replace:true,preventScrollReset:true});
+  }
+  function setComparing(value:boolean) {
+    const changed=new URLSearchParams(params);
+    if(value) changed.set('view','compare');else changed.delete('view');
+    setParams(changed,{preventScrollReset:true});
+  }
   const opened = params.get('record');
   const rows = (data?.profiles ?? []).filter(p => !comparing || ids.includes(p.item));
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const q = String(new FormData(event.currentTarget).get('q') ?? '').trim();
-    setComparing(false); setIds([]); setParams(q ? {q} : {});
+    setParams(q ? {q} : {});
   }
   function source(profile: PublicProfile) {
     return <a href={'https://www.wikidata.org/w/index.php?title='+profile.item+'&oldid='+profile.revision} target="_blank" rel="noreferrer">Source revision<span className="sr-only"> for {profile.name}</span> ↗</a>;
@@ -46,12 +42,14 @@ export function PublicCreatorDirectory({ isolatedDemo = false }: { isolatedDemo?
   const hasLiteral = rows.some(profile => [profile.name, profile.local_name, profile.description, profile.local_description]
     .some(value => value.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   return <div className="hl-page hl-directory">
-    <header className="hl-page-heading"><div><h1>Public creator directory</h1><p>Discover Hong Kong creators through their published Wikidata records.</p></div></header>
+    <header className="hl-page-heading"><div><h1>Public creator directory</h1><p>Find credited work, inspect historical sources and save leads for a campaign.</p></div></header>
     <form className="hl-directory-search" onSubmit={submit} role="search" aria-label="Search public creators">
       <input key={query} name="q" aria-label="Creator name or topic" defaultValue={query} maxLength={120} placeholder="Creator name or topic" />
       <button type="submit" className="hl-primary">Search</button>
-      {query && <button type="button" onClick={() => {setComparing(false);setIds([]);setParams({});}}>Clear search</button>}
+      {query && <button type="button" onClick={() => {setParams({});}}>Clear search</button>}
     </form>
+    <PublishedWorks isolated={isolatedDemo} query={query}/>
+    <header className="hl-section-bar"><div><h2>Public identities</h2><p>Names and descriptions from Wikidata.</p></div></header>
     {result.state === 'loading' && <p role="status">Loading public profiles…</p>}
     {result.state === 'error' && <div role="alert">Public profiles could not be loaded. <button type="button" onClick={retry}>Retry</button></div>}
     {data && data.state !== 'available' && <div className="hl-decision"><h2>{data.state === 'expired' ? 'Directory records have expired' : 'No current public directory'}</h2>
@@ -80,9 +78,9 @@ export function PublicCreatorDirectory({ isolatedDemo = false }: { isolatedDemo?
               {isolatedDemo ? <p>Ask the creator for relevant posts and a current quote before planning spend.</p> :
                 <Link to={'/creators?q='+encodeURIComponent(profile.name)}>Find company evidence</Link>}
             </div>
-          </article><label className="hl-check"><input type="checkbox" aria-label={'Compare '+profile.name} checked={ids.includes(profile.item)} onChange={e => setIds(old => e.target.checked ? [...old,profile.item] : old.filter(id => id !== profile.item))}/>Compare</label>
+          </article><div className="hl-record-actions"><SaveResearchLead id={'wikidata:'+profile.item} name={profile.name}/><label className="hl-check"><input type="checkbox" aria-label={'Compare '+profile.name} checked={ids.includes(profile.item)} onChange={e => setIds(e.target.checked ? [...ids,profile.item] : ids.filter(id => id !== profile.item))}/>Compare</label></div>
         </li>)}</ul>}
-      {!rows.length && <div className="hl-empty"><h2>No public profiles matched</h2><p>Try a broader topic such as cooking, or search the creator’s name.</p><button onClick={() => {setIds([]);setComparing(false);setParams({});}}>Browse all public profiles</button></div>}
+      {!rows.length && <div className="hl-empty"><h2>No public profiles matched</h2><p>Try a broader topic such as cooking, or search the creator’s name.</p><button onClick={() => {setParams({});}}>Browse all public profiles</button></div>}
       <p className="hl-note">Source · <a href={license} target="_blank" rel="noreferrer">Wikidata · CC0</a></p>
     </>}
   </div>;

@@ -30,7 +30,7 @@ function Editor({saved,company,children,reload}:{saved:Saved[];company:Company;c
   useEffect(()=>{ generation.alive=true; return ()=>{generation.alive=false;}; },[generation]);
 
   const entry=entries.find(row=>row.id===active)!;
-  const dirty=entries.find(row=>row.draft!==row.acknowledged && (row.version>0 || row.draft.saved || row.draft.shortlist.length>0));
+  const dirty=entries.find(row=>row.draft!==row.acknowledged && (row.version>0 || row.draft.saved || row.draft.shortlist.length>0 || Boolean(row.draft.research)));
   useEffect(()=>{
     if(!dirty || saving || failure) return;
     setSaving(true);
@@ -67,7 +67,7 @@ function Editor({saved,company,children,reload}:{saved:Saved[];company:Company;c
     try { sessionStorage.setItem(pointer,next.id); } catch {}
   }
   const actions=useDraftActions('partner',entry.draft,setDraft,false);
-  return <DraftContext.Provider value={{...actions,company,campaignReceipt:{id:entry.id,version:entry.version,pending:entry.draft!==entry.acknowledged},openDraft,otherDrafts:()=>entries.filter(row=>row.id!==active && (row.draft.saved||row.draft.shortlist.length>0)).map(row=>({key:row.id,name:row.draft.brief.name||'Untitled campaign'}))}}>
+  return <DraftContext.Provider value={{...actions,company,campaignReceipt:{id:entry.id,version:entry.version,pending:entry.draft!==entry.acknowledged},openDraft,otherDrafts:()=>entries.filter(row=>row.id!==active && (row.draft.saved||row.draft.shortlist.length>0||Boolean(row.draft.research))).map(row=>({key:row.id,name:row.draft.brief.name||row.draft.research?.title||'Untitled campaign'}))}}>
     {failure && <p role="alert" className="hl-storage">{failure} <button onClick={()=>{if(conflict) reload(); else {setFailure('');setRetry(i=>i+1);}}}>{conflict?'Reload saved campaign':'Retry save'}</button></p>}
     {saving && <div className="hl-company-saving" role="status">Saving company campaign…</div>}{children}
   </DraftContext.Provider>;

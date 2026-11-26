@@ -123,6 +123,7 @@ export function Advisor({ capability, mode }: { capability: ReactNode; mode?: Da
     <aside className="hl-brief-lane" aria-label="Current campaign brief">
       <div className="hl-crumb">Campaign Advisor</div>
       <h1>{draft.saved ? brief.name : 'Start a campaign'}</h1>
+      {mode==='partner' && Boolean(draft.research?.leads.length) && <p><Link to={path('research-plan')}>Open research shortlist ({draft.research!.leads.length})</Link></p>}
       {draft.saved ? <details className="hl-brief-details" key={String(compactBrief)} open={!compactBrief || editing}>
         <summary>Brief and requirements <span>· {fee(brief.budget)}</span></summary>
         <section><div className="hl-row-between"><h2>Campaign brief</h2>{!editing && <button type="button" onClick={() => setEditing(true)}>Edit brief</button>}</div><p>{brief.description}</p></section>

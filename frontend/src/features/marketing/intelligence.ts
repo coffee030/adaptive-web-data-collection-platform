@@ -59,7 +59,9 @@ export interface ContentEvidence {
   content: Observed<Post>;
   performance: Observed<{ views: number | null; likes: number | null; comments: number | null; window_end: string }> | null;
 }
+export type MatchBasis = 'name' | 'description' | 'post_text' | 'reviewed_topic' | 'related_content';
 export interface CreatorSummary {
+  match_basis?: MatchBasis | null;
   profile: Observed<{ creator_id: string; name: string; description: string; accounts: { platform: Platform; account_id: string }[] }>;
   post_count: number;
   pricing: 'available' | 'unknown';
@@ -118,7 +120,7 @@ export interface CampaignResult {
   campaign: CampaignRequest;
 }
 interface ScopeResult { mode: DataMode }
-interface CatalogResult extends ScopeResult { activity?: { start: string; posts: number }[]; state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
+interface CatalogResult extends ScopeResult { retrieval?: 'browse'|'granite_int8'|'character_tfidf'; activity?: { start: string; posts: number }[]; state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
 export interface ComparisonResult extends ScopeResult { state: 'available' | 'empty' | 'incomplete'; creators: CreatorDetail[]; unavailable_ids: string[] }
 interface ProcessingResult extends ScopeResult { revision: string; state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
 export interface ScenarioRequest {

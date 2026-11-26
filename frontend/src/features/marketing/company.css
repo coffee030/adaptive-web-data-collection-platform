@@ -12,3 +12,14 @@
 .hl-members li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--hl-line); overflow-wrap:anywhere; }
 .hl-company-menu .hl-form-grid { margin:.75rem 0 1.5rem; align-items:end; }
 .hl-company-access.harbour .hl-page { max-width:32rem; margin-inline:auto; }
+
+.hl-company-access.hl-pilot-entry .hl-page.hl-entry { display:grid; grid-template-columns:1fr 1fr; gap:40px; max-width:56rem; width:min(56rem,94vw); padding:clamp(24px,4vw,44px); }
+.hl-entry-intro p, .hl-signin-column p { margin:8px 0; }
+.hl-entry-intro .hl-demo-choice { margin-top:26px; }
+.hl-signin-column { border-left:1px solid var(--hl-line); padding-left:32px; }
+.hl-signin-column h2 { margin:0; font-size:1.45rem; }
+@media(max-width:700px) {
+  .hl-company-access.hl-pilot-entry .hl-page.hl-entry { display:block; max-width:32rem; }
+  .hl-entry-intro .hl-demo-choice { margin:16px 0 22px; }
+  .hl-signin-column { padding:0; border:0; }
+}
