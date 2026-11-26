@@ -48,6 +48,7 @@ from backend.persistence.database import (
 from .articles import router as articles_router
 from .collection import router as collection_router
 from .jobs import router as jobs_router
+from .operations import router as operations_router
 from .profiles import router as profiles_router
 from .results import router as results_router
 
@@ -197,6 +198,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     for router in (
         profiles_router,
         jobs_router,
+        operations_router,
         collection_router,
         articles_router,
         results_router,

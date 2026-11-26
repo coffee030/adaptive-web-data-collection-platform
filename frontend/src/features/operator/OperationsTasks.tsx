@@ -11,6 +11,7 @@ export const operationsPath = '/operations';
 export const datasetsPath = operationsPath + '/intelligence-datasets';
 export const researchPath = operationsPath + '/creator-research';
 export const directoryPath = operationsPath + '/public-directory';
+export const marketSourcesPath = operationsPath + '/market-sources';
 
 const checkHealth = (signal: AbortSignal) => apiGet<{ status: string }>('/health', signal);
 
