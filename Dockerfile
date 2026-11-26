@@ -14,4 +14,6 @@ RUN python -m pip install --no-cache-dir pip==26.3 \
     && install -d -o collection -g collection /data/evidence /data/demo-state
 COPY alembic.ini ./
 COPY backend/ backend/
+ARG HARBOURLINE_BUILD_ID=development
+ENV HARBOURLINE_BUILD_ID=$HARBOURLINE_BUILD_ID
 USER collection

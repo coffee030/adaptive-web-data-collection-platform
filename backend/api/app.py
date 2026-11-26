@@ -1,6 +1,7 @@
 """Local FastAPI composition root."""
 
 import logging
+import os
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -27,11 +28,14 @@ from backend.core.inputs import InputError
 from backend.core.profiles import ProfileError
 from backend.intelligence.api import router as intelligence_router
 from backend.intelligence.directory_api import router as directory_router
+from backend.intelligence.research_api import router as research_router
 from backend.intelligence.works_api import router as historical_works_router
+from backend.intelligence.market_api import router as market_router
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.intelligence.store import IntelligenceStore
 from backend.marketing.api import router as marketing_router
 from backend.marketing.company_api import router as company_router
+from backend.marketing.campaign_tracking import router as campaign_tracking_router
 from backend.marketing.pilot_access import require_core_operator
 from backend.marketing.store import MarketingError, ResearchSettings, ResearchStore
 from backend.persistence.database import (
@@ -45,6 +49,7 @@ from backend.persistence.database import (
 from .articles import router as articles_router
 from .collection import router as collection_router
 from .jobs import router as jobs_router
+from .operations import router as operations_router
 from .profiles import router as profiles_router
 from .results import router as results_router
 
@@ -194,6 +199,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     for router in (
         profiles_router,
         jobs_router,
+        operations_router,
         collection_router,
         articles_router,
         results_router,
@@ -201,9 +207,19 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         app.include_router(router, prefix="/api/v1", dependencies=core_access)
     app.include_router(marketing_router, prefix="/api/v1")
     app.include_router(company_router, prefix="/api/v1")
+    app.include_router(campaign_tracking_router, prefix="/api/v1")
+    app.include_router(research_router, prefix="/api/v1")
     app.include_router(intelligence_router, prefix="/api/v1")
     app.include_router(directory_router, prefix="/api/v1")
     app.include_router(historical_works_router, prefix="/api/v1")
+    app.include_router(market_router, prefix="/api/v1")
+
+    @app.get("/api/v1/version", response_model=dict[str, str], tags=["health"])
+    def version():
+        return {
+            "application": "Harbourline",
+            "build": os.getenv("HARBOURLINE_BUILD_ID", "development"),
+        }
 
     @app.get("/api/v1/health", response_model=dict[str, str], tags=["health"])
     def health(request: Request):

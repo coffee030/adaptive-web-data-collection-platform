@@ -1,7 +1,13 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    String,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,4 +52,29 @@ class CompanyCampaignRow(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     version: Mapped[int]
     draft: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(12), server_default="planning")
+    tracking_version: Mapped[int] = mapped_column(server_default="0")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CampaignPeriodRow(Base):
+    __tablename__ = "marketing_campaign_periods"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "campaign_id"],
+            [
+                "marketing_company_campaigns.company_id",
+                "marketing_company_campaigns.id",
+            ],
+            ondelete="CASCADE",
+        ),
+    )
+    company_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    campaign_id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    channel: Mapped[str] = mapped_column(String(60))
+    period_start: Mapped[date]
+    period_end: Mapped[date]
+    report: Mapped[dict] = mapped_column(JSONB)
+    recorded_by: Mapped[str] = mapped_column(String(80))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

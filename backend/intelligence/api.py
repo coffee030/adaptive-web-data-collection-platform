@@ -1,6 +1,7 @@
 """Campaign, catalog and operator endpoints for the separate intelligence store."""
 
 from datetime import date, timedelta
+from hashlib import sha256
 from secrets import compare_digest
 from typing import Annotated, Literal
 
@@ -15,7 +16,15 @@ from backend.marketing.pilot_access import BrowserLogin, pilot_customer
 from backend.marketing.store import MarketingError
 
 from .analytics import ScenarioResult, scenario
-from .catalog import Catalog, CreatorDetail, CreatorSummary, Observed, detail, summary
+from .catalog import (
+    Catalog,
+    CreatorDetail,
+    CreatorSummary,
+    MeasurementWindow,
+    Observed,
+    detail,
+    summary,
+)
 from .contracts import (
     Campaign,
     CompareRequest,
@@ -24,6 +33,7 @@ from .contracts import (
     Deliverable,
     CreatorFilter,
     ImportDataset,
+    Performance,
     Mode,
     Ref,
     Scenario,
@@ -312,6 +322,46 @@ def dataset_scope(
             if session.get(CompanyRow, company) is not None:
                 return Scope("partner", company)
     raise MarketingError(404, "company_unavailable", "Company unavailable")
+
+
+class ReviewedReceipt(DatasetStatus):
+    performance_window: MeasurementWindow | None = None
+
+
+@router.get(
+    "/operator/partner/performance-window", dependencies=[Depends(operator_store)]
+)
+def linked_performance_window(
+    company: Ref, creator_id: Ref, platform: Platform, post_id: Ref, store: Store
+) -> MeasurementWindow:
+    scope = dataset_scope("partner", store, company)
+    return Catalog(store.snapshot(scope)).measurement_window(
+        creator_id, platform, post_id
+    )
+
+
+@router.post(
+    "/operator/partner/receipts",
+    dependencies=[Depends(operator_store)],
+    response_model_exclude_unset=True,
+)
+def register_receipt(
+    company: Ref, body: ImportDataset, store: Store
+) -> ReviewedReceipt:
+    if len(body.records) != 1:
+        raise MarketingError(
+            422, "one_receipt_required", "Review one first-party record at a time"
+        )
+    row = body.records[0]
+    key = sha256(f"{row.creator_id}/{row.kind}/{row.id}".encode()).hexdigest()[:48]
+    scope = dataset_scope("partner", store, company)
+    saved = store.ingest(scope, "receipt-" + key, body, create_only=True)
+    if isinstance(row, Performance):
+        window = Catalog(store.snapshot(scope)).measurement_window(
+            row.creator_id, row.platform, row.post_id, row.window_end
+        )
+        return ReviewedReceipt(**saved.model_dump(), performance_window=window)
+    return ReviewedReceipt(**saved.model_dump())
 
 
 @router.get("/operator/{mode}/datasets", dependencies=[Depends(operator_store)])

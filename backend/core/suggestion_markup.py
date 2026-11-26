@@ -114,7 +114,6 @@ def example_target(url: str, keyword: str) -> SearchTarget:
 
 def _form_parameter(form: Selector) -> str | None:
     attrs = form.attrib
-    # The valid non-GET methods are POST and dialog. A missing or invalid value defaults to GET.
     if attrs.get("method", "").lower() in {"post", "dialog"}:
         return None
     if form.css(

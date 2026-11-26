@@ -426,7 +426,6 @@ def test_real_broker_redelivers_when_worker_dies_before_ack(
         before = job_status(client, job_id)
         event_url = f"/api/v1/collection-jobs/{job_id}/events"
         events = client.get(event_url).json()
-        # Advance only the interrupted message past Kombu's visibility window.
         unacked = [
             key
             for key, value in redis.hgetall("unacked").items()

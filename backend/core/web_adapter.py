@@ -95,7 +95,6 @@ def checked_url(source: Source, url: str) -> tuple[str, str]:
             raise InputError(
                 "destination_denied", "URL path is outside the Source allowlist"
             )
-    # Reject ambiguous segments before robots sees a different path from the fetcher.
     for segment in parts.path.split("/"):
         decoded = unquote(segment)
         if decoded in {".", ".."} or "/" in decoded or "\\" in decoded:
@@ -487,7 +486,6 @@ def _get(
         body.extend(chunk)
         return len(chunk)
 
-    # Scrapling can log the full request or redirect URL. Keep that data in Evidence.
     token = set_logger(PRIVATE_FETCH_LOG)
     try:
         if addresses:

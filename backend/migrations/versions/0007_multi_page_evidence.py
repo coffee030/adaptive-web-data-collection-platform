@@ -33,7 +33,6 @@ def upgrade():
 
 
 def downgrade():
-    # Reinstating the old unique constraints fails atomically if the data uses M6.
     op.create_unique_constraint("uq_evidence_job", "raw_evidence", ["job_id"])
     op.create_unique_constraint("uq_evidence_run", "raw_evidence", ["run_id"])
     op.create_unique_constraint(

@@ -244,6 +244,3 @@ th[scope="row"] { text-align: start; font-weight: 400; }
   .timeline > li { grid-template-columns: minmax(0, 1fr); gap: var(--xs); }
   .timeline .timestamp span { display: inline; margin-inline-start: var(--sm); }
 }
-
-.operator-exits{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap}.operator-exits>a{color:var(--accent-ink);font-size:.86rem}.operator-exits button{font-size:.8rem}
-@media(max-width:620px){.topbar:has(.operator-exits){flex-wrap:wrap;gap:8px}.operator-exits{gap:8px;justify-content:flex-start}}

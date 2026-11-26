@@ -1,10 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
-import { Link, Route, Routes, ScrollRestoration, useLocation } from 'react-router';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import { jobsPath, newJobPath } from '../features/collection-jobs/api';
 import { Overview } from '../features/dashboard/Overview';
-import { lockOperator } from '../lib/api';
-import { ThemeSelect } from './ThemeSelect';
-import { WorkspaceNavigation } from './WorkspaceNavigation';
+import { OperationsFrame } from '../features/operator/OperationsFrame';
 import { JobCreate } from '../features/collection-jobs/JobCreate';
 import { JobDetail } from '../features/collection-jobs/JobDetail';
 import { JobList } from '../features/collection-jobs/JobList';
@@ -23,12 +21,13 @@ import { RequestDetails, RequestList } from '../features/topic-collections/Reque
 import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
-import { datasetsPath, directoryPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
+import { datasetsPath, directoryPath, marketSourcesPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
 
 const OperatorGate = lazy(async () => ({ default: (await import('../features/operator/OperatorGate')).OperatorGate }));
 const CompanySetup = lazy(async () => ({ default: (await import('../features/operator/CompanyRegistry')).CompanySetup }));
 const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
 const IntelligenceDatasets = lazy(async () => ({ default: (await import('../features/operator/IntelligenceDatasets')).IntelligenceDatasets }));
+const MarketSources = lazy(async () => ({ default: (await import('../features/operator/MarketSources')).MarketSources }));
 const PublicDirectoryOperations = lazy(async () => ({ default: (await import('../features/operator/PublicResearchSources')).PublicDirectoryOperations }));
 const CreatorResearch = lazy(async () => ({ default: (await import('../features/operator/CreatorResearch')).CreatorResearch }));
 const operatorPrefixes = [operationsPath, jobsPath, requestsPath, topicsPath, articlesPath, recordsPath, evidencePath, sourcesPath];
@@ -45,6 +44,7 @@ export function App() {
   const path = pathname.replace(/\/+$/, '') || '/';
   const demo = path === '/demo' || path.startsWith('/demo/');
   const operations = operatorPrefixes.some(prefix => path === prefix || path.startsWith(prefix + '/'));
+  if(demo && __HARBOURLINE_INSTALLATION__ === 'pilot') return <Navigate to="/" replace/>;
   if (demo || (!operations && !(path === '/' && __PLATFORM_SYNTHETIC_DEMO__))) {
     return <Suspense fallback={<Loading>Loading campaign workspace…</Loading>}><MarketingWorkspace mode={path === '/demo/connected' || path.startsWith('/demo/connected/') ? 'server-demo' : demo ? 'sample' : 'partner'} /></Suspense>;
   }
@@ -60,6 +60,7 @@ function OperationsApp() {
   useEffect(() => {
     const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
       : pathname === '/operations/companies' ? 'Company setup'
+      : pathname === marketSourcesPath ? 'Market sources'
       : pathname === directoryPath ? 'Public research sources'
       : pathname === researchPath ? 'Creator research and refresh'
       : pathname === datasetsPath ? 'Intelligence datasets'
@@ -87,32 +88,13 @@ function OperationsApp() {
   }, [pathname, hash]);
 
   return (
-    <div className="shell">
-      <a className="skip-link" href="#main-content" onClick={event => {
-        event.preventDefault();
-        main.current?.focus();
-      }}>Skip to main content</a>
-      <ScrollRestoration />
-      <header className="topbar">
-        <Link className="wordmark" to={__PLATFORM_SYNTHETIC_DEMO__ ? "/" : operationsPath}>Data Operations</Link>
-        <div className="operator-exits"><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? '/demo/connected' : '/'}>Return to Harbourline</Link>
-          {__HARBOURLINE_INSTALLATION__ === 'pilot' && <button type="button" onClick={lockOperator}>Lock Data Operations</button>}
-          <ThemeSelect /></div>
-      </header>
-      <WorkspaceNavigation />
-      <main className="workspace" id="main-content" tabIndex={-1} ref={main}>
-        <div className="workspace-inner">
-          {__PLATFORM_SYNTHETIC_DEMO__ && (
-            <p className="demo-notice">
-              <strong>Synthetic Demo.</strong> Fictional data and prices.{' '}
-              <Link to={requestsPath}>View collection requests</Link>
-            </p>
-          )}
+    <OperationsFrame mainRef={main}>
           <Routes>
             {__PLATFORM_SYNTHETIC_DEMO__ && <Route path="/" element={<Overview />} />}
             <Route path={operationsPath} element={<Overview />} />
             <Route path="/operations/companies" element={operatorRoute(<CompanySetup />)} />
             <Route path={datasetsPath} element={operatorRoute(<IntelligenceDatasets />)} />
+            <Route path={marketSourcesPath} element={operatorRoute(<MarketSources />)} />
             <Route path={directoryPath} element={operatorRoute(<PublicDirectoryOperations />)} />
             <Route path={researchPath} element={operatorRoute(<CreatorResearch />)} />
             <Route path={jobsPath} element={<JobList />} />
@@ -141,8 +123,6 @@ function OperationsApp() {
               </>
             } />
           </Routes>
-        </div>
-      </main>
-    </div>
+    </OperationsFrame>
   );
 }

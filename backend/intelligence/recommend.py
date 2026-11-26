@@ -280,6 +280,7 @@ def _assess(
             Support(
                 content=post.record,
                 performance=post.performance,
+                other_window=post.other_window,
                 similarity=scores[post.key],
             )
             for post in strongest

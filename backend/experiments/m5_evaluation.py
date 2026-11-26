@@ -66,7 +66,6 @@ CSV_CONFIG = CsvMappingConfiguration(
         )
     ],
 )
-# Labels transcribed from committed fixtures before running the workload.
 HTML_RECORDS = {
     1: {"key": "c3", "title": "River Walk"},
     2: {"key": "d4", "title": "Lake View"},

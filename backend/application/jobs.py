@@ -362,8 +362,6 @@ class Jobs:
     @staticmethod
     def attempt_limit(session: Session, row: JobRow) -> int:
         profile = ProfileStorage(session).profile(row.source_id, row.profile_version_id)
-        # The pinned configuration was validated before approval. Dispatchers only
-        # need its retry bound and never take part in destination validation.
         search = profile.configuration.get("search") or {}
         return search.get("max_attempts", MAX_ATTEMPTS)
 

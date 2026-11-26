@@ -30,7 +30,6 @@ $env:M2_TEST_COMPOSE_PROJECT = $Project
 $env:M3_TEST_COMPOSE_PROJECT = $Project
 $env:M3_TEST_COMPOSE_API_URL = "http://127.0.0.1:$ApiPort"
 $env:M2_TEST_DATABASE_URL = "postgresql+psycopg://m10_fixture:$($env:POSTGRES_PASSWORD)@127.0.0.1:$PostgresPort/m10_fixture"
-# Compose workers use database 0. Subprocess worker tests use a different queue namespace.
 $env:M3_TEST_BROKER_URL = "redis://127.0.0.1:$RedisPort/1"
 $env:M4D_COMPOSE_PROJECT = $Project
 $env:M4E_COMPOSE_PROJECT = $Project

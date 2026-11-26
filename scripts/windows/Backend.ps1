@@ -1,7 +1,6 @@
 function Invoke-Docker([string[]]$Arguments, $Seconds = 20, $Environment = @{}) {
     $base = @{ DOCKER_CONTEXT = $null; DOCKER_HOST = $null; DOCKER_TLS_VERIFY = $null; DOCKER_CERT_PATH = $null }
     foreach ($key in $Environment.Keys) { $base[$key] = $Environment[$key] }
-    # A Desktop install updates PATH for future shells. Image pulls in this shell still need its credential helper.
     $base.Path = "$(Split-Path -Parent $script:Docker.CLI);$env:Path"
     $result = Invoke-Tool $script:Docker.CLI (@('--host', $DockerHost) + $Arguments) $Seconds -Environment $base
     Write-LauncherLog INFO "Docker $($Arguments[0]): exit $($result.Code), details: $($result.Reason)."
@@ -123,7 +122,6 @@ function Assert-PortAvailable($Port, $Code, $Name, [switch]$Owned) {
             $process = Get-Process -Id $connection.OwningProcess -ErrorAction Stop
             if ($process.ProcessName -match '^[A-Za-z0-9_.-]{1,80}$') { $owner = "PID $($process.Id) ($($process.ProcessName))." }
         } catch {
-            # CIM may be blocked even when the built-in socket table is readable.
             $table = Invoke-Tool (Join-Path $env:SystemRoot 'System32/netstat.exe') @('-ano', '-p', 'tcp') 5
             $entry = [regex]::Match($table.Out, ('(?m)^\s*TCP\s+\S+:{0}\s+\S+:0\s+\S+\s+(\d+)\s*$' -f $Port))
             if ($entry.Success) { $owner = "PID $($entry.Groups[1].Value)." }
@@ -204,10 +202,20 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
     $kind = if ($Service -eq 'api') { 'backend' } else { 'frontend' }
     $stamp = Join-Path $Local "$kind-image.txt"
     $fingerprint = Get-ImageFingerprint $Service
+    $revision = 'source'
+    if ((Test-Path -LiteralPath (Join-Path $Root '.git')) -and (Get-Command git.exe -ErrorAction SilentlyContinue)) {
+        $head = & git.exe -C $Root rev-parse --verify HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $head -match '^[a-f0-9]{40}$') {
+            $revision = $head
+            $changes = & git.exe -C $Root status --porcelain --untracked-files=normal 2>$null
+            if ($LASTEXITCODE -ne 0 -or $changes) { $revision += '.working' }
+        }
+    }
+    $Config['HARBOURLINE_BUILD_ID'] = $revision + '.' + $fingerprint.Replace('-', '').ToLowerInvariant()
     $imageName = "$($Config.COMPOSE_PROJECT_NAME)-${kind}:local"
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
     if (!$NoCache -and $image.Code -eq 0 -and (Test-Path -LiteralPath $stamp) -and
-        [IO.File]::ReadAllText($stamp) -ceq "$fingerprint $($image.Out)") {
+        [IO.File]::ReadAllText($stamp) -ceq "$($Config.HARBOURLINE_BUILD_ID) $($image.Out)") {
         Write-Step "[PASS] Reusing the verified $kind image."
         if ($AllowFailure) { return $true }
         return
@@ -222,7 +230,7 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
             @('Check internet access to Docker Hub and the package registries.', 'Check free disk space and Docker Desktop.', "Run $DiagnoseCommand, then try again.")
     }
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
-    if ($image.Code -eq 0) { Write-AtomicFile $stamp "$fingerprint $($image.Out)" }
+    if ($image.Code -eq 0) { Write-AtomicFile $stamp "$($Config.HARBOURLINE_BUILD_ID) $($image.Out)" }
     if ($AllowFailure) { return ($image.Code -eq 0) }
 }
 
@@ -258,7 +266,6 @@ function Test-ApiHealth($Url) {
 function Test-Dispatcher {
     $state = Get-ServiceState dispatcher
     $logs = Invoke-Compose @('logs', '--no-color', '--since', '2m', '--tail', '20', 'dispatcher') 10
-    # Normal dispatcher runs log a startup line and then log only failures.
     if ($logs.Code -eq 0 -and $logs.Out -match 'database operation failed') { return $false }
     $startup = Invoke-Compose @('logs', '--no-color', '--tail', '20', 'dispatcher') 10
     return $state -match '^running/' -and $startup.Code -eq 0 -and $startup.Out -match 'Collection dispatcher polling PostgreSQL'

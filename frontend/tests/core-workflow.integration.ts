@@ -400,7 +400,6 @@ for (const adapter of ['web', 'csv'] as const) {
     const evidence = await get<EvidenceMetadata>(request, evidencePath);
     await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
     const capturedInput = body.entry.adapter_type === 'csv' ? body.entry.content : bytes;
-    // Windows checkouts may use CRLF while the fixture image was built from an LF checkout.
     const representations = body.entry.adapter_type === 'web'
       ? [capturedInput, bytes.toString('utf8').replace(/\r\n/g, '\n')] : [capturedInput];
     expect(representations.map(value => createHash('sha256').update(value).digest('hex'))).toContain(evidence.content_hash);

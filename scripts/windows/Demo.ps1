@@ -4,7 +4,7 @@ function Find-DemoPort([int]$Preferred) {
         try {
             $listener.Server.ExclusiveAddressUse = $true
             $listener.Start()
-            if ($port -ne $Preferred) { Write-Step "[INFO] Demo port $Preferred is unavailable. Selected loopback port $port." }
+            if ($port -ne $Preferred) { Write-Step "[INFO] Port $Preferred is unavailable. Selected loopback port $port." }
             return $port
         } catch [Net.Sockets.SocketException] {
             continue
@@ -30,7 +30,6 @@ function Find-DemoSubnets {
         $routes = @(Get-NetRoute -AddressFamily IPv4 -ErrorAction Stop |
             Select-Object -ExpandProperty DestinationPrefix)
         $defaults = @('0.0.0.0/0')
-        # VPNs can split their default route in two. Specific LAN and VPN routes still reserve their subnets.
         if ('0.0.0.0/1' -in $routes -and '128.0.0.0/1' -in $routes) {
             $defaults += @('0.0.0.0/1', '128.0.0.0/1')
         }

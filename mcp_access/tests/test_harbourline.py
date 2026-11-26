@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import json
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -6,10 +8,25 @@ from threading import Thread
 
 import pytest
 
-from mcp_access.harbourline import create_server
+from mcp_access.harbourline import create_server, worksheet_page
 from mcp_access.tests.company_client import connection, read
 
 BASE = "http://127.0.0.1:5198/api/v1"
+
+
+def test_rate_request_pages_keep_headings_and_quoted_credits():
+    heading = [["Company", "Test"], [], ["Creator", "Work", "Price"]]
+    names = [["First", 'Programme, "one"', ""], ["Second", "Series\npart two", ""]]
+    buffer = io.StringIO(newline="")
+    csv.writer(buffer, quoting=csv.QUOTE_ALL).writerows(heading + names)
+    full = buffer.getvalue()
+    assert worksheet_page(full, 10, 0)["csv"] == full
+    first = worksheet_page(full, 1, 0)
+    second = worksheet_page(full, 1, first["next_offset"])
+    assert first["total"] == 2 and second["next_offset"] is None
+    assert (
+        list(csv.reader(io.StringIO(second["csv"], newline=""))) == heading + names[1:]
+    )
 
 
 def test_public_and_demo_tool_scopes():
@@ -19,6 +36,11 @@ def test_public_and_demo_tool_scopes():
             assert {tool.name for tool in tools} == {
                 "search_public_creators",
                 "search_public_works",
+                "search_market_creators",
+                "find_market_activity",
+                "compare_market_creators",
+                "market_activity_overview",
+                "compare_market_measurements",
             }
             assert all(tool.annotations.read_only_hint for tool in tools)
         async with connection(BASE, "demo") as demo:

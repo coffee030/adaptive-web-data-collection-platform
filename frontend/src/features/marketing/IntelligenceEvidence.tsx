@@ -29,7 +29,7 @@ export function Pending({ children }: { children: ReactNode }) {
 }
 
 export function SourceRef({ evidence }: { evidence: EvidenceRef }) {
-  return <span className="hl-note">{evidence.attribution} · Evidence {evidence.reference} · Observed {date(evidence.observed_at)} · Expires {date(evidence.expires_at)}</span>;
+  return <span className="hl-note">{evidence.attribution} · {evidence.source_url && /^https?:\/\//i.test(evidence.source_url) ? <a href={evidence.source_url} target="_blank" rel="noopener noreferrer">Evidence {evidence.reference} ↗</a> : <>Evidence {evidence.reference}</>} · Observed {date(evidence.observed_at)} · Expires {date(evidence.expires_at)}</span>;
 }
 
 export function measureText(measure: Measure | null | undefined, percent = false) {

@@ -11,6 +11,7 @@ QUEUE = "collection"
 TASK = "collection.execute_job"
 MARKETING_TASK = "marketing.execute_youtube_run"
 INTELLIGENCE_TASK = "marketing.index_intelligence_dataset"
+RESEARCH_TASK = "marketing.execute_company_research"
 TASK_TIME_LIMIT = 60
 VISIBILITY_TIMEOUT = 180
 LOGGER = logging.getLogger(__name__)
@@ -48,8 +49,6 @@ app.conf.update(
 def _identify_worker(sender, **kwargs) -> None:
     global _worker_instance_id
     if sender.app is app:
-        # The node initializes before starting the pool. Prefork children
-        # (including replacements) inherit this value from their parent.
         _worker_instance_id = uuid4()
 
 

@@ -5,7 +5,8 @@ import { useResource } from '../../lib/useResource';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, measureText } from './IntelligenceEvidence';
 import { EvaluationScope } from './EvaluationScope';
 import { useEvaluation } from './useEvaluation';
-import { amount, calculateScenario, runCampaign, type DataMode, type ScenarioRequest } from './intelligence';
+import { amount, calculateScenario, runCampaign, type DataMode } from './intelligence';
+import { ScenarioFields, readScenario } from './ScenarioFields';
 import { useMarketing } from './workspace';
 import { exportCsv } from './CampaignPlan';
 
@@ -17,36 +18,15 @@ function Assumptions({ mode, quoted }: { mode: DataMode; quoted?: number }) {
   const { result, retry } = useResource(load,0,false,Boolean(input));
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const values = new FormData(event.currentTarget);
-    function number(name: string) {
-      const value = String(values.get(name) ?? '');
-      return value ? Number(value) : undefined;
-    }
-    const clicks = number('clicks'), conversions = number('conversions'), value = number('value');
-    const ads = number('ads'), cost = number('cost'), margin = number('margin');
-    const scenario: ScenarioRequest = { currency:'HKD', impressions:number('impressions'), click_rate:clicks === undefined ? undefined : (clicks / 100).toFixed(6),
-      conversion_rate:conversions === undefined ? undefined : (conversions / 100).toFixed(6),
-      value_per_conversion_minor:value === undefined ? undefined : Math.round(value * 100),
-      advertising_spend_minor:ads === undefined ? undefined : Math.round(ads * 100),
-      campaign_cost_minor:cost === undefined ? undefined : Math.round(cost * 100),
-      contribution_margin:margin === undefined ? undefined : (margin / 100).toFixed(6) };
+    const scenario = readScenario(event.currentTarget);
     setEdited(false);
     setDraft(old => ({ ...old, scenario }));
-  }
-  function initial(value: string | number | undefined, scale = 1) {
-    return value == null ? undefined : Number((Number(value) * scale).toFixed(6));
   }
   return <section className="hl-scenario">
     <h2>Scenario assumptions</h2><p>Enter your own assumptions for a what-if calculation. Leave any unknown values blank.</p>
     {quoted !== undefined && <p className="hl-note">Selected creator quotes total {amount(quoted)}. Enter your full campaign cost separately.</p>}
     <form className="hl-form-grid" onSubmit={submit} onChange={() => setEdited(true)}>
-      <label>Impressions<input type="number" name="impressions" defaultValue={initial(input?.impressions)} min={0} max={1000000000000} /></label>
-      <label>Click rate (%)<input type="number" name="clicks" defaultValue={initial(input?.click_rate, 100)} min={0} max={100} step={0.01} /></label>
-      <label>Conversion rate (%)<input type="number" name="conversions" defaultValue={initial(input?.conversion_rate, 100)} min={0} max={100} step={0.01} /></label>
-      <label>Value per conversion (HK$)<input type="number" name="value" defaultValue={initial(input?.value_per_conversion_minor, 0.01)} min={0} max={10000000} step={0.01} /></label>
-      <label>Advertising spend (HK$)<input type="number" name="ads" defaultValue={initial(input?.advertising_spend_minor, 0.01)} min={0} max={10000000} step={0.01} /></label>
-      <label>Total campaign cost (HK$)<input type="number" name="cost" defaultValue={initial(input?.campaign_cost_minor, 0.01)} min={0} max={10000000} step={0.01} /></label>
-      <label>Contribution margin (%)<input type="number" name="margin" defaultValue={initial(input?.contribution_margin, 100)} min={0} max={100} step={0.01} /></label>
+      <ScenarioFields input={input} />
       <div><button type="submit" disabled={input !== undefined && result.state === 'loading'}>Calculate scenario</button></div>
     </form>
     {input && result.state === 'loading' && <Pending>Calculating from your assumptions…</Pending>}

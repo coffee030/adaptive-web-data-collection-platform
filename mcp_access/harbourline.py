@@ -1,17 +1,21 @@
 """Company-scoped marketing research over local MCP stdio."""
 
 import asyncio
+import csv
+import io
 import os
 import re
 import sys
+from datetime import date
 from typing import Annotated, Literal
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx2
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from backend.intelligence.contracts import (
     Campaign,
@@ -20,6 +24,7 @@ from backend.intelligence.contracts import (
     Ref,
     Scenario,
 )
+from backend.intelligence.research_contracts import BusinessBrief
 from mcp_access.server import (
     Limit,
     Offset,
@@ -42,6 +47,28 @@ COOKIE = "harbourline_company_session"
 WRITE = ToolAnnotations(
     readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
+MarketId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.:-]{1,140}$")]
+MarketLead = Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
+CampaignName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)
+]
+Metric = Annotated[int, Field(strict=True, ge=0, le=1_000_000_000_000)]
+
+
+class PeriodMeasurement(BaseModel):
+    period_start: date
+    period_end: date
+    channel: Annotated[str, Field(min_length=1, max_length=60)]
+    source: Annotated[str, Field(min_length=1, max_length=300)]
+    authorization_ref: Annotated[str, Field(min_length=1, max_length=300)]
+    impressions: Metric | None = None
+    reach: Metric | None = None
+    clicks: Metric | None = None
+    conversions: Metric | None = None
+    revenue_minor: Metric | None = None
+    ad_spend_minor: Metric | None = None
+    campaign_cost_minor: Metric | None = None
+    contribution_minor: int | None = None
 
 
 def page(items: list[Row], limit: int, offset: int) -> Row:
@@ -53,6 +80,33 @@ def page(items: list[Row], limit: int, offset: int) -> Row:
     }
 
 
+def worksheet_page(value: str, limit: int, offset: int) -> Row:
+    try:
+        reader = csv.reader(io.StringIO(value, newline=""), strict=True)
+        heading = []
+        for line in reader:
+            heading.append(line)
+            if not line:
+                break
+        heading.append(next(reader))
+        leads = list(reader)
+    except (csv.Error, StopIteration):
+        raise ToolError(
+            "Harbourline returned an unreadable rate-request worksheet."
+        ) from None
+    result = io.StringIO(newline="")
+    writer = csv.writer(result, quoting=csv.QUOTE_ALL)
+    writer.writerows(heading)
+    writer.writerows(leads[offset : offset + limit])
+    return {
+        "media_type": "text/csv",
+        "filename": "harbourline-rate-request.csv",
+        "csv": result.getvalue(),
+        "total": len(leads),
+        "next_offset": offset + limit if offset + limit < len(leads) else None,
+    }
+
+
 def create_server(
     base: str,
     workspace: Workspace,
@@ -60,6 +114,7 @@ def create_server(
     session: str = "",
     company: str = "",
     allow_budget_edits: bool = False,
+    allow_workspace_edits: bool = False,
 ) -> MCPServer:
     base = api_base(base)
     if workspace not in ("public", "demo", "company"):
@@ -73,7 +128,7 @@ def create_server(
             raise ValueError(
                 "Company mode requires a local member session and its company ID. Use Connect-HarbourlineMcp.ps1."
             )
-    elif session or company or allow_budget_edits:
+    elif session or company or allow_budget_edits or allow_workspace_edits:
         raise ValueError("Company credentials and budget editing require company mode.")
     mode = "partner" if workspace == "company" else "demo"
     scope = f"{API}/{mode}"
@@ -94,6 +149,7 @@ def create_server(
         method: str = "GET",
         params: dict | None = None,
         body: dict | None = None,
+        csv: bool = False,
     ):
         headers = {"Accept-Encoding": "identity"}
         if workspace == "company":
@@ -110,10 +166,21 @@ def create_server(
                 ) as client,
             ):
                 async with client.stream(
-                    method, base + path, params=params, json=body
+                    method,
+                    base + path,
+                    params={k: v for k, v in (params or {}).items() if v is not None},
+                    json=body,
                 ) as response:
                     status = response.status_code
-                    if status != 200:
+                    if status not in (200, 201, 202):
+                        if status == 409 and path.endswith("/rate-request"):
+                            detail = row(
+                                row(await response_json(response)).get("error")
+                            )
+                            if detail.get("code") == "no_current_leads":
+                                raise ToolError(
+                                    "This campaign needs a shortlisted creator with currently eligible published work. (HTTP 409)"
+                                )
                         reason = {
                             401: "Company sign-in expired or was revoked. Reconnect with an active member account.",
                             403: "This account or deployment does not permit this workspace operation.",
@@ -125,6 +192,20 @@ def create_server(
                             reason.get(status, "Harbourline API request failed.")
                             + f" (HTTP {status})"
                         )
+                    if csv:
+                        if (
+                            response.headers.get("content-type", "").split(";")[0]
+                            != "text/csv"
+                        ):
+                            raise ToolError("Harbourline did not return a CSV report.")
+                        data = bytearray()
+                        async for part in response.aiter_bytes(chunk_size=65536):
+                            if len(data) + len(part) > 2 * 1024 * 1024:
+                                raise ToolError(
+                                    "The CSV report exceeds the 2 MiB tool limit."
+                                )
+                            data.extend(part)
+                        return bytes(data).decode("utf-8-sig")
                     return await response_json(response)
         except (httpx2.RequestError, TimeoutError):
             raise ToolError(
@@ -134,6 +215,107 @@ def create_server(
             raise ToolError("Harbourline returned invalid data.") from None
 
     if workspace in ("public", "company"):
+        market = scope + "/market"
+
+        @server.tool(annotations=READ_ONLY)
+        async def search_market_creators(
+            query: Query = "",
+            platform: Query = "",
+            topic: Query = "",
+            order: Literal["recent", "activity", "name"] = "recent",
+            page_number: Annotated[int, Field(ge=1, le=10000)] = 1,
+            page_size: Limit = 10,
+        ) -> Row:
+            """Find attributed contributors in current eligible market publications. Sort by recent activity, activity count or name. Public activity alone does not establish sponsorship, audience location or price."""
+            return row(
+                await call(
+                    market + "/creators",
+                    params={
+                        "q": query,
+                        "platform": platform or None,
+                        "topic": topic or None,
+                        "sort": order,
+                        "page": page_number,
+                        "page_size": page_size,
+                    },
+                )
+            )
+
+        @server.tool(annotations=READ_ONLY)
+        async def find_market_activity(
+            query: Query = "",
+            platform: Query = "",
+            topic: Query = "",
+            creator_id: MarketId | None = None,
+            page_number: Annotated[int, Field(ge=1, le=10000)] = 1,
+            page_size: Limit = 10,
+        ) -> Row:
+            """Search dated, source-linked public activity and its own platform-specific observed measurements."""
+            return row(
+                await call(
+                    market + "/activity",
+                    params={
+                        "q": query,
+                        "platform": platform or None,
+                        "topic": topic or None,
+                        "creator_id": creator_id,
+                        "page": page_number,
+                        "page_size": page_size,
+                    },
+                )
+            )
+
+        @server.tool(annotations=READ_ONLY)
+        async def compare_market_creators(
+            creator_ids: Annotated[list[MarketId], Field(min_length=1, max_length=4)],
+            observation_limit: Limit = 6,
+        ) -> Row:
+            """Compare creators on their own platforms and inspect source-linked activity and observation history. Favorites, views and comments measure different things."""
+            entries = []
+            for creator_id in dict.fromkeys(creator_ids):
+                detail = row(
+                    await call(f"{market}/creators/{quote(creator_id, safe='')}")
+                )
+                entries.append(
+                    {
+                        **fields(
+                            detail,
+                            "id name platform profile_url activity_count latest_published_at topics example",
+                        ),
+                        "activity": rows(detail.get("activity", []))[
+                            :observation_limit
+                        ],
+                        "measurements": rows(detail.get("measurements", []))[
+                            :observation_limit
+                        ],
+                    }
+                )
+            return {
+                "creators": entries,
+                "basis": "Observed at each source. Geography describes the content context.",
+            }
+
+        @server.tool(annotations=READ_ONLY)
+        async def market_activity_overview() -> Row:
+            """Compare source-specific platform coverage, measured activity, publication dates and topics for the available market catalog."""
+            return row(await call(market + "/overview"))
+
+        @server.tool(annotations=READ_ONLY)
+        async def compare_market_measurements(
+            creator_id: MarketId | None = None,
+            platform: Query = "",
+            days: Annotated[int, Field(ge=1, le=3650)] = 365,
+        ) -> Row:
+            """Read quartiles of latest authorized public counters per eligible work. Keep each platform’s definition and observation dates with its distribution."""
+            result = await call(
+                market + "/measurements",
+                params={
+                    "creator_id": creator_id,
+                    "platform": platform or None,
+                    "days": days,
+                },
+            )
+            return {"items": result} if isinstance(result, list) else row(result)
 
         @server.tool(annotations=READ_ONLY)
         async def search_public_creators(
@@ -317,6 +499,245 @@ def create_server(
         """Open the company-owned brief, shortlist, saved public research, evidence requests, last submitted evaluation inputs and scenario assumptions. Call evaluate_campaign to obtain a current plan."""
         return row(await call(f"{COMPANIES}/campaigns/{campaign_id}"))
 
+    @server.tool(annotations=READ_ONLY)
+    async def export_rate_request(
+        campaign_id: UUID,
+        expected_version: Annotated[int, Field(strict=True, ge=1)],
+        limit: Limit = 10,
+        offset: Offset = 0,
+    ) -> Row:
+        """Return a page of the company's current rate-request CSV with original source credits and blank commercial response fields. Use the saved campaign revision. Each page repeats the worksheet heading. Withdrawn leads are omitted at export time."""
+        value = await call(
+            f"{COMPANIES}/campaigns/{campaign_id}/rate-request",
+            params={"version": expected_version},
+            csv=True,
+        )
+        return {"version": expected_version, **worksheet_page(value, limit, offset)}
+
+    runs = COMPANIES + "/research-runs"
+
+    @server.tool(annotations=READ_ONLY)
+    async def list_company_research(
+        limit: Limit = 10, offset: Offset = 0, campaign_id: UUID | None = None
+    ) -> Row:
+        """List durable business research briefs and current progress. Supply a campaign ID to limit the list to that campaign."""
+        params = {"limit": limit + 1, "offset": offset}
+        if campaign_id is not None:
+            params["campaign_id"] = str(campaign_id)
+        records = rows(await call(runs, params=params))
+        return {
+            "items": records[:limit],
+            "next_offset": offset + limit if len(records) > limit else None,
+        }
+
+    @server.tool(annotations=READ_ONLY)
+    async def get_research_progress(run_id: UUID) -> Row:
+        """Read the company's persisted research phase, brief and source availability. A ready run can be opened for findings."""
+        return row(await call(f"{runs}/{run_id}"))
+
+    @server.tool(annotations=READ_ONLY)
+    async def get_research_findings(run_id: UUID) -> Row:
+        """Read current source-linked findings, measured activity, firm quotes, alternative allocations and evidence gaps. Public activity suggests research leads. Historical similarity is not a success probability."""
+        return row(await call(f"{runs}/{run_id}/results"))
+
+    @server.tool(annotations=READ_ONLY)
+    async def get_campaign_performance(campaign_id: UUID) -> Row:
+        """Read company-authorized actual campaign periods, measured results, lifecycle, currency and reporting version."""
+        return row(await call(f"{COMPANIES}/campaigns/{campaign_id}/tracking"))
+
+    @server.tool(annotations=READ_ONLY)
+    async def export_campaign_performance(campaign_id: UUID) -> Row:
+        """Return the company's actual tracking report as CSV, including its stated measurement sources."""
+        value = await call(
+            f"{COMPANIES}/campaigns/{campaign_id}/tracking/export", csv=True
+        )
+        return {
+            "media_type": "text/csv",
+            "filename": f"campaign-{campaign_id}.csv",
+            "csv": value,
+        }
+
+    if allow_workspace_edits:
+
+        @server.tool(annotations=WRITE)
+        async def create_saved_campaign(
+            campaign_id: UUID,
+            name: CampaignName,
+            budget_hkd_cents: Annotated[
+                int, Field(strict=True, ge=0, le=1_000_000_000)
+            ],
+            creator_count: Annotated[int, Field(strict=True, ge=1, le=40)],
+            description: Annotated[str, Field(max_length=2000)] = "",
+            objective: Annotated[str, Field(max_length=160)] = "",
+            deliverable: Annotated[str, Field(max_length=160)] = "",
+        ) -> Row:
+            """Create a saved Hong Kong campaign in the connected company. Supply the intended HKD cap in cents and target creator count. Reuse the same UUID and arguments after a timeout. Creation uses revision zero and cannot overwrite a changed campaign."""
+            saved = row(
+                await call(
+                    f"{COMPANIES}/campaigns/{campaign_id}",
+                    method="PUT",
+                    body={
+                        "version": 0,
+                        "draft": {
+                            "saved": True,
+                            "shortlist": [],
+                            "market_leads": [],
+                            "lines": [],
+                            "explorer": "",
+                            "brief": {
+                                "name": name,
+                                "description": description,
+                                "budget": budget_hkd_cents / CENTS_PER_HKD,
+                                "objective": objective,
+                                "market": "Hong Kong",
+                                "language": "",
+                                "platform": "",
+                                "deliverable": deliverable,
+                                "required": "",
+                                "preferred": "",
+                                "minAudience": 0,
+                                "requireCantonese": False,
+                                "creatorCount": creator_count,
+                            },
+                        },
+                    },
+                )
+            )
+            return fields(saved, "id version updated_at")
+
+        @server.tool(annotations=WRITE)
+        async def shortlist_market_creator(
+            campaign_id: UUID,
+            expected_version: Annotated[int, Field(strict=True, ge=1)],
+            creator_id: MarketLead,
+        ) -> Row:
+            """Add a creator with currently licensed published activity to this saved campaign. Supply the latest campaign version. After a timeout read the shortlist before retrying. A lead still needs a current quote and availability."""
+            path = f"{COMPANIES}/campaigns/{campaign_id}"
+            current = row(await call(path))
+            if current.get("version") != expected_version:
+                raise ToolError(
+                    "Campaign changed. Read the latest shortlist and version before applying this edit."
+                )
+            draft = row(current.get("draft"))
+            leads = draft.get("market_leads", [])
+            if not isinstance(leads, list):
+                raise ToolError(
+                    "Harbourline returned an unreadable campaign shortlist."
+                )
+            evidence = row(
+                await call(
+                    scope + "/market/activity",
+                    params={"creator_id": creator_id, "page_size": 1},
+                )
+            )
+            works = rows(evidence.get("items"))
+            if not works or works[0].get("creator_id") != creator_id:
+                raise ToolError(
+                    "This creator has no currently eligible published work."
+                )
+            if creator_id not in leads:
+                if len(leads) >= 120:
+                    raise ToolError("The campaign already has 120 market leads.")
+                draft["market_leads"] = [*leads, creator_id]
+                current = row(
+                    await call(
+                        path,
+                        method="PUT",
+                        body={"version": expected_version, "draft": draft},
+                    )
+                )
+            return {
+                **fields(current, "id version updated_at"),
+                "creator_id": creator_id,
+                "supporting_work": fields(
+                    works[0],
+                    "title url creator_name attribution license_url credit_role credit_url",
+                ),
+            }
+
+        @server.tool(annotations=WRITE)
+        async def start_campaign_research(
+            request_key: UUID, brief: BusinessBrief, campaign_id: UUID | None = None
+        ) -> Row:
+            """Start a company research job on explicit request. Reuse the same UUID for a retry of the same brief. Use the currency's minor units and user-approved channel constraints."""
+            return row(
+                await call(
+                    runs,
+                    method="POST",
+                    body={
+                        "request_key": str(request_key),
+                        "brief": brief.model_dump(mode="json"),
+                        "campaign_id": str(campaign_id) if campaign_id else None,
+                    },
+                )
+            )
+
+        @server.tool(annotations=WRITE)
+        async def cancel_campaign_research(run_id: UUID) -> Row:
+            """Stop pending work on a company research run on explicit request. Its business brief is retained."""
+            return row(await call(f"{runs}/{run_id}/cancel", method="POST", body={}))
+
+        @server.tool(annotations=WRITE)
+        async def refresh_campaign_research(run_id: UUID) -> Row:
+            """Resume an interrupted research run or refresh findings against current source permissions and available evidence."""
+            return row(await call(f"{runs}/{run_id}/resume", method="POST", body={}))
+
+        @server.tool(annotations=WRITE)
+        async def set_campaign_status(
+            campaign_id: UUID,
+            expected_version: Annotated[int, Field(ge=0)],
+            status: Literal["planning", "active", "completed", "paused"],
+        ) -> Row:
+            """Apply the requested campaign lifecycle change after reading the latest tracking version."""
+            return row(
+                await call(
+                    f"{COMPANIES}/campaigns/{campaign_id}/tracking",
+                    method="PATCH",
+                    body={"version": expected_version, "status": status},
+                )
+            )
+
+        @server.tool(annotations=WRITE)
+        async def record_campaign_measurement(
+            campaign_id: UUID,
+            period_id: UUID,
+            expected_version: Annotated[int, Field(ge=0)],
+            measurement: PeriodMeasurement,
+        ) -> Row:
+            """Record observed company-authorized results on explicit request. Supply the actual measurement source, permission reference and dates. Omit unknown metrics. Money is integer HKD cents. Reuse the period ID for edits."""
+            return row(
+                await call(
+                    f"{COMPANIES}/campaigns/{campaign_id}/tracking/periods/{period_id}",
+                    method="PUT",
+                    body={
+                        "version": expected_version,
+                        **measurement.model_dump(mode="json", exclude_none=True),
+                    },
+                )
+            )
+
+        @server.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=True,
+                idempotentHint=False,
+                openWorldHint=False,
+            )
+        )
+        async def remove_campaign_measurement(
+            campaign_id: UUID,
+            period_id: UUID,
+            expected_version: Annotated[int, Field(ge=0)],
+        ) -> Row:
+            """Remove a specifically identified measured period only on explicit request, using the latest reporting version."""
+            return row(
+                await call(
+                    f"{COMPANIES}/campaigns/{campaign_id}/tracking/periods/{period_id}",
+                    method="DELETE",
+                    params={"version": expected_version},
+                )
+            )
+
     if allow_budget_edits:
 
         @server.tool(annotations=WRITE)
@@ -363,14 +784,16 @@ def create_server(
 def main() -> None:
     try:
         editing = os.getenv("HARBOURLINE_MCP_ALLOW_BUDGET_EDITS", "0")
-        if editing not in ("0", "1"):
-            raise ValueError("HARBOURLINE_MCP_ALLOW_BUDGET_EDITS must be 0 or 1.")
+        workspace_edits = os.getenv("HARBOURLINE_MCP_ALLOW_WORKSPACE_EDITS", "0")
+        if any(value not in ("0", "1") for value in (editing, workspace_edits)):
+            raise ValueError("Harbourline MCP editing switches must be 0 or 1.")
         server = create_server(
             os.getenv("FYP_MCP_API_BASE", ""),
             os.getenv("HARBOURLINE_MCP_WORKSPACE", "public"),
             session=os.getenv("HARBOURLINE_MCP_SESSION", ""),
             company=os.getenv("HARBOURLINE_MCP_COMPANY_ID", ""),
             allow_budget_edits=editing == "1",
+            allow_workspace_edits=workspace_edits == "1",
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

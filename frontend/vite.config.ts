@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import type { Connect, Plugin } from 'vite';
@@ -51,7 +52,6 @@ export default defineConfig(({ mode, command, isPreview }) => {
   const port = Number(env.HARBOURLINE_PEER_PORT);
   const peerPort = Number.isInteger(port) && port >= 1024 && port <= 65535 ? port : 0;
   const target = env.API_PROXY_TARGET || 'http://127.0.0.1:8000';
-  // The container enforces the local approval boundary at its reverse proxy.
   const containerApproval = command === 'build' && env.PLATFORM_CONTAINER_FRONTEND === '1'
     && env.LOCAL_PROFILE_APPROVAL === '1';
   const localApproval = command === 'serve' && !isPreview && env.LOCAL_PROFILE_APPROVAL === '1'
@@ -61,20 +61,25 @@ export default defineConfig(({ mode, command, isPreview }) => {
   const apiProxy = {
     '/api/v1': {
       target,
-      // Preserve the browser's loopback authority for the API origin check.
       changeOrigin: false,
     },
   };
 
   return {
     publicDir: false,
+    resolve: {
+      alias: workspace === 'pilot' ? [{
+        find: /^\.\/demo\/fixture$/,
+        replacement: resolve('src/features/marketing/demo/company.ts'),
+      }] : [],
+    },
     build: { license: { fileName: 'licenses/dependencies.md' } },
     plugins: [react(), approvalBoundary(localApproval), {
       name: 'third-party-notices',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'harbourline-installation.json',
-          source: JSON.stringify({ application: 'Harbourline', workspace }) });
-        for (const file of ['Geist.txt', 'Tremor.txt', 'TailAdmin.txt']) {
+          source: JSON.stringify({ application: 'Harbourline', workspace, build: env.HARBOURLINE_BUILD_ID || 'development' }) });
+        for (const file of ['Geist.txt', 'Tremor.txt', 'TailAdmin.txt', 'Tabler.txt']) {
           this.emitFile({ type: 'asset', fileName: 'licenses/' + file, source: readFileSync('public/licenses/' + file, 'utf8') });
         }
       },

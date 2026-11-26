@@ -17,6 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.application.jobs import Jobs, database_now
 from backend.core.contracts import CollectionError
 from backend.intelligence.indexing import INDEX_CLAIM_WINDOW, Indexing
+from backend.intelligence.market_poll import MarketPoll
+from backend.intelligence.research_runs import LEASE as RESEARCH_LEASE, ResearchRuns
 from backend.intelligence import commons_works, public_directory, public_feed
 from backend.intelligence.refresh import refresh_partner_files
 from backend.intelligence.store import Config as IntelligenceConfig
@@ -26,7 +28,7 @@ from backend.marketing.store import ResearchSettings
 from backend.persistence.database import database_url, make_engine, session_factory
 from backend.persistence.models import JobRow
 
-from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, TASK, app
+from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, RESEARCH_TASK, TASK, app
 
 LOGGER = logging.getLogger(__name__)
 POLL_SECONDS = 1
@@ -49,6 +51,15 @@ def publish_marketing(run_id: UUID) -> None:
         args=[str(run_id)],
         retry=False,
         expires=MARKETING_CLAIM_WINDOW.total_seconds(),
+    )
+
+
+def publish_research(run_id: UUID, claim: UUID) -> None:
+    app.send_task(
+        RESEARCH_TASK,
+        args=[str(run_id), str(claim)],
+        retry=False,
+        expires=RESEARCH_LEASE.total_seconds(),
     )
 
 
@@ -150,10 +161,19 @@ def main() -> None:
     dispatcher = Dispatcher(sessions)
     marketing = Pipeline(sessions, ResearchSettings.load())
     intelligence = Indexing(sessions, IntelligenceConfig.load())
+    research = ResearchRuns(sessions, intelligence.config)
     partner_directory = os.getenv("MARKETING_PARTNER_REFRESH_DIR")
+    market = (
+        MarketPoll(sessions)
+        if intelligence.config.workspace or intelligence.config.public_demo_directory
+        else None
+    )
     try:
         if args.once:
+            if market:
+                market.poll()
             dispatcher.poll()
+            research.dispatch(publish_research)
             marketing.maintain()
             marketing.dispatch(publish_marketing)
             if partner_directory:
@@ -173,8 +193,11 @@ def main() -> None:
         indexing_due = 0.0
         indexing_cleanup_due = 0.0
         while True:
+            if market:
+                market.poll()
             try:
                 dispatcher.poll()
+                research.dispatch(publish_research)
             except SQLAlchemyError as error:
                 LOGGER.warning(
                     "Dispatcher database operation failed (%s)", type(error).__name__
@@ -227,6 +250,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if market:
+            market.close()
         engine.dispose()
 
 

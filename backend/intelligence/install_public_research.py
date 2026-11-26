@@ -15,7 +15,8 @@ from backend.persistence.database import (
 )
 from backend.persistence.models import SourceRow
 
-from . import commons_works, public_directory, public_feed
+from . import commons_works, public_directory, public_feed, market_collection
+from .market_sources import SOURCES
 
 MAPPINGS = {
     "hk-wikidata-creator-directory": "72565130ca0199f9b7489ba214c10f8a97882f5de7bbd66e7efdafb2c795df5a",
@@ -66,6 +67,14 @@ def main():
     engine = make_engine(database_url())
     try:
         sessions = session_factory(engine)
+        for key in SOURCES:
+            try:
+                result = market_collection.install(
+                    sessions, LocalEvidenceStore(evidence_path()), key
+                )
+                print(f"Publisher research: {key}: {result}.")
+            except MarketingError as error:
+                print(f"Publisher research: {key}: unavailable ({error.code}).")
         for spec in (public_directory.feed(), commons_works.feed()):
             try:
                 print(

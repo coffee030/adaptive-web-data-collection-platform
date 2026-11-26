@@ -1,4 +1,7 @@
-import { OperationsTasks } from '../operator/OperationsTasks';
+import { marketSourcesPath, OperationsTasks } from '../operator/OperationsTasks';
+import { Observability } from '../operator/Observability';
+import { PageHeader } from '../../components/studio/Workspace';
+import '../operator/Observability.css';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Status, Timestamp } from '../../components/feedback';
@@ -138,10 +141,9 @@ export function Overview() {
     : []);
 
   return <div className="collection-overview">
-    <header className="overview-title">
-      <h1>Data Collection Overview</h1>
-    </header>
-    <OperationsTasks />
+    <PageHeader title="Data Collection Overview" description="Monitor collection runs, investigate failures and publish source-backed records."
+      actions={<><Link className="studio-secondary" to={marketSourcesPath}>Market sources</Link><Link className="studio-primary" to={newRequestPath}>Start collection</Link></>}/>
+    <Observability />
     <TopicDirectory />
     <section className="collection-activity" aria-labelledby="request-ledger-title">
       <div className="overview-section-heading">
@@ -222,5 +224,6 @@ export function Overview() {
         ) : <p className="overview-empty">No validated records yet</p>}</OverviewResource>
       </section>
     </div>
+    <OperationsTasks />
   </div>;
 }

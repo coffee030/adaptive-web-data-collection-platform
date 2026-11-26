@@ -75,7 +75,6 @@ def publish_results(
 
 def _quarantine_id(job_id: UUID, page_number: int, position: SourcePosition) -> UUID:
     key = f"{position.kind}:{position.index}"
-    # Keep the historical IDs for the first page and CSV rows.
     return uuid5(job_id, key if page_number == 1 else f"{page_number}:{key}")
 
 

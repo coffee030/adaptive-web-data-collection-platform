@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.application.jobs import database_now
+from backend.core.csv_export import protect_csv_text
 from backend.intelligence.contracts import Campaign, Ref, Scenario, StrictModel
 from backend.intelligence.plan_export import allocation_rows
 from backend.persistence.database import settings
@@ -48,8 +49,11 @@ class NewMember(Credentials):
     role: Role = "member"
 
 
-class NewCompany(Credentials):
+class Registration(Credentials):
     name: Name
+
+
+class NewCompany(Registration):
     claim_existing_pilot: bool = False
 
 
@@ -107,6 +111,9 @@ class CampaignDraft(StrictModel):
     brief: CampaignBrief
     saved: bool
     shortlist: list[Ref] = Field(max_length=120)
+    market_leads: list[Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{32}$")]] = (
+        Field(default_factory=list, max_length=120)
+    )
     lines: list[None] = Field(max_length=0)
     explorer: str = Field(max_length=2000)
     evaluation: Campaign | None = None
@@ -135,7 +142,7 @@ def db(request: Request):
         yield session
 
 
-Database = Annotated[Session, Depends(db)]
+Database = Annotated[Session, Depends(db, scope="function")]
 
 
 def password_hash(password: SecretStr, salt: str) -> str:
@@ -182,6 +189,10 @@ def create_company(
             raise MarketingError(
                 409, "pilot_claimed", "The earlier pilot has already been assigned"
             )
+    return initialize_company(session, key, body)
+
+
+def initialize_company(session: Session, key: str, body: Registration) -> CompanyInfo:
     row = CompanyRow(id=key, name=body.name)
     session.add(row)
     try:
@@ -267,6 +278,13 @@ def sign_in(
         )
     member.failed_attempts = 0
     member.locked_until = None
+    return open_session(request, response, session, member)
+
+
+def open_session(
+    request: Request, response: Response, session: Session, member: MemberRow
+) -> Identity:
+    now = database_now(session)
     session.execute(
         delete(CompanySessionRow).where(
             (CompanySessionRow.expires_at <= now)
@@ -296,6 +314,41 @@ def sign_in(
         username=member.username,
         role=member.role,
     )
+
+
+def registration_enabled() -> bool:
+    config = settings()
+    return (
+        bool(config.get("MARKETING_PILOT_PASSWORD"))
+        and config.get("HARBOURLINE_SELF_REGISTRATION") == "1"
+    )
+
+
+@router.get("/register")
+def registration_available(session: Database) -> dict[str, bool]:
+    enabled = registration_enabled()
+    return {
+        "enabled": enabled,
+        "first_company": enabled
+        and session.scalar(select(CompanyRow.id).limit(1)) is None,
+    }
+
+
+@router.post("/register", status_code=201)
+def register_company(
+    body: Registration, request: Request, response: Response, session: Database
+) -> Identity:
+    if not registration_enabled():
+        raise MarketingError(
+            403, "registration_disabled", "Ask your company administrator for access"
+        )
+    company = initialize_company(session, "company-" + uuid4().hex, body)
+    member = session.get(MemberRow, body.username)
+    if member is None or member.company_id != company.id:
+        raise RuntimeError(
+            "Company registration did not create its initial administrator"
+        )
+    return open_session(request, response, session, member)
 
 
 @router.delete("/session", status_code=204)
@@ -362,6 +415,7 @@ class CampaignSummary(BaseModel):
     name: str
     version: int
     updated_at: datetime
+    status: str
 
 
 @router.get("/campaigns/summaries")
@@ -381,6 +435,7 @@ def campaign_summaries(
             ).label("name"),
             CompanyCampaignRow.version,
             CompanyCampaignRow.updated_at,
+            CompanyCampaignRow.status,
         )
         .where(CompanyCampaignRow.company_id == user.id)
         .order_by(CompanyCampaignRow.updated_at.desc(), CompanyCampaignRow.id)
@@ -544,5 +599,108 @@ def export_campaign(
         media_type="text/csv",
         headers={
             "Content-Disposition": "attachment; filename=harbourline-campaign.csv"
+        },
+    )
+
+
+@router.get("/campaigns/{campaign_id}/rate-request")
+def export_rate_request(
+    campaign_id: UUID, version: int, user: User, session: Database
+) -> Response:
+    from backend.intelligence.market_catalog import A, activity_query, item
+
+    campaign = session.get(
+        CompanyCampaignRow, (user.id, campaign_id), with_for_update={"read": True}
+    )
+    if campaign is None:
+        raise MarketingError(404, "campaign_unavailable", "Campaign unavailable")
+    if campaign.version != version:
+        raise MarketingError(
+            409, "campaign_changed", "Reload the latest campaign shortlist"
+        )
+    ids = list(dict.fromkeys(campaign.draft.get("market_leads", [])))
+    rows = session.scalars(
+        activity_query(session)
+        .where(A.creator_id.in_(ids))
+        .distinct(A.creator_id)
+        .order_by(A.creator_id, A.published.desc(), A.id)
+    )
+    works = {row.creator_id: item(row) for row in rows}
+    if not works:
+        raise MarketingError(
+            409,
+            "no_current_leads",
+            "Save a creator with currently eligible published work",
+        )
+    out = io.StringIO()
+    writer = csv.writer(out, quoting=csv.QUOTE_ALL)
+    brief = campaign.draft["brief"]
+    writer.writerow(["Company", protect_csv_text(user.name)])
+    writer.writerow(
+        ["Campaign", protect_csv_text(brief["name"] or "Creator shortlist")]
+    )
+    writer.writerow(["Requested deliverable", protect_csv_text(brief["deliverable"])])
+    writer.writerow(
+        [
+            "Request purpose",
+            "Ask each creator for availability, a current fee and permission to use their response.",
+        ]
+    )
+    writer.writerow(["Currently eligible leads", len(works)])
+    writer.writerow(["Unavailable or withdrawn leads omitted", len(ids) - len(works)])
+    writer.writerow([])
+    writer.writerow(
+        [
+            "Credited creator",
+            "Public profile",
+            "Supporting work",
+            "Source",
+            "Source license",
+            "Attribution",
+            "Credited role",
+            "Credit source",
+            "Series",
+            "Broadcaster",
+            "Availability",
+            "Firm or indicative",
+            "Fee (HKD)",
+            "Valid until",
+            "Deliverable and terms",
+            "Permission reference",
+        ]
+    )
+    for creator_id in ids:
+        if creator_id in works:
+            work = works[creator_id]
+            writer.writerow(
+                [
+                    *[
+                        protect_csv_text(str(work.get(key) or ""))
+                        for key in (
+                            "creator_name",
+                            "profile_url",
+                            "title",
+                            "url",
+                            "license_url",
+                            "attribution",
+                            "credit_role",
+                            "credit_url",
+                            "series_title",
+                            "broadcaster_url",
+                        )
+                    ],
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
+    return Response(
+        content="\ufeff" + out.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=harbourline-rate-request.csv"
         },
     )

@@ -215,7 +215,6 @@ def fixtures(client):
         for index in range(1200)
     )
     return {
-        # Expected terminal status, valid, invalid, duplicate and captured inputs.
         "short": [
             (html_pin, html, ("succeeded", 2, 0, 0, 1)),
             (csv_pin, csv | {"content": CSV.decode()}, ("partial", 2, 3, 1, 1)),

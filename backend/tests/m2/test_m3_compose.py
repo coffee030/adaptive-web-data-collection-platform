@@ -640,7 +640,6 @@ def test_m7_recovers_after_worker_loss_and_keeps_terminal_lineage(compose):
                 wait_for(lambda: evidence_lock_exists(prefix, granted=False))
                 compose_command(prefix, "kill", "-s", "SIGKILL", "worker")
             assert client.get(path + "/evidence-pages").json() == []
-            # Exercise recovery without waiting for the already tested 90-second lease.
             compose_command(
                 prefix,
                 *PSQL,

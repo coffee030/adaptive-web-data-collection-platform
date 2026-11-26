@@ -147,7 +147,7 @@ test('shell, persisted fields, and keyboard navigation', async ({ page }) => {
   await page.route(api + '/sources/' + sourceId + '/versions/' + profileId, route => route.fulfill({ json: { version: 4 } }));
   await page.goto('/operations');
   await expect(page).toHaveURL('/operations');
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Data Operations', exact: true })).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Harbourline Scraping Operations', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Data Collection Overview' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Collection Jobs' }).click();
@@ -602,7 +602,6 @@ test('a narrow touch viewport opens the Job and its related Record without horiz
 test('Chrome native 200 percent zoom keeps Jobs and diagnostics usable', async ({ baseURL, browserName }) => {
   test.skip(browserName !== 'chromium', 'Uses the native Chromium Appearance settings.');
   const context = await chromium.launchPersistentContext('', {
-    // The Chromium Headless Shell does not include chrome://settings.
     channel: process.env.PLAYWRIGHT_CHANNEL || 'chromium', baseURL, viewport: { width: 1440, height: 900 },
   });
   try {

@@ -11,6 +11,7 @@ from backend.application.execution import JobExecutor
 from backend.core.evidence import LocalEvidenceStore
 from backend.core.profiles import ProfileError
 from backend.intelligence.indexing import Indexing
+from backend.intelligence.research_runs import ResearchRuns
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.marketing.pipeline import Pipeline
 from backend.marketing.store import ResearchSettings
@@ -22,7 +23,14 @@ from backend.persistence.database import (
     settings,
 )
 
-from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, TASK, app, worker_instance_id
+from .celery_app import (
+    INTELLIGENCE_TASK,
+    MARKETING_TASK,
+    RESEARCH_TASK,
+    TASK,
+    app,
+    worker_instance_id,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -104,3 +112,18 @@ def index_intelligence_dataset(dataset_id: str, claim: str) -> None:
     except SQLAlchemyError as error:
         LOGGER.warning("Intelligence index database error (%s)", type(error).__name__)
         raise RuntimeError("Intelligence index state could not be confirmed") from None
+
+
+@lru_cache(maxsize=1)
+def company_research():
+    return ResearchRuns(worker_executor().sessions, IntelligenceConfig.load())
+
+
+@app.task(name=RESEARCH_TASK, time_limit=165)
+def execute_company_research(run_id: str, claim: str) -> None:
+    try:
+        run_uuid, token = UUID(run_id), UUID(claim)
+    except (ValueError, TypeError, AttributeError):
+        LOGGER.warning("Discarded company research message with an invalid identity")
+        return
+    company_research().execute(run_uuid, token)

@@ -46,7 +46,6 @@ function attempt(t, { signal = 'dashboard_confirmation', stopAt = 600, approvalA
   if (approvalAt < stopAt) respond();
   const stop = persistStop(directory, record, start, stamp(stopAt), signal);
   if (approvalAt >= stopAt) respond();
-  // A slow response body may finish after Enter. Only the response event sets its observation time.
   if (hasBody) {
     record('api_body', { id: 2, kind: 'approve', result: approved }, stamp(Math.max(stopAt, approvalAt) + 50));
   }

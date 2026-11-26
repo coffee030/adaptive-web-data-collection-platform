@@ -33,6 +33,7 @@ function Set-HarbourlineDestination([ValidateSet('pilot','demo')][string]$Mode) 
 
 function Initialize-HarbourlinePilotSettings {
     Set-HarbourlineDestination pilot
+    $Config['HARBOURLINE_SELF_REGISTRATION'] = '1'
     $Config['MARKETING_PARTNER_WORKSPACE'] = $Config.COMPOSE_PROJECT_NAME
     $refreshRoot = Join-Path $Local 'partner-refresh'
     foreach ($folder in @($refreshRoot, (Join-Path $refreshRoot $Config.COMPOSE_PROJECT_NAME))) {
@@ -111,7 +112,7 @@ function Invoke-PublicResearchProvisioning {
     $public = Invoke-Compose @('exec', '-T', 'api', 'python', '-m', 'backend.intelligence.install_public_research') 145
     if ($public.Code -ne 0) { Write-Step '[WARN] Public research setup needs attention in Data Operations.' }
     foreach ($line in ($public.Out -split '\r?\n')) {
-        if ($line -match '^Public research:') { Write-Step $line }
+        if ($line -match '^(Public|Publisher) research:') { Write-Step $line }
     }
 }
 

@@ -10,12 +10,17 @@ services:
     labels: *owner
   redis:
     labels: *owner
-  api: *backend
+  api:
+    <<: *backend
+    build:
+      args:
+        HARBOURLINE_BUILD_ID: "${HARBOURLINE_BUILD_ID:-development}"
   worker: *backend
   dispatcher: *backend
   frontend:
     build:
       args:
+        HARBOURLINE_BUILD_ID: "${HARBOURLINE_BUILD_ID:-development}"
         HARBOURLINE_INSTALLATION: "${HARBOURLINE_INSTALLATION:-core}"
         HARBOURLINE_PEER_PORT: "${HARBOURLINE_PEER_PORT:-0}"
     image: "${COMPOSE_PROJECT_NAME}-frontend:local"

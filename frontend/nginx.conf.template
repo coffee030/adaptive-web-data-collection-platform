@@ -37,7 +37,6 @@ server {
             return 403 '{"error":{"code":"local_approval_required","message":"Local operator approval requires the same loopback origin"}}';
         }
 
-        # Re-resolve after an API container replacement.
         resolver 127.0.0.11 valid=5s ipv6=off;
         resolver_timeout 2s;
         set $backend api:8000;

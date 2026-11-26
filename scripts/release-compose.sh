@@ -10,8 +10,6 @@ export POSTGRES_PASSWORD="$(python -c 'from secrets import token_hex; print(toke
 if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
     printf '::add-mask::%s\n' "$POSTGRES_PASSWORD"
 fi
-# Existing recovery tests restart or recreate containers and retain the same URLs.
-# Reserve distinct loopback ports together so Docker can rebind them on restart.
 ports="$(python - <<'PY'
 import socket
 
@@ -192,6 +190,20 @@ check "Empty Normal workspace" \
     env M4_FRONTEND_PORT="$normal_web" M14_EMPTY_NORMAL=1 M15_EMPTY_NORMAL=1 M12_EMPTY_NORMAL=1 \
     npm --prefix frontend test -- jobs.integration.ts operator.integration.ts topic-collections.integration.ts \
     -g 'fresh Normal database|isolated empty Normal' --workers=1
+company_check() (
+    export HARBOURLINE_SELF_REGISTRATION=1 MARKETING_PARTNER_WORKSPACE=release-company
+    MARKETING_PILOT_PASSWORD="$(openssl rand -hex 32)"
+    MARKETING_CUSTOMER_TOKEN="$(openssl rand -hex 32)"
+    MARKETING_OPERATOR_TOKEN="$(openssl rand -hex 32)"
+    export MARKETING_PILOT_PASSWORD MARKETING_CUSTOMER_TOKEN MARKETING_OPERATOR_TOKEN
+    normal build --build-arg HARBOURLINE_INSTALLATION=pilot frontend || return 1
+    normal up -d --no-build --wait --wait-timeout 90 api dispatcher worker frontend || return 1
+    curl --fail --silent --max-time 10 "$normal_url/harbourline-installation.json" | grep -q '"workspace":"pilot"' || return 1
+    normal exec -T frontend sh -ec 'test -z "$(find /usr/share/nginx/html/assets -name "*-portrait-*.webp" -o -name "*-post-*.webp")"' || return 1
+    M4_FRONTEND_PORT="$normal_web" HARBOURLINE_RESEARCH_TEST_PILOT=1 \
+        npm --prefix frontend test -- campaign-research.integration.ts first-party-window.integration.ts market-sources.integration.ts --workers=1
+)
+check "Company discovery, research, evidence intake and publisher navigation" company_check
 if (( ${#failures[@]} )); then
     printf 'FAIL %s\n' "${failures[@]}"
     exit 1

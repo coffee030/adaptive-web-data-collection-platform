@@ -1,14 +1,13 @@
 # Harbourline
 
-Harbourline helps Hong Kong businesses and agencies research creators and plan campaigns. Customers search supported creator profiles, inspect historical content, compare candidates and decide which combination fits a confirmed budget.
+Harbourline is a local marketing research workspace for Hong Kong businesses and agencies. Each company has its own members, campaign briefs, saved leads, permissions and performance reports. Start the Windows application with **Start-Harbourline.bat**. Create a company or sign in to return to a saved campaign. [Windows setup](README.md)
 
-## Campaign decisions
+## Research and decisions
 
-- Use reviewed evidence for mandatory requirements. Rank eligible candidates using content relevance and the available history, fees and optional preferences.
-- Link recommendations to the underlying content and current quote. Leave missing audience evidence or fees unavailable.
-- Calculate scenarios from the customer's assumptions. Show attributed revenue, advertising spend and contribution separately.
-- Separate fictional demonstrations, public research material and partner data by their permitted uses.
+Market overview and Creator discovery show published work from currently eligible sources. Open the creator, dated work, original credit and usage terms to evaluate a lead. Source-specific measurements belong to their own platform and observation window. A presenter credit identifies the host of a series. Current social accounts, audience, affordability and availability each require supporting evidence.
 
-## Data Operations
+Campaign Advisor takes a brief and budget, looks for relevant evidence, and requests eligible refreshes when needed. Its findings distinguish direct evidence, background and missing requirements. Firm fees, deliverables and mandatory campaign conditions constrain allocation. The company can adjust budgets, candidate counts and scenario assumptions, save a campaign, request prices and export eligible evidence. The reporting workspace records actual channel periods, costs and attributed revenue supplied by the company. Reach, ROAS and ROI depend on the observations and cost coverage available. [Intelligence and permissions](docs/contracts/Marketing-M2-intelligence.md)
 
-The **Adaptive Scalable and Observable Web Data Collection Platform** is the underlying FYP Core. Operators authorize inputs, approve extraction profiles, follow collection and refresh, inspect validation and evidence, and withdraw datasets. Ordinary customers work in the marketing application. The operator console and MCP use the same Core APIs. [System overview](docs/architecture/System-Overview.md) · [Intelligence and permissions](docs/contracts/Marketing-M2-intelligence.md) · [Launch instructions](README.md)
+## Collection and access
+
+Scraping Operations is for the authorized workstation operator. It covers publisher approvals, capture schedules, worker activity, validation, quarantine and publication. Creator-supplied profiles, audience surveys, fees and performance observations can be registered for a named company under a reviewed permission. Withdrawing a source removes its evidence from eligible searches and exports. External clients can use the corresponding Core and Marketing MCP services with the appropriate role. [System overview](docs/architecture/System-Overview.md)
