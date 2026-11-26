@@ -83,7 +83,7 @@ function MarketingShell({ capabilityRequest }: { capabilityRequest: ReturnType<t
       {pathname !== path('creators') && <form role="search" aria-label="Workspace search" onSubmit={search}><input name="query" aria-label="Creator name, handle or topic" placeholder="Search creators or topics" minLength={2} maxLength={100}/><button aria-label="Search creators" type="submit">↵</button></form>}
       <CompanyControls/>{mode !== 'partner' && <div className="hl-mode"><strong>{demo ? 'Fictional demo' : 'Fictional backend demo'}</strong><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : '/'}>Live workspace</Link></div>}
     </div><div className="hl-nav-rule"><nav aria-label="Marketing workspace">
-      <NavLink end to={path()}>Workspace</NavLink><NavLink aria-label="Creator Explorer" to={creatorPath}><span className="hl-nav-prefix">Creator </span><span className="hl-nav-desktop">Explorer</span><span className="hl-nav-mobile">Creators</span></NavLink>
+      <NavLink end to={path()}>Workspace</NavLink><NavLink aria-label="Creator Explorer" to={creatorPath}><span className="hl-nav-prefix">Creator </span>Explorer</NavLink>
       {apiMode==='partner' && <NavLink aria-label="Public directory" to={path('directory')}><span className="hl-nav-prefix">Public </span>Directory</NavLink>}
       <NavLink aria-label="Campaign Advisor" to={path('advisor')}><span className="hl-nav-prefix">Campaign </span>Advisor</NavLink><NavLink aria-label="Campaign plan" to={path('plan')}><span className="hl-nav-desktop">Campaign plan</span><span className="hl-nav-mobile">Plan</span></NavLink></nav></div></header>
     <main id="harbour-main" tabIndex={-1} ref={main}>

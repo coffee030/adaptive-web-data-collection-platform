@@ -55,7 +55,9 @@ export function useDraftActions(mode: WorkspaceMode, draft: Draft, setDraft: Rea
   const demo = mode === 'sample';
   const base = mode === 'server-demo' ? '/demo/connected' : demo ? '/demo' : '';
   function path(page = '') {
-    return mode === 'partner' && !page && __PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : base + '/' + page;
+    if (page) return base + '/' + page;
+    if (mode === 'partner' && __PLATFORM_SYNTHETIC_DEMO__) return '/workspace';
+    return base || '/';
   }
   return {
     draft, setDraft, demo, mode, path, storageFailed, creators: demo ? demoCreators : [],

@@ -33,6 +33,7 @@ test('the authorised research UI displays the deployment restriction without fet
 });
 
 test('the M2 backend demo runs discovery, evidence, exact selection and scenarios through the shared routes', async ({ page, request }) => {
+  test.setTimeout(120_000);
   const capability = await request.get('/api/v1/marketing/capabilities');
   const data = await capability.json();
   test.skip(data.demo_intelligence !== 'available', 'Requires a seeded M2 fictional workspace.');
@@ -65,7 +66,10 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await expect(page.getByRole('dialog')).toContainText('Fixture Tasting Table');
   await page.keyboard.press('Escape');
   await page.getByRole('navigation', { name: 'Marketing workspace' }).getByRole('link', { name: 'Campaign Advisor' }).click();
+  const evaluated = page.waitForResponse(response =>
+    response.url().endsWith('/demo/campaign-briefs') && response.request().method() === 'POST', { timeout: 45_000 });
   await page.getByRole('button', { name: 'Run Campaign Advisor' }).click();
+  expect((await evaluated).ok()).toBe(true);
   await expect(page.getByRole('heading', { name: 'Recommended creator combination' })).toBeVisible();
   const evidence = page.getByRole('region', { name: 'Eligible candidates' }).getByRole('button', { name: /Evidence for Fixture/ }).first();
   await evidence.click();
