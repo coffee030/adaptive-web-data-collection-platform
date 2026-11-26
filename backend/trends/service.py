@@ -43,6 +43,8 @@ def approved(session, row, *, lock=False):
         source
         and profile
         and source.approval_status == "approved"
+        and source.request_key == SOURCE_KEY
+        and source.permission_reference == wikimedia.POLICY
         and profile.approval_status == "approved"
         and profile.source_id == source.id
         and profile.config_hash == wikimedia.MAPPING.config_hash()

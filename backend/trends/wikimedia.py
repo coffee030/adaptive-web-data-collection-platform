@@ -91,13 +91,20 @@ def load(url):
             trust_env=False,
             timeout=10,
         ) as reply:
+            if reply.headers.get("cf-mitigated", "").lower() == "challenge":
+                raise ProviderError("publisher_access_blocked", None)
+            requested_wait = reply.headers.get("retry-after", "")
             if reply.status_code == 429:
                 raise ProviderError(
                     "publisher_rate_limited",
-                    retry_after(reply.headers.get("retry-after", "")),
+                    retry_after(requested_wait),
                 )
             if reply.status_code in (401, 403, 451) or 300 <= reply.status_code < 400:
                 raise ProviderError("publisher_access_blocked", None)
+            if 500 <= reply.status_code <= 599 and requested_wait:
+                raise ProviderError(
+                    "publisher_unavailable", retry_after(requested_wait)
+                )
             if reply.status_code == 404:
                 raise ProviderError("no_data_from_publisher")
             reply.raise_for_status()
