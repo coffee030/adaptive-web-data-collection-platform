@@ -63,6 +63,7 @@ def published_works():
             data = {
                 "state": "available",
                 "criteria": "Dated food evidence",
+                "retrieval": "evidence_filter_with_granite",
                 "contributors": [
                     {
                         "name": "Controlled contributor",
@@ -98,6 +99,7 @@ def test_public_work_pages_retain_credit_source_and_missing_measurements():
                 public, "search_public_works", query="dining", work_limit=1
             )
             assert first["criteria"] == "Dated food evidence"
+            assert first["retrieval"] == "evidence_filter_with_granite"
             contributor = first["items"][0]
             assert (
                 contributor["name"] == "Controlled contributor"
