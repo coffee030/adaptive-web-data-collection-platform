@@ -80,6 +80,8 @@ function CompareRecords({ mode, ids, platform, close }: { mode: DataMode; ids: s
   const request = useResource(load, useCatalogRevision());
   const result = request.result.state === 'ready' ? request.result.data : undefined;
   const creators = result?.creators.filter(row => visibleFor(mode,row.profile.evidence)) ?? [];
+  const comparable = (Object.keys(platformOptions) as Platform[]).filter(key =>
+    creators.filter(row => row.historical_by_platform[key]?.median_views.value != null).length >= 2);
   return <Overlay title="Compare shortlisted creators" close={close} wide>
     <RefreshOnFocus refresh={request.retry} />
     {request.result.state === 'loading' && <Pending>Loading the current comparison…</Pending>}
@@ -92,7 +94,10 @@ function CompareRecords({ mode, ids, platform, close }: { mode: DataMode; ids: s
           <tbody>{creators.map(creator => <tr key={creator.profile.data.creator_id}><th scope="row">{creator.profile.data.name}</th>
             <td>{creator.profile.data.accounts.map(account => platformOptions[account.platform]).join(', ')}</td><td><ComparisonQuotes creator={creator} mode={mode} platform={platform} /></td><td><Coverage creator={creator} /></td>
             {platform && <td>{measureText(creator.historical_by_platform[platform]?.median_views)}</td>}</tr>)}</tbody></table></TableRegion>}
-      {!platform && <p className="hl-note">Filter to one platform to compare historical performance within that platform.</p>}
+      {creators.length > 0 && <p className="hl-note">Use firm quotes to compare costs for the same deliverable. {platform && comparable.includes(platform)
+        ? 'Median views describe observed posts on this platform.'
+        : comparable.length ? 'Comparable historical views are available on ' + comparable.map(key=>platformOptions[key]).join(', ') + '. Choose that platform in Explorer to compare them.'
+        : 'These creators have no shared platform with measured views for two or more of them.'}</p>}
     </>}
   </Overlay>;
 }
@@ -150,13 +155,13 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
     return <button type="button" aria-pressed={saved} aria-label={'Shortlist ' + name} onClick={() => toggleShortlist(id)}>{saved ? 'Shortlisted' : 'Shortlist'}</button>;
   }
   return <div className="hl-page hl-explore"><RefreshOnFocus refresh={request.retry} />
-    <div className="hl-page-heading"><div><h1>Creator Explorer</h1><p>Search eligible profiles and review creator-authored content.</p></div>
+    <div className="hl-page-heading"><div><h1>Creator Explorer</h1><p>Search for words in creator names, descriptions and historical posts.</p></div>
       <div className="hl-views"><button type="button" aria-pressed={view === 'desk'} onClick={() => change('view','desk')}>Research desk</button>
         <button type="button" aria-pressed={view === 'gallery'} onClick={() => change('view','gallery')}>Content gallery</button></div></div>
     <div className="hl-explore-tools"><form role="search" aria-label="Search creators" onSubmit={event => {
       event.preventDefault(); change('q',String(new FormData(event.currentTarget).get('q') ?? '').trim());
     }}><input key={query} name="q" aria-label="Creator name or content topic" minLength={2} maxLength={120} defaultValue={query} placeholder="Creator name or content topic" /><button type="submit" className="hl-primary">Search</button></form></div>
-    <div className="hl-connected-filters">
+    <details className="hl-explorer-options" open={Boolean(platform || params.get('market') || params.get('language') || savedOnly) || undefined}><summary>Filters and sort</summary><div className="hl-connected-filters">
       <label>Platform<select value={platform ?? ''} onChange={event => change('platform',event.target.value)}><option value="">All platforms</option>
         {Object.entries(platformOptions).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Language<select value={params.get('language') ?? ''} onChange={event => change('language',event.target.value)}><option value="">All languages</option>
@@ -165,19 +170,20 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
       <label>Sort<select value={params.get('sort') ?? ''} onChange={event => change('sort',event.target.value)}><option value="">Name</option><option value="posts">Historical content count</option></select></label>
     </div>
     <label className="hl-check"><input type="checkbox" checked={savedOnly}
-      onChange={event => change('shortlist', event.target.checked ? '1' : '')} />Only shortlisted creators</label>
-    <WorkspaceProcessing mode={mode} />
+      onChange={event => change('shortlist', event.target.checked ? '1' : '')} />Only shortlisted creators</label></details>
     {request.result.state === 'loading' && <Pending>Loading creator results…</Pending>}
     {request.result.state === 'error' && <IntelligenceError error={request.result.error} retry={request.retry} />}
     {data && <div className={selected ? 'hl-explore-body hl-has-inspector' : 'hl-explore-body'}>
       <div className="hl-results">
-        {rows.length === 0 ? <div className="hl-empty"><h2>No matching creators</h2><p>Change the search or clear filters.</p>
+        {rows.length === 0 ? <div className="hl-empty"><h2>No matching creators</h2><p>{query ? <>No results for “{query}” with these filters. Try a creator name or a specific word from a post.</> : 'Broaden the filters or turn off the shortlist filter.'}</p>
+          {mode === 'partner' && <Link to={path('directory')+(query ? '?q='+encodeURIComponent(query) : '')}>Search the public directory</Link>}
+          {mode === 'demo' && query && <button onClick={() => setParams({q:'sunscreen'}, {preventScrollReset:true})}>Search “sunscreen” in the demo</button>}
           <button type="button" onClick={() => setParams({}, { preventScrollReset:true })}>Clear search and filters</button></div>
           : view === 'desk' ? <TableRegion label="Eligible creator results"><table className="hl-api-table"><thead><tr>
-            <th scope="col">Creator</th><th scope="col">Historical posts</th><th scope="col">Coverage</th><th scope="col">Shortlist</th></tr></thead>
+            <th scope="col">Creator</th><th scope="col">Posts</th><th scope="col">Firm quote</th><th scope="col">Shortlist</th></tr></thead>
             <tbody>{rows.map(row => <tr key={row.profile.data.creator_id}><th scope="row"><button type="button" className="hl-text-button"
-              id={'profile-trigger-' + row.profile.data.creator_id} onClick={() => change('creator',row.profile.data.creator_id)}>{row.profile.data.name}</button></th>
-              <td>{row.post_count}</td><td><Coverage creator={row} /></td><td>{save(row)}</td></tr>)}</tbody></table></TableRegion>
+              id={'profile-trigger-' + row.profile.data.creator_id} onClick={() => change('creator',row.profile.data.creator_id)}>{row.profile.data.name}</button>{row.preview && visibleFor(mode,row.preview.evidence) && <span className="hl-result-excerpt">{row.preview.data.text}</span>}</th>
+              <td>{row.post_count}</td><td>{row.pricing === 'available' ? 'Available' : 'Missing'}</td><td>{save(row)}</td></tr>)}</tbody></table></TableRegion>
           : <div className="hl-gallery hl-text-gallery">{rows.map(row => <article key={row.profile.data.creator_id}>
             <h2>{row.profile.data.name}</h2>{row.preview && visibleFor(mode,row.preview.evidence) ? <>
               <p className="hl-note">{platformOptions[row.preview.data.platform]} · {date(row.preview.data.published_at)}</p>
@@ -189,6 +195,7 @@ export function ConnectedExplorer({ mode }: { mode: DataMode }) {
       </div>
       {selected && <div className="hl-inspector-slot" tabIndex={-1} ref={inspector}><RecordInspector mode={mode} id={selected} close={closeProfile} /></div>}
     </div>}
+    <WorkspaceProcessing mode={mode}/>
     {data && <div className="hl-short-bar" data-active={draft.shortlist.length > 0 && !selected}><strong>{draft.shortlist.length} shortlisted{draft.shortlist.length > 12 && ' · Keep up to 12 to compare'}</strong><div className="hl-actions">
       <button type="button" disabled={draft.shortlist.length < 2 || draft.shortlist.length > 12} onClick={() => setCompare([...draft.shortlist])}>Compare shortlist</button>
       <Link className="hl-button" to={path('advisor')}>Open Campaign Advisor</Link></div></div>}

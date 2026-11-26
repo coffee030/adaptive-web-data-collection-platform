@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Loading, RequestProblem, Status, TableRegion, Timestamp } from '../../components/feedback';
-import { ApiError } from '../../lib/api';
+import { ApiError, getOperatorCredential, lockOperator } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { getMarketingCapability } from '../marketing/api';
 import { operationsPath } from './OperationsTasks';
@@ -196,6 +196,7 @@ function ResearchSession({ token, clear }: { token: string; clear: () => void })
 }
 
 export function CreatorResearch() {
+  const unlocked = getOperatorCredential();
   const [token, setToken] = useState('');
   const { result, retry } = useResource(getMarketingCapability);
   const loopback = window.location.protocol === 'http:' && window.location.hostname === '127.0.0.1';
@@ -209,6 +210,7 @@ export function CreatorResearch() {
         : <><h2>YouTube permission status</h2><p>Approved research only · Additional permission pending · {result.data.retention_days}-day snapshot retention</p></>}
     </section>
     {!loopback ? <p className="notice">Open Data Operations on 127.0.0.1 to use a local marketing operator token.</p>
+      : unlocked ? <ResearchSession token={unlocked} clear={lockOperator} />
       : token ? <ResearchSession token={token} clear={() => setToken('')} />
       : <form className="operator-research-form operator-token" onSubmit={event => {
         event.preventDefault();

@@ -51,7 +51,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByRole('textbox', { name: 'Creator name or content topic' }).fill('荃灣');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: 'Fixture Street Bowl', exact: true }).click();
-  await expect(page.getByText(/荃灣收工醫肚/)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Creator profile' }).getByText(/荃灣收工醫肚/)).toBeVisible();
   await page.getByRole('button', { name: 'Metrics and quotes' }).click();
   await expect(page.getByText('Current firm quotes', { exact: true })).toBeVisible();
   await expect(page.getByText(/HK\$2,300/)).toBeVisible();

@@ -3,7 +3,7 @@
 ## Get started
 
 1. Clone or extract the repository to a local NTFS folder where you have write access.
-2. Double-click `Start-Harbourline-Demo.bat` for fictional data or `Start-Harbourline-Pilot.bat` for the private workspace. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
+2. Double-click `Start-Harbourline-Demo.bat` for password-free public directory research and fictional campaign practice, or `Start-Harbourline-Pilot.bat` for the private workspace. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
 3. The first launch downloads dependencies and builds the backend and frontend images inside Docker. After `[SUCCESS]`, the launcher opens the product in the default browser. You can also copy the URL shown.
 4. Double-click the same file for later launches. The launcher reuses healthy services, dependencies, and the database. Use the printed URL to reopen the Dashboard.
 

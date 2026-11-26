@@ -187,7 +187,7 @@ function Get-ImageFingerprint([ValidateSet('api', 'frontend')][string]$Service) 
             $path = Join-Path $Frontend $directory
             if (Test-Path -LiteralPath $path) { $files += @(Get-ChildItem -LiteralPath $path -File -Recurse) }
         }
-        $settings = "approval=$($Config.LOCAL_PROFILE_APPROVAL); demo=$DemoMode"
+        $settings = "approval=$($Config.LOCAL_PROFILE_APPROVAL); demo=$DemoMode; installation=$($Config.HARBOURLINE_INSTALLATION); peer=$($Config.HARBOURLINE_PEER_PORT)"
     }
     $hash = [Security.Cryptography.SHA256]::Create()
     try {

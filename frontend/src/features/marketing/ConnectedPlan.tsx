@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { apiAttachment } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, measureText } from './IntelligenceEvidence';
+import { EvaluationScope } from './EvaluationScope';
 import { useEvaluation } from './useEvaluation';
 import { amount, calculateScenario, runCampaign, type DataMode, type ScenarioRequest } from './intelligence';
 import { useMarketing } from './workspace';
@@ -160,7 +161,7 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     <p className="hl-crumb">{draft.brief.name || 'Campaign workspace'}</p>
     <div className="hl-page-heading"><div><h1>Campaign plan</h1><p>Review quoted allocations and test a different budget or candidate selection.</p></div>
       {draft.saved && <button type="button" className="hl-primary" disabled={campaignReceipt?.pending || checkingExport || running || Boolean(error) || (mode === 'demo' && !current)}
-        onClick={exportPlan}>{mode === 'demo' ? 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
+        onClick={exportPlan}>{active?.status === 'infeasible' ? mode === 'demo' ? 'Export infeasible assessment CSV' : 'Export brief only (CSV)' : mode === 'demo' ? 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
     {exportError && <p role="alert">{exportError}</p>}
     {exported && <p role="status">CSV exported.</p>}
     {error && <IntelligenceError error={error} retry={retry} />}
@@ -173,6 +174,11 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       </form>
       {!running && !error && <section className={`hl-decision ${confirmed === undefined || manual ? 'hl-warning' : ''}`} aria-label="Confirmed selection">
         <strong>{status}</strong><p>{confirmed === undefined ? 'Confirmed spend unavailable.' : amount(confirmed) + ' confirmed for ' + selected.length + (selected.length === 1 ? ' creator allocation.' : ' creator allocations.')}</p>
+        <EvaluationScope result={current}/>
+        {active?.status === 'infeasible' && <div className="hl-actions">
+          {current.campaign.shortlist && <button type="button" onClick={() => { setPool(undefined); evaluate({ ...current.campaign, shortlist: undefined }); }}>Evaluate all creators</button>}
+          <Link className="hl-button" to={path('advisor')+'#edit-requirements'}>Edit campaign requirements</Link>
+        </div>}
         {confirmed !== undefined && <div className="hl-budget-usage">
           {current.campaign.budget_minor > 0 && <meter aria-label="Confirmed creator spend against the budget" min={0} max={current.campaign.budget_minor} value={confirmed}/>}
           {amount(current.campaign.budget_minor - confirmed)} remaining of {amount(current.campaign.budget_minor)}

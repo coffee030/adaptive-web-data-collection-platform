@@ -46,6 +46,10 @@ function approvalBoundary(enabled: boolean): Plugin {
 
 export default defineConfig(({ mode, command, isPreview }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const installation = env.HARBOURLINE_INSTALLATION;
+  const workspace = installation === 'pilot' || installation === 'demo' ? installation : 'core';
+  const port = Number(env.HARBOURLINE_PEER_PORT);
+  const peerPort = Number.isInteger(port) && port >= 1024 && port <= 65535 ? port : 0;
   const target = env.API_PROXY_TARGET || 'http://127.0.0.1:8000';
   // The container enforces the local approval boundary at its reverse proxy.
   const containerApproval = command === 'build' && env.PLATFORM_CONTAINER_FRONTEND === '1'
@@ -67,12 +71,16 @@ export default defineConfig(({ mode, command, isPreview }) => {
     plugins: [react(), approvalBoundary(localApproval), {
       name: 'third-party-notices',
       generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'harbourline-installation.json',
+          source: JSON.stringify({ application: 'Harbourline', workspace }) });
         for (const file of ['Geist.txt', 'Tremor.txt']) {
           this.emitFile({ type: 'asset', fileName: 'licenses/' + file, source: readFileSync('public/licenses/' + file, 'utf8') });
         }
       },
     }],
     define: {
+      __HARBOURLINE_INSTALLATION__: JSON.stringify(workspace),
+      __HARBOURLINE_PEER_PORT__: JSON.stringify(peerPort),
       __LOCAL_PROFILE_APPROVAL__: JSON.stringify(localApproval || containerApproval),
       __PLATFORM_SYNTHETIC_DEMO__: JSON.stringify(syntheticDemo),
     },

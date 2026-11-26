@@ -98,7 +98,7 @@ The lexical index is prepared during import. The dispatcher advances pending emb
 
 ## Company accounts and campaign records
 
-Start the private pilot on loopback. In Data Operations, load the company directory or create a company and first administrator using the system operator credential. Each account belongs to one company. Administrators can create and remove members in that company. Removing membership deletes its sessions. Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Random session identifiers are stored as SHA-256 digests and expire after twelve hours. Core and dataset operations retain separate operator permissions.
+Start the private pilot on loopback. Choose Operator setup on the Company pilot screen, unlock Data Operations with the workstation credential and create the company and its first administrator. Each account belongs to one company. Administrators can create and remove members in that company. Removing membership deletes its sessions. Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Random session identifiers are stored as SHA-256 digests and expire after twelve hours. Core and dataset operations retain separate operator permissions.
 
 Under `/api/v1/marketing/companies`, operators use `GET/POST /registry`, account holders use `POST/GET/DELETE /session`, and administrators use `GET/POST /members` and `DELETE /members/{username}`. Company campaigns use `GET /campaigns`, `PUT /campaigns/{id}` with the previously read version (zero for a new campaign), and `GET /campaigns/{id}/export?version=…`. A stale write or stale export returns 409. CSV contains customer-authored campaign data and assumptions. Catalog evidence is fetched again under the current grant.
 

@@ -1,36 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { EvaluationScope, readable } from './EvaluationScope';
 import { useEvaluation } from './useEvaluation';
 import { Overlay } from './components';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, SourcePost, SourceRef, SurveyEvidence } from './IntelligenceEvidence';
-import { amount, campaignInput, date, languageOptions, type DataMode, type Recommendation } from './intelligence';
+import { amount, campaignInput, date, type DataMode, type Recommendation } from './intelligence';
 import { useMarketing } from './workspace';
-
-const readable = (value: string) => {
-  if (value.startsWith('required_fact_unverified:')) {
-    return 'Required fact unverified (' + value.slice('required_fact_unverified:'.length).replaceAll('_', ' ') + ')';
-  }
-  if (value.startsWith('language:')) {
-    const language = value.slice('language:'.length) as keyof typeof languageOptions;
-    return 'Language evidence (' + (languageOptions[language] ?? language) + ')';
-  }
-  return ({
-    confirmed_quote_unavailable: 'Current firm quote unavailable',
-    target_market_evidence_unavailable: 'Audience evidence unavailable',
-    insufficient_relevant_content: 'Insufficient supporting content',
-    quote_exceeds_budget: 'Quote exceeds budget',
-    required_language_unverified: 'Required language unverified',
-    required_market_share_unverified: 'Required audience share unverified',
-    required_market_share_below_minimum: 'Audience share below minimum',
-    relevance: 'Content relevance',
-    performance: 'Historical performance',
-    consistency: 'Historical consistency',
-    cost: 'Quote fit',
-    market: 'Audience fit',
-    language: 'Language evidence',
-    preferences: 'Reviewed preferences',
-  }[value] ?? value.replaceAll('_', ' '));
-};
 
 export function ConnectedReport({ mode }: { mode: DataMode }) {
   const { draft, path, toggleShortlist } = useMarketing();
@@ -82,6 +57,7 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
     {running && <Pending>Reviewing eligible campaign evidence…</Pending>}
     {error && <IntelligenceError error={error} retry={retry} />}
     {current && <>
+      <EvaluationScope result={current}/>
       {current.categories.labels.length > 0 && <p className="hl-category"><strong>{current.categories.source === 'suggested' ? 'Suggested categories' : 'Your category labels'}</strong> · {current.categories.labels.join(', ')}</p>}
       {current.unavailable_shortlist_ids.length > 0 && <p className="hl-note">{current.unavailable_shortlist_ids.length} shortlisted creators are unavailable.</p>}
       {current.plan.total_minor !== null && <div className="hl-decision"><strong>{amount(current.plan.total_minor)}</strong> · {current.plan.selected.length} {current.plan.selected.length === 1 ? 'quoted allocation' : 'quoted allocations'}

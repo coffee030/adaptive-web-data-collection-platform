@@ -1,6 +1,6 @@
 import { useCatalogRevision } from './CatalogUpdates';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { eligibility, eligible, fee, audience, planStatus, type Brief, type Creator } from './contracts';
 import { useResource } from '../../lib/useResource';
 import { ConnectedReport } from './ConnectedReport';
@@ -112,7 +112,8 @@ export function Advisor({ capability, mode }: { capability: ReactNode; mode?: Da
     query.addEventListener('change', resize);
     return () => query.removeEventListener('change', resize);
   }, []);
-  const [editing, setEditing] = useState(!draft.saved);
+  const { hash } = useLocation();
+  const [editing, setEditing] = useState(!draft.saved || hash === '#edit-requirements');
   const [evidence, setEvidence] = useState<Creator>();
   const { brief } = draft;
   const { pick, minimum } = sampleRecommendation(creators, brief);

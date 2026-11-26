@@ -12,6 +12,7 @@ import { CreatorExplorer } from './CreatorExplorer';
 import { fee } from './contracts';
 import { CatalogUpdates } from './CatalogUpdates';
 import { MarketingDraft, useMarketing, type WorkspaceMode } from './workspace';
+import { WorkspaceDestination } from './WorkspaceDestination';
 import { CompanyControls } from './CompanyAccess';
 import { OverviewAnalytics } from './Overview';
 import { PublicCreatorDirectory } from './PublicCreatorDirectory';
@@ -22,16 +23,27 @@ function Home({ capability, serverDemo, apiMode }: { capability: ReactNode; serv
   const { draft, demo, mode, path, otherDrafts, openDraft } = useMarketing();
   const navigate = useNavigate();
   const saved = otherDrafts();
+  const directory = apiMode === 'partner' || (mode === 'server-demo' && __HARBOURLINE_INSTALLATION__ === 'demo');
+  const campaignAction = <Link to={path('advisor')}>{draft.saved ? 'Open Campaign Advisor' : 'Start a campaign'}</Link>;
   return <div className="hl-page hl-overview">
+    {directory ? <section className="hl-first-search"><h1>Find Hong Kong creators</h1>
+      <p>Search published names and descriptions. Open a source to see what it supports.</p>
+      <form role="search" aria-label="Start public directory research" onSubmit={event => {
+        event.preventDefault(); const q = String(new FormData(event.currentTarget).get('topic') ?? '').trim();
+        navigate(path('directory') + (q ? '?' + new URLSearchParams({q}) : ''));
+      }}><label htmlFor="starting-topic">Creator name or topic</label><div><input id="starting-topic" name="topic" maxLength={120} defaultValue="affordable dining"/><button className="hl-primary">Search public directory</button></div></form>
+      <p className="hl-note">Wikidata · Public records</p>
+    </section> : <>
     <div className="hl-page-heading"><div><h1>Workspace overview</h1><p>Creator coverage and campaign activity in your workspace.</p></div>
       <Link className="hl-button hl-primary" to={path('advisor')}>{draft.saved ? 'Open Campaign Advisor' : 'Start a campaign'} <span aria-hidden="true">↗</span></Link></div>
-    <OverviewAnalytics mode={apiMode}/>
+    </>}
     {!apiMode && !demo && <section className="hl-availability">{capability}{mode==='partner' && <div className="hl-actions">{serverDemo && <Link to="/demo/connected">Open backend demo</Link>}<Link to="/demo">Open fictional demo</Link></div>}</section>}
-    <section className="hl-campaigns"><div className="hl-row-between"><h2>Campaign drafts</h2>{!demo && draft.saved && <button onClick={()=>{openDraft();navigate(path('advisor'));}}>Start another campaign</button>}</div>
+    <section className="hl-campaigns"><div className="hl-row-between"><h2>{directory && mode === 'server-demo' ? 'Fictional campaign practice' : 'Campaign drafts'}</h2>{directory && campaignAction}{!demo && draft.saved && <button onClick={()=>{openDraft();navigate(path('advisor'));}}>Start another campaign</button>}</div>
       {draft.saved ? <div className="hl-draft-row"><Link to={path('advisor')}>{draft.brief.name}</Link><span>{fee(draft.brief.budget)} budget · {draft.brief.creatorCount} creator slots</span></div>
       : <p>Start a campaign to save a brief, shortlist and budget.</p>}
       {saved.map(item=><button className="hl-text-button" key={item.key} onClick={()=>{openDraft(item.key);navigate(path('advisor'));}}>{item.name}</button>)}
     </section>
+    {directory ? <details className="hl-coverage-fold"><summary>{mode==='server-demo' ? 'Fictional catalog coverage' : 'Company catalog coverage'}</summary><OverviewAnalytics mode={apiMode}/></details> : <OverviewAnalytics mode={apiMode}/>}
   </div>;
 }
 
@@ -80,17 +92,17 @@ function MarketingShell({ capabilityRequest }: { capabilityRequest: ReturnType<t
     <ScrollRestoration />
     <a className="skip-link" href="#harbour-main" onClick={event => { event.preventDefault(); main.current?.focus(); }}>Skip to main content</a>
     <header className="hl-navigation"><div className="hl-navigation-top"><Link className="hl-wordmark" to={path()}><Brand/></Link>
-      {pathname !== path('creators') && <form role="search" aria-label="Workspace search" onSubmit={search}><input name="query" aria-label="Creator name, handle or topic" placeholder="Search creators or topics" minLength={2} maxLength={100}/><button aria-label="Search creators" type="submit">↵</button></form>}
-      <CompanyControls/>{mode !== 'partner' && <div className="hl-mode"><strong>{demo ? 'Fictional demo' : 'Fictional backend demo'}</strong><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? '/workspace' : '/'}>Live workspace</Link></div>}
+      {pathname !== path('creators') && pathname !== path('directory') && pathname !== path() && <form role="search" aria-label="Workspace search" onSubmit={search}><input name="query" aria-label="Creator name, handle or topic" placeholder="Search creators or topics" minLength={2} maxLength={100}/><button aria-label="Search creators" type="submit">↵</button></form>}
+      <CompanyControls/>{mode !== 'partner' && <div className="hl-mode"><strong>{pathname === path('directory') ? 'Public records · Wikidata' : pathname === path() && __HARBOURLINE_INSTALLATION__ === 'demo' && mode === 'server-demo' ? 'Local research workspace' : demo ? 'Fictional demo' : 'Fictional backend demo'}</strong><WorkspaceDestination destination="pilot"/></div>}
     </div><div className="hl-nav-rule"><nav aria-label="Marketing workspace">
       <NavLink end to={path()}>Workspace</NavLink><NavLink aria-label="Creator Explorer" to={creatorPath}><span className="hl-nav-prefix">Creator </span>Explorer</NavLink>
-      {apiMode==='partner' && <NavLink aria-label="Public directory" to={path('directory')}><span className="hl-nav-prefix">Public </span>Directory</NavLink>}
+      {(apiMode==='partner' || (mode==='server-demo' && __HARBOURLINE_INSTALLATION__ === 'demo')) && <NavLink aria-label="Public directory" to={path('directory')}><span className="hl-nav-prefix">Public </span>Directory</NavLink>}
       <NavLink aria-label="Campaign Advisor" to={path('advisor')}><span className="hl-nav-prefix">Campaign </span>Advisor</NavLink><NavLink aria-label="Campaign plan" to={path('plan')}><span className="hl-nav-desktop">Campaign plan</span><span className="hl-nav-mobile">Plan</span></NavLink></nav></div></header>
     <main id="harbour-main" tabIndex={-1} ref={main}>
       {storageFailed && <p className="hl-storage" role="alert">This browser could not save the draft. Open work stays available for this session.</p>}
       <CatalogUpdates mode={apiMode}><Routes>
         <Route path={path()} element={<Home capability={capability} serverDemo={serverDemo} apiMode={apiMode} />} />
-        {mode === 'partner' && <Route path={path('directory')} element={apiMode ? <PublicCreatorDirectory/> : capability}/>}
+        {(mode === 'partner' || (mode === 'server-demo' && __HARBOURLINE_INSTALLATION__ === 'demo')) && <Route path={path('directory')} element={apiMode || mode === 'server-demo' ? <PublicCreatorDirectory isolatedDemo={mode==='server-demo'}/> : capability}/>}
         <Route path={path('advisor')} element={<Advisor capability={capability} mode={apiMode} />} />
         <Route path={path('creators')} element={<CreatorExplorer capability={capability} mode={apiMode} />} />
         <Route path={path('plan')} element={apiMode ? <ConnectedPlan mode={apiMode} />
@@ -104,6 +116,6 @@ function MarketingShell({ capabilityRequest }: { capabilityRequest: ReturnType<t
 export function MarketingWorkspace({ mode }: { mode: WorkspaceMode }) {
   const capabilityRequest = useResource(getMarketingCapability, 0, false, mode !== 'sample');
   const { result } = capabilityRequest;
-  if (mode === 'partner' && result.state === 'loading') return <Loading>Opening workspace…</Loading>;
-  return <MarketingDraft mode={mode} key={mode} companyEnabled={result.state === 'ready' && result.data.company_accounts}><MarketingShell capabilityRequest={capabilityRequest} /></MarketingDraft>;
+  if (mode === 'partner' && __HARBOURLINE_INSTALLATION__ !== 'pilot' && result.state === 'loading') return <Loading>Opening workspace…</Loading>;
+  return <MarketingDraft mode={mode} key={mode} companyEnabled={__HARBOURLINE_INSTALLATION__ === 'pilot' || (result.state === 'ready' && result.data.company_accounts)}><MarketingShell capabilityRequest={capabilityRequest} /></MarketingDraft>;
 }

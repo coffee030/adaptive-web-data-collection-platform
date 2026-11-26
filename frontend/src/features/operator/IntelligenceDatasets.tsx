@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Loading, Status, Timestamp } from '../../components/feedback';
-import { ApiError, apiLocal } from '../../lib/api';
+import { getOperatorCredential, ApiError, apiLocal } from '../../lib/api';
 import { CompanyRegistry } from './CompanyRegistry';
 import { operationsPath } from './OperationsTasks';
 
@@ -38,7 +38,7 @@ export function IntelligenceDatasets() {
     const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') ?? 'inspect';
     const mode = String(form.get('mode') ?? '');
     const id = String(form.get('dataset') ?? '');
-    const token = String(form.get('token') ?? '').trim();
+    const token = getOperatorCredential() || String(form.get('token') ?? '').trim();
     const listing = action === 'list' || action === 'more';
     if (!['demo','partner'].includes(mode)) return;
     if (!listing && !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(id)) {
@@ -117,7 +117,7 @@ export function IntelligenceDatasets() {
       }}>
         <fieldset className="operator-form-block"><legend>Dataset access</legend>
           <label>Workspace<select name="mode"><option value="partner">Partner data</option><option value="demo">Fictional demo</option></select></label>
-          <label>Marketing operator token<input type="password" name="token" required minLength={24} maxLength={512} autoComplete="off" /></label>
+          {!getOperatorCredential() && <label>Marketing operator token<input type="password" name="token" required minLength={24} maxLength={512} autoComplete="off" /></label>}
           <div><button type="submit" value="list" disabled={pending}>List datasets</button></div>
         </fieldset>
         <fieldset className="operator-form-block"><legend>Find a dataset</legend>

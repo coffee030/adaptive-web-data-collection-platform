@@ -15,6 +15,13 @@ export class ApiError extends Error {
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '');
 const timeoutMs = 10_000;
 let activeCompany: string | undefined;
+let operatorCredential = '';
+export function getOperatorCredential() { return operatorCredential; }
+export function setOperatorCredential(value: string) { operatorCredential = value; }
+export function lockOperator() {
+  operatorCredential = '';
+  window.dispatchEvent(new Event('harbourline-operator-locked'));
+}
 export function setCompanyScope(id: string | undefined) { activeCompany = id; }
 
 async function responseError(response: Response) {
@@ -94,13 +101,28 @@ async function request<T>(path: string, signal: AbortSignal, init?: RequestInit,
   try {
     const companyScoped = path.startsWith('/marketing/intelligence/partner/') || (path.startsWith('/marketing/companies/') && path !== '/marketing/companies/session');
     const companyHeader: Record<string,string> = companyScoped && activeCompany ? { 'X-Harbourline-Company': activeCompany } : {};
+    const coreCredential = operatorCredential && target === '/api/v1' && !path.startsWith('/marketing/')
+      ? operatorCredential : '';
+    const headers = new Headers({ Accept: 'application/json', ...companyHeader, ...init?.headers });
+    if (coreCredential) headers.set('Authorization', 'Bearer ' + coreCredential);
+    const activeOperatorRequest = Boolean(operatorCredential && headers.get('Authorization') === 'Bearer ' + operatorCredential);
+    const sentCredential = operatorCredential;
     const response = await fetch(`${target}${path}`, {
       ...init,
       signal: combinedSignal,
       cache: 'no-store',
-      headers: { Accept: 'application/json', ...companyHeader, ...init?.headers },
+      ...(activeOperatorRequest ? { redirect: 'error' } : {}),
+      headers,
     });
-    if (!response.ok) throw await responseError(response);
+    if (!response.ok) {
+      const problem = await responseError(response);
+      if (activeOperatorRequest && sentCredential === operatorCredential &&
+          (problem.code === 'pilot_operator_login' || problem.code === 'operator_required')) lockOperator();
+      if (companyScoped && activeCompany && problem.code === 'company_login_required') {
+        window.dispatchEvent(new Event('company-session'));
+      }
+      throw problem;
+    }
     try {
       return await read(response);
     } catch {

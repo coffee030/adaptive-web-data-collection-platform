@@ -41,6 +41,20 @@ def directory(
             "workspace_restricted",
             "Use the operational workspace for public profiles",
         )
+    return directory_results(store, q)
+
+
+@router.get("/public-research/directory")
+def local_research_directory(
+    store: Store, q: Annotated[str, Query(max_length=120)] = ""
+) -> DirectoryResults:
+    config = store.config
+    if not config.public_demo_directory or not config.demo_enabled or config.workspace:
+        raise MarketingError(403, "workspace_restricted", "Use the isolated demo")
+    return directory_results(store, q)
+
+
+def directory_results(store, q):
     result = snapshot(store.sessions)
     if q.strip():
         result = search(result, q.strip(), store.config.model_dir)

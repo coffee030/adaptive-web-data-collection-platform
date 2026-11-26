@@ -30,7 +30,7 @@ test('live workspace saves a brief and keeps restricted data and the demo out of
   await expect(page.getByText('Mira Lau')).toHaveCount(0);
   await page.goto('/demo');
   await expect(page.getByRole('link', { name: 'Sheung Wan coffee launch', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Live workspace' }).click();
+  await page.getByRole('link', { name: 'Local campaign workspace' }).click();
   await expect(page.getByText('Harbour launch')).toBeVisible();
   expect(protectedRequests).toEqual([]);
 });
@@ -159,4 +159,18 @@ test('a configured partner workspace respects server authorization without loadi
   expect(requested.some(path => path.endsWith('/partner/creators'))).toBe(true);
   expect(requested.every(path => path.includes('/partner/'))).toBe(true);
   await expect(page.getByText('Mira Lau')).toHaveCount(0);
+});
+
+test('a signed-out company visitor can try a sample or find the correct provisioning role', async ({ page }) => {
+  await page.route(capabilityPath, route => route.fulfill({ json: { ...capability, company_accounts: true } }));
+  await page.route('**/api/v1/marketing/companies/session', route => route.fulfill({
+    status: 401, json: { error: { code: 'company_login_required' } },
+  }));
+  await page.goto('/plan');
+  await expect(page.getByRole('heading', { name: 'Company pilot' })).toBeVisible();
+  await page.getByText('How do I get an account?').click();
+  await expect(page.getByText(/Ask your company administrator/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Operator setup' })).toHaveAttribute('href', '/operations/companies');
+  await page.getByRole('link', { name: 'Try the demo without an account' }).click();
+  await expect(page.getByText('Fictional demo', { exact: true })).toBeVisible();
 });

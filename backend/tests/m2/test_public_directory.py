@@ -1,8 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from backend.api.app import create_app
 from backend.application.execution import JobExecutor
 from backend.application.profiles import Profiles
 from backend.core.evidence import LocalEvidenceStore
@@ -11,7 +13,7 @@ from backend.persistence.models import RecordRow
 
 
 def test_directory_projects_validated_records_and_honors_authorization(
-    sessions, tmp_path, monkeypatch
+    sessions, pg_engine, tmp_path, monkeypatch
 ):
     upstream = {
         "entities": {
@@ -50,6 +52,25 @@ def test_directory_projects_validated_records_and_honors_authorization(
     JobExecutor(sessions, evidence).execute(job)
     initial = library.snapshot(sessions)
     assert len(initial.profiles) == 11 and initial.observed == timestamp
+    endpoint = "/api/v1/marketing/intelligence/public-research/directory"
+    monkeypatch.setenv("MARKETING_DEMO_ENABLED", "1")
+    monkeypatch.setenv("MARKETING_PARTNER_WORKSPACE", "")
+    monkeypatch.setenv("MARKETING_PUBLIC_DEMO_DIRECTORY", "0")
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://localhost",
+    ) as client:
+        assert client.get(endpoint).status_code == 403
+    monkeypatch.setenv("MARKETING_PUBLIC_DEMO_DIRECTORY", "1")
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://localhost",
+    ) as client:
+        public = client.get(endpoint, params={"q": "animation"})
+        assert public.status_code == 200
+        assert len(public.json()["profiles"]) == 11
+        partner = "/api/v1/marketing/intelligence/partner/public-directory"
+        assert client.get(partner).status_code == 403
     library.refresh(sessions)
     with sessions() as session:
         pending = session.get(library.DirectoryRow, 1).pending

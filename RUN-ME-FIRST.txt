@@ -2,8 +2,9 @@ Harbourline · Local setup for Windows
 
 Extract the complete project into a writable local NTFS folder.
 
-Open Start-Harbourline-Demo.bat to explore fictional creators and campaign plans.
-Open Start-Harbourline-Pilot.bat for the operational company workspace.
+Open Start-Harbourline-Demo.bat for password-free public directory research and fictional campaign practice.
+Open Start-Harbourline-Pilot.bat for saved company campaigns. Sign in with an account from your administrator.
+First-time visitors can choose Try the demo without an account. Operators can choose Operator setup to create a company.
 The launcher prints the local URL and initial access instructions.
 
 Start-FYP-Demo.bat opens the separate Core teaching demonstration.

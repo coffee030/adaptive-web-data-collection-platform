@@ -43,6 +43,7 @@ export function WorkspaceNavigation() {
         Operations <span aria-hidden="true">{open ? '−' : '+'}</span>
       </button>
       <div className="nav-links" id="operations-links" onClick={() => setOpenFor(undefined)}>
+        {__HARBOURLINE_INSTALLATION__ === 'pilot' && <NavLink to="/operations/companies">Company setup</NavLink>}
         <NavLink to={sourcesPath}>Sources</NavLink>
         <NavLink to={topicsPath}>Topics &amp; bindings</NavLink>
         <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink>

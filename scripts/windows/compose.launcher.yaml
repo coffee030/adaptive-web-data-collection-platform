@@ -14,6 +14,10 @@ services:
   worker: *backend
   dispatcher: *backend
   frontend:
+    build:
+      args:
+        HARBOURLINE_INSTALLATION: "${HARBOURLINE_INSTALLATION:-core}"
+        HARBOURLINE_PEER_PORT: "${HARBOURLINE_PEER_PORT:-0}"
     image: "${COMPOSE_PROJECT_NAME}-frontend:local"
     labels: *owner
 

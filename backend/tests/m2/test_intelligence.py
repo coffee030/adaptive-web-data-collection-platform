@@ -191,6 +191,7 @@ def test_private_browser_pilot_separates_customer_operator_and_core(
         create_app(engine=pg_engine, evidence_root=tmp_path),
         base_url="http://localhost",
     ) as client:
+        assert client.get(BASE + "/public-research/directory").status_code == 403
         catalog = BASE + "/partner/creators"
         dataset = BASE + "/operator/partner/datasets/pilot-one"
         denied = client.get(catalog)

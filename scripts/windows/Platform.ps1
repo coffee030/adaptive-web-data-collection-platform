@@ -93,9 +93,9 @@ function Start-Platform {
     if ($Harbourline) { $url += "demo/connected" }
     Write-Step "URL: $url"
     if (!$NoBrowser) { Open-PlatformBrowser $url }
-    if ($Harbourline) { Write-Step '[SUCCESS] Harbourline Fictional Demo is ready!' }
+    if ($Harbourline) { Write-Step '[SUCCESS] Harbourline is ready. Search the public directory or practice with fictional campaigns. No password is needed. Company users can open the pilot from the demo when it is running.' }
     elseif ($Pilot) {
-        Write-Step "[SUCCESS] Harbourline is ready. Sign in with your company account. For initial setup, open Data Operations and create a company and administrator."
+        Write-Step "[SUCCESS] Company pilot is ready. Sign in with your company account, or choose Try the demo without an account. For a new company choose Operator setup."
         Write-Step "[INFO] Data Operations uses the separate credential in $Local/harbourline-operator.token."
     }
     elseif ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }

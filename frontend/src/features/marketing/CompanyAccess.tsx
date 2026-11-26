@@ -1,4 +1,6 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { WorkspaceDestination } from './WorkspaceDestination';
 import { ApiError, apiGet, apiPost, setCompanyScope } from '../../lib/api';
 import { Brand, Overlay } from './components';
 import './company.css';
@@ -39,17 +41,21 @@ export function CompanyGate({ children }: { children: (company: Company) => Reac
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const signedIn = useRef(false);
+  const sessionCheck = useRef(0);
+  const [expired,setExpired] = useState(false);
   useEffect(() => {
     let current = true;
     const controller = new AbortController();
     async function check() {
+      const sequence = ++sessionCheck.current;
       try {
         const user = await apiGet<Company>(base+'/session',controller.signal);
-        if (current) { setCompanyScope(user.id); setAccount(user); setError(''); }
+        if (current && sequence === sessionCheck.current) { signedIn.current = true; setExpired(false); setCompanyScope(user.id); setAccount(user); setError(''); }
       } catch (cause) {
-        if (!current) return;
+        if (!current || sequence !== sessionCheck.current) return;
         setCompanyScope(undefined);
-        if (cause instanceof ApiError && cause.status === 401) { setAccount(null); setError(''); }
+        if (cause instanceof ApiError && cause.status === 401) { if (signedIn.current) setExpired(true); signedIn.current=false; setAccount(null); setError(''); }
         else { setAccount(undefined); setError(accountProblem(cause)); }
       }
     }
@@ -62,22 +68,33 @@ export function CompanyGate({ children }: { children: (company: Company) => Reac
     return () => { current = false; updates.close(); controller.abort(); window.clearInterval(timer); window.removeEventListener('focus',check); window.removeEventListener('company-session',check); setCompanyScope(undefined); };
   }, [attempt]);
 
+  useEffect(() => { if (!account) document.title = 'Company pilot | Harbourline'; }, [account]);
+
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setPending(true); setError('');
     try {
       const user = await apiPost<Company>(base+'/session',{username:form.get('username'),password:form.get('password')},new AbortController().signal);
+      ++sessionCheck.current; signedIn.current = true; setExpired(false);
       setCompanyScope(user.id); setAccount(user);
       broadcastSession();
     } catch (cause) { setError(accountProblem(cause)); } finally { setPending(false); }
   }
   if (account) return <>{children(account)}</>;
-  return <main className="harbour dark hl-company-access"><section className="hl-page"><Brand/><h1>{account === null ? 'Sign in to Harbourline' : 'Company workspace'}</h1>
+  return <main className="harbour dark hl-company-access"><section className="hl-page hl-entry"><Brand/><h1>Company pilot</h1>
+    <p>Sign in to research creators and reopen campaigns saved by your company.</p>
+    {expired && <p role="status">Your company session ended. Sign in again to reopen your saved campaigns.</p>}
     {account === null ? <form className="hl-form-grid" onSubmit={login}><AccountFields />
       <div><button className="hl-primary" disabled={pending}>Sign in</button></div></form> : !error && <p role="status">Opening your company workspace…</p>}
     {error && <p role="alert">{error} {account === undefined && <button onClick={()=>setAttempt(value=>value+1)}>Retry</button>}</p>}
-    {account === null && <p>Use the account provided by your company administrator. <a href="/operations/intelligence-datasets">Operator setup</a></p>}
+    {(account === null || error) && <>
+      <WorkspaceDestination destination="demo"/>
+      <details className="hl-account-help"><summary>How do I get an account?</summary>
+        <p>Ask your company administrator to open the company menu, choose Add a team member and send you your account details privately. For a new company, ask the person running this workstation to create the first administrator.</p>
+      </details>
+      <p className="hl-entry-operator"><Link to="/operations/companies">Operator setup</Link> · Create a company or its first administrator.</p>
+    </>}
   </section></main>;
 }
 
