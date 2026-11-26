@@ -101,11 +101,9 @@ status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$@"; }
 [[ "$(status "$url/assets/missing.js")" == 404 ]]
 [[ "$(status "$url/licenses/missing.txt")" == 404 ]]
 for notice in frontend/public/licenses/*.txt; do
-    curl -fsS --max-time 10 "$url/licenses/${notice##*/}" -o "$output/notice.txt"
-    cmp "$notice" "$output/notice.txt"
+    curl -fsS --max-time 10 "$url/licenses/${notice##*/}" | cmp "$notice" -
 done
-curl -fsS --max-time 10 "$url/licenses/dependencies.md" -o "$output/dependencies.md"
-grep -Fq '## react - ' "$output/dependencies.md"
+curl -fsS --max-time 10 "$url/licenses/dependencies.md" | grep -F '## react - ' > /dev/null
 echo "Production frontend, API forwarding and local boundary checks passed."
 
 sample() {
