@@ -1,6 +1,6 @@
 # Worldwide trend collection
 
-The Core exposes daily Wikimedia article pageviews through the local operator API. An operator can discover popular topics by Wikipedia edition, start and pause saved article series, and compare dated counts. Any Wikipedia language edition can be requested. Edition identifies where an article was published. The series does not identify a reader's location or measure Google search interest.
+Open **Worldwide trends** from the Core Collection workspace or Operations desk. The browser and local operator API use the same dated Wikipedia series. An operator can discover popular topics by Wikipedia edition, start and pause saved article series, and compare dated counts. Any Wikipedia language edition can be requested. Edition identifies where an article was published. The series does not identify a reader's location or measure Google search interest.
 
 ## Operate a collection
 
@@ -21,7 +21,7 @@ The operator-visible trend read is released after the Core job succeeds with the
 
 The [Wikimedia Analytics API access policy](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/documentation/access-policy.html) specifies CC0 data, an identifying User-Agent and serial requests. This adapter uses public HTTPS, no signing credentials, no redirects, bounded responses and a shared database request window. A 429 delays new requests to the API for at least an hour and honours a longer Retry-After. Other transient errors preserve the last published values. An explicit denial stops subsequent upstream requests and stays visible to the operator. Resumption after an explicit publisher denial requires review of the publisher's access decision.
 
-A trusted operator can revoke the source from the Core Sources workflow. Trend reads and scheduled acquisition stop after revocation. The Core retains previous Jobs, Records and captures in its trusted audit storage. These public CC0 records have no provider deletion deadline. A new provider with different terms would require its own retention rules. If the mapping profile was retired, validate and approve a replacement with the same mapping and submit source approval again to select it. The recheck preserves any existing publisher block.
+A trusted operator can revoke the source from the Core Sources workflow. Trend reads and scheduled acquisition stop after revocation. The Core retains previous Jobs, Records and captures in its trusted audit storage. The API policy makes these aggregate counts available under CC0 and gives no fixed retention period. A new provider with different terms would require its own retention rules. If the mapping profile was retired, validate and approve a replacement with the same mapping and submit source approval again to select it. The recheck preserves any existing publisher block.
 
 The top list and daily article views are separate Wikimedia Analytics measures. The top-list order is useful for discovering subjects, including pages used to navigate the site. The scheduled counts are raw all-access, user-agent-filtered article pageviews. This slice does not fetch Wikimedia country datasets. [Pageview definitions](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/concepts/page-views.html) · [Endpoint reference](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html)
 

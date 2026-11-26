@@ -23,9 +23,10 @@ import { RequestDetails, RequestList } from '../features/topic-collections/Reque
 import { NewTopicRequest } from '../features/topic-collections/NewTopicRequest';
 import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../features/topic-collections/api';
 
-import { datasetsPath, directoryPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
+import { datasetsPath, directoryPath, operationsPath, researchPath, worldwideTrendsPath } from '../features/operator/OperationsTasks';
 
 const OperatorGate = lazy(async () => ({ default: (await import('../features/operator/OperatorGate')).OperatorGate }));
+const WorldwideTrends = lazy(async () => ({ default: (await import('../features/trends/WorldwideTrends')).WorldwideTrends }));
 const CompanySetup = lazy(async () => ({ default: (await import('../features/operator/CompanyRegistry')).CompanySetup }));
 const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
 const IntelligenceDatasets = lazy(async () => ({ default: (await import('../features/operator/IntelligenceDatasets')).IntelligenceDatasets }));
@@ -60,6 +61,7 @@ function OperationsApp() {
   useEffect(() => {
     const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
       : pathname === '/operations/companies' ? 'Company setup'
+      : pathname === worldwideTrendsPath ? 'Worldwide trends'
       : pathname === directoryPath ? 'Public research sources'
       : pathname === researchPath ? 'Creator research and refresh'
       : pathname === datasetsPath ? 'Intelligence datasets'
@@ -111,6 +113,7 @@ function OperationsApp() {
           <Routes>
             {__PLATFORM_SYNTHETIC_DEMO__ && <Route path="/" element={<Overview />} />}
             <Route path={operationsPath} element={<Overview />} />
+            <Route path={worldwideTrendsPath} element={operatorRoute(<WorldwideTrends />)} />
             <Route path="/operations/companies" element={operatorRoute(<CompanySetup />)} />
             <Route path={datasetsPath} element={operatorRoute(<IntelligenceDatasets />)} />
             <Route path={directoryPath} element={operatorRoute(<PublicDirectoryOperations />)} />

@@ -1,0 +1,38 @@
+.trend-nav,
+.trend-actions,
+.trend-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sm) var(--md);
+}
+.trend-nav { border-block-end: 1px solid var(--divider); }
+.trend-nav a { padding: var(--sm) 0; }
+.trend-nav a[aria-current] { font-weight: 700; border-block-end: 2px solid var(--accent); text-decoration: none; }
+.trend-source { display: grid; gap: var(--xs); margin-block: var(--md) var(--lg); }
+.trend-workspace summary { cursor: pointer; }
+.trend-source details > div, .trend-point > * + * { margin-block-start: var(--sm); }
+.trend-controls { align-items: end; }
+.trend-controls, .trend-body, .trend-note, .trend-feedback:not(:empty) { padding: var(--md); }
+.trend-note { margin: 0; }
+.trend-workspace label:not(.trend-choice) { display: grid; gap: var(--xs); font-weight: 600; min-width: 0; }
+.trend-workspace input:not([type=checkbox]) { max-width: 100%; min-block-size: 40px; }
+.trend-fields { display: grid; gap: var(--sm); justify-items: start; margin-block-start: var(--md); }
+.trend-fields label:not(.trend-choice) { inline-size: min(100%, 25rem); }
+.trend-body h3, .trend-body p, .trend-fields h4 { margin: 0; }
+.trend-body > h3 + p { margin-top: var(--xs); }
+.trend-choice input, .trend-workspace td input[type=checkbox] { width: 1.25rem; height: 1.25rem; vertical-align: middle; }
+.trend-schedule dl { margin: var(--sm) 0; }
+.trend-schedule dt, .trend-grid small { color: var(--text-secondary); font-weight: 400; }
+.trend-schedule dd { margin: 0 0 var(--xs); }
+.trend-grid th[scope=col]:not(:first-child) { min-width: 10rem; }
+.trend-grid th:first-child { white-space: nowrap; }
+.trend-grid small { display: block; }
+.trend-grid td { vertical-align: middle; font-variant-numeric: tabular-nums; }
+.trend-grid .trend-count { min-height: 32px; padding: 0 .35rem; border: 0; background: transparent; color: var(--accent-ink); text-decoration: underline; }
+.trend-point code { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .trend-controls { align-items: stretch; flex-direction: column; }
+  .trend-controls input { width: 100%; }
+  .trend-grid .trend-count, .trend-workspace summary { min-height: 44px; align-content: center; }
+}
