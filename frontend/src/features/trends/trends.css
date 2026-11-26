@@ -16,6 +16,23 @@
 .trend-controls, .trend-body, .trend-note, .trend-feedback:not(:empty) { padding: var(--md); }
 .trend-note { margin: 0; }
 #trend-values { scroll-margin-block-start: var(--md); }
+#google-market-name { scroll-margin-block-start: var(--md); }
+.google-back { display: inline-block; padding-block: var(--sm); }
+.google-inline { padding: var(--sm) 0; }
+.google-inline input { inline-size: 10rem; }
+.google-schedule-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--md); }
+.google-snapshot-summary { display: grid; gap: var(--sm); }
+.google-snapshot-summary code { overflow-wrap: anywhere; }
+.google-events th:first-child { width: 45%; }
+.google-lineage { display: flex; flex-wrap: wrap; gap: 0 var(--md); }
+.google-snapshot .google-events th[scope="row"] a {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  max-inline-size: 100%;
+}
+.google-events th[scope="row"] .google-lineage a { font-size: 0.875rem; font-weight: 400; }
 .trend-workspace label:not(.trend-choice) { display: grid; gap: var(--xs); font-weight: 600; min-width: 0; }
 .trend-workspace input:not([type=checkbox]) { max-width: 100%; min-block-size: 40px; }
 .trend-fields { display: grid; gap: var(--sm); justify-items: start; margin-block-start: var(--md); }
@@ -38,4 +55,7 @@
   .trend-controls input { width: 100%; }
   .trend-grid .trend-count, .trend-workspace summary { min-height: 44px; align-content: center; }
   .trend-grid .trend-count { min-width: 44px; }
+  .google-back { align-content: center; min-block-size: 44px; }
+  .google-snapshot .google-events th[scope="row"] a { min-block-size: 44px; min-inline-size: 44px; }
+  .google-events th:first-child { width: auto; }
 }

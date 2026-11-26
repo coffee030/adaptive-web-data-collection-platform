@@ -6,21 +6,29 @@ import { sourcePath } from '../sources/api';
 import { Resource } from '../topic-collections/support';
 import { getProvider, problemText } from './api';
 import { DiscoveryPane } from './DiscoveryPane';
+import { GoogleTrends } from './GoogleTrends';
 import { SavedSeries } from './SavedSeries';
 import './trends.css';
 
 export function WorldwideTrends() {
   const [params] = useSearchParams();
-  const saved = params.get('view') === 'saved';
-  const state = useResource(getProvider, 0, true);
+  const view = params.get('view');
   return <div className="trend-workspace">
     <div className="page-heading operator-title"><h1>Worldwide trends</h1>
-      <p>Discover popular Wikipedia articles by language edition and compare daily article pageviews. Reader location is unavailable.</p></div>
+      <p>{view === 'google' ? 'Follow emerging Google searches by market and inspect the source of each observation.'
+        : 'Discover popular Wikipedia articles by language edition and compare daily article pageviews. Reader location is unavailable.'}</p></div>
     <nav className="trend-nav" aria-label="Trend views">
-      <Link to={worldwideTrendsPath} aria-current={saved ? undefined : 'page'}>Discover articles</Link>
-      <Link to={worldwideTrendsPath + '?view=saved'} aria-current={saved ? 'page' : undefined}>Saved series and comparison</Link>
+      <Link to={worldwideTrendsPath} aria-current={view === 'saved' || view === 'google' ? undefined : 'page'}>Discover articles</Link>
+      <Link to={worldwideTrendsPath + '?view=saved'} aria-current={view === 'saved' ? 'page' : undefined}>Saved series and comparison</Link>
+      <Link to={worldwideTrendsPath + '?view=google'} aria-current={view === 'google' ? 'page' : undefined}>Google Trending Now</Link>
     </nav>
-    <Resource state={state} label="Wikimedia source status">{source => <>
+    {view === 'google' ? <GoogleTrends /> : <WikimediaTrends saved={view === 'saved'} search={params.toString()} />}
+  </div>;
+}
+
+function WikimediaTrends({ saved, search }: { saved: boolean; search: string }) {
+  const state = useResource(getProvider, 0, true);
+  return <Resource state={state} label="Wikimedia source status">{source => <>
       <div className="trend-source">
         <div className="trend-actions"><strong>Wikimedia source</strong><span>{source.authorized ? 'Approved' : source.configured ? 'Approval inactive' : 'Awaiting approval'}</span>
           <button type="button" onClick={state.retry}>Refresh source status</button></div>
@@ -31,8 +39,7 @@ export function WorldwideTrends() {
             {source.source_id && <Link to={sourcePath(source.source_id)}>Inspect Core source</Link>}</div>
         </details>
       </div>
-      {saved ? <SavedSeries key={params.toString()} provider={source} refreshProvider={state.retry} />
+      {saved ? <SavedSeries key={search} provider={source} refreshProvider={state.retry} />
         : <DiscoveryPane provider={source} refresh={state.retry} />}
-    </>}</Resource>
-  </div>;
+    </>}</Resource>;
 }

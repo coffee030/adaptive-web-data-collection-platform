@@ -43,6 +43,7 @@ from backend.persistence.database import (
 )
 
 from backend.trends.api import router as trends_router
+from backend.trends.rss_api import router as rss_router
 from backend.trends.service import TrendError
 
 from .articles import router as articles_router
@@ -201,6 +202,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         articles_router,
         results_router,
         trends_router,
+        rss_router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=core_access)
     app.include_router(marketing_router, prefix="/api/v1")

@@ -9,6 +9,7 @@ from hashlib import sha256
 from io import StringIO
 from time import monotonic
 from unicodedata import normalize
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx2
 from lxml import etree
@@ -28,6 +29,7 @@ ROBOTS = ORIGIN + "/robots.txt"
 POLICY = "https://support.google.com/trends/answer/4365538"
 ATTRIBUTION = "Google Trends Trending Now"
 DATASET = "google-trending-now"
+SOURCE_KEY = uuid5(NAMESPACE_URL, "https://trends.google.com/trending/rss#core-csv")
 ACCESS_STOP_KEY = "collection:provider:google-trending-now:access-denied"
 METRIC = "google_trending_now_approximate_search_traffic"
 MAX_BYTES = 512 * 1024
@@ -274,7 +276,7 @@ def event_key(market: str, query: str, published_at: str | datetime) -> str:
     )
 
 
-def entry(snapshot: dict) -> CsvEntry:
+def observations(snapshot: dict) -> list[dict]:
     try:
         market = snapshot["market"]
         url = feed_url(market)
@@ -294,11 +296,6 @@ def entry(snapshot: dict) -> CsvEntry:
             or len(snapshot["rows"]) > MAX_ITEMS
         ):
             raise ValueError("Capture bounds")
-        if not snapshot["rows"]:
-            raise ProviderError("no_data_from_publisher")
-        output = StringIO(newline="")
-        writer = csv.writer(output)
-        writer.writerow(COLUMNS)
         seen = {}
         for row in snapshot["rows"]:
             query = row["query"].strip()
@@ -308,28 +305,43 @@ def entry(snapshot: dict) -> CsvEntry:
             bucket = row.get("approx_traffic")
             lower = traffic_lower_bound(bucket)
             if event in seen:
-                if seen[event] != bucket:
+                if seen[event]["traffic_bucket"] != bucket:
                     raise ValueError("Conflicting observation")
                 continue
-            seen[event] = bucket
-            writer.writerow(
-                (
-                    identity(event, instant.astimezone(UTC).isoformat()),
-                    event,
-                    market,
-                    query,
-                    published,
-                    observed,
-                    bucket,
-                    lower,
-                    METRIC,
-                    url,
-                    ATTRIBUTION,
-                    digest,
+            seen[event] = dict(
+                zip(
+                    COLUMNS,
+                    (
+                        identity(event, instant.astimezone(UTC).isoformat()),
+                        event,
+                        market,
+                        query,
+                        published,
+                        observed,
+                        bucket,
+                        lower,
+                        METRIC,
+                        url,
+                        ATTRIBUTION,
+                        digest,
+                    ),
+                    strict=True,
                 )
             )
-        return CsvEntry(
-            adapter_type="csv", dataset_id=DATASET, content=output.getvalue()
-        )
+        return list(seen.values())
     except (KeyError, TypeError, ValueError, AttributeError, OverflowError) as error:
         raise ProviderError("publisher_invalid_response") from error
+
+
+def entries(rows: list[dict]) -> CsvEntry:
+    if not rows:
+        raise ProviderError("no_data_from_publisher")
+    output = StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=COLUMNS)
+    writer.writeheader()
+    writer.writerows(rows)
+    return CsvEntry(adapter_type="csv", dataset_id=DATASET, content=output.getvalue())
+
+
+def entry(snapshot: dict) -> CsvEntry:
+    return entries(observations(snapshot))
