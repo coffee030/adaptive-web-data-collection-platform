@@ -68,12 +68,21 @@ function EvidenceCapture({ evidence }: { evidence: EvidenceMetadata }) {
     </section>
     <section className="capture-integrity" aria-labelledby="evidence-hash-title">
       <div className="capture-hash-heading">
-        <h2 id="evidence-hash-title">Content SHA-256</h2>
+        <h2 id="evidence-hash-title">{evidence.rendered_dom ? 'Original response SHA-256' : 'Content SHA-256'}</h2>
         <CopyButton key={evidence.evidence_id} label="Copy hash" read={() => evidence.content_hash} />
       </div>
       <code>{evidence.content_hash}</code>
       <p className="muted">Stored hash recorded by the collection backend.</p>
     </section>
+    {evidence.rendered_dom && <section className="capture-lineage" aria-labelledby="evidence-dom-title">
+      <div className="panel-heading"><h2 id="evidence-dom-title">Rendered DOM</h2></div>
+      <dl className="result-metadata">
+        <Metadata label="Rendered DOM SHA-256" className="result-hash"><code>{evidence.rendered_dom.sha256}</code></Metadata>
+        <Metadata label="Rendered size">{evidence.rendered_dom.byte_count.toLocaleString('en-GB')} bytes</Metadata>
+        <Metadata label="Rendered (UTC)"><Timestamp value={evidence.rendered_dom.rendered_at} /></Metadata>
+        <Metadata label="Browser engine">{evidence.rendered_dom.engine}</Metadata>
+      </dl>
+    </section>}
     <section className="capture-lineage" aria-labelledby="evidence-provenance-title">
       <div className="panel-heading"><h2 id="evidence-provenance-title">Collection provenance</h2></div>
       <dl className="result-metadata">

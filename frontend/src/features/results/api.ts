@@ -60,6 +60,7 @@ export interface EvidenceMetadata extends Lineage {
   config_hash: string;
   captured_at: string;
   content_hash: string;
+  rendered_dom?: { sha256: string; byte_count: number; rendered_at: string; engine: string } | null;
   content_type: string | null;
   adapter_type: 'web' | 'csv';
   original_location: string;

@@ -9,7 +9,7 @@ import { adapterLabels, getSource, listVersions, sourcePath, sourcesPath } from 
 import type { Source } from '../sources/api';
 import { allowedInputs } from '../sources/collectionInput';
 import { jobSubmissionPath } from '../collection-jobs/api';
-import { approveProfile, createProfile, getProfile, previewProfile, profilePath, saveProfile, validateProfile } from './api';
+import { approveProfile, createProfile, getProfile, getRenderingPolicy, previewProfile, profilePath, renderingProblems, saveProfile, validateProfile } from './api';
 import type { Profile } from './api';
 import { compileDraft, draftFrom } from './configuration';
 import { ConfigurationEditor } from './ConfigurationEditor';
@@ -23,6 +23,8 @@ import { topicsPath } from '../topic-collections/api';
 
 function problem(error: unknown, action: Action) {
   if (error instanceof ApiError) {
+    const renderingProblem = error.code && renderingProblems[error.code];
+    if (renderingProblem) return renderingProblem;
     if (error.code === 'draft_revision_conflict') return 'Another edit was saved first. Your changes are still here. Review them before reloading the server version.';
     if (error.code === 'stale_validation') return 'The report or configuration is out of date. Reload the current draft and validate it again.';
     if (error.code === 'source_not_approved') return 'This Source is no longer authorized. Reload the server version to see its current access status.';
@@ -96,6 +98,12 @@ function Workspace({ initialSource, initial }: { initialSource: Source; initial?
   const allowNavigation = useRef(false);
   const id = source.source_id;
   const immutable = profile && profile.approval_status !== 'draft';
+  const loadRendering = useCallback((signal: AbortSignal) => getRenderingPolicy(id, signal), [id]);
+  const policy = useResource(loadRendering, 0, false, source.adapter_type === 'web');
+  const decision = policy.result.state === 'ready' ? policy.result.data : null;
+  const renderingOrigin = decision?.eligible && decision.origin && source.approval_status === 'approved'
+    && source.allowed_origins.includes(decision.origin) ? decision.origin : null;
+  const savedRendering = profile?.configuration.adapter_type === 'web' && !!profile.configuration.rendering;
 
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => { if (failure) feedback.current?.focus(); }, [failure]);
@@ -194,7 +202,7 @@ function Workspace({ initialSource, initial }: { initialSource: Source; initial?
       </div>
       <div className="profile-actions">
         {profile && <Status value={profile.approval_status} />}
-        {profile?.approval_status === 'approved' && source.approval_status === 'approved' && allowedInputs(source).length > 0 && (
+        {profile?.approval_status === 'approved' && source.approval_status === 'approved' && allowedInputs(source).length > 0 && (!savedRendering || renderingOrigin) && (
           <Link className="control" to={jobSubmissionPath(id, profile.profile_version_id)}
             state={{ fromSource: id, fromProfile: profile.profile_version_id }}>New Collection Job</Link>
         )}
@@ -272,14 +280,22 @@ function Workspace({ initialSource, initial }: { initialSource: Source; initial?
         {immutable ? <span className="muted timezone">Read only</span>
           : <span className="muted timezone" role="status">{dirty ? 'Unsaved changes' : profile ? 'Saved draft' : 'New draft'}</span>}
       </div>
-      {!profile && source.adapter_type === 'web' && source.approval_status === 'approved' &&
+      {draft.rendering && !renderingOrigin && <div className="notice" role="status">
+        {policy.result.state === 'loading' ? 'Checking access to the browser renderer…' : <>
+          <p>{policy.result.state === 'error' ? 'Core could not confirm rendering access.' : 'This source is ineligible for browser rendering.'}
+            {' '}Review the approved local origin in <Link to={sourcePath(id)}>Source details</Link> and the installation’s rendering policy.
+            {!immutable && ' Choose Controlled document to save a static draft.'}</p>
+          <button type="button" onClick={policy.retry}>Retry rendering access</button>
+        </>}
+      </div>}
+      {!profile && !draft.rendering && source.adapter_type === 'web' && source.approval_status === 'approved' &&
         <ProfileSuggestion sourceId={id} draft={draft} dirty={dirty} disabled={!!busy || locked}
           change={(next, unsaved) => {
             setDraft(next); setDirty(unsaved); setErrors({}); setStatus(''); setFailure('');
           }} />}
       {immutable ? <ConfigurationSummary configuration={profile.configuration} /> : <form className="profile-body profile-editor" noValidate onSubmit={event => {
         event.preventDefault();
-        if (locked || busy) return;
+        if (locked || busy || (draft.rendering && !renderingOrigin)) return;
         const { configuration, errors: invalid } = compileDraft(draft, source.adapter_type);
         setErrors(invalid);
         if (Object.keys(invalid).length) {
@@ -303,13 +319,13 @@ function Workspace({ initialSource, initial }: { initialSource: Source; initial?
         }
       }}>
         <fieldset className="profile-form" disabled={!!busy}>
-          <ConfigurationEditor draft={draft} adapter={source.adapter_type} origins={source.allowed_origins} errors={errors}
+          <ConfigurationEditor draft={draft} adapter={source.adapter_type} origins={source.allowed_origins} renderingOrigin={renderingOrigin} errors={errors}
             change={next => {
               setDraft(next); setDirty(true); setErrors({}); setStatus('');
               if (!locked) setFailure('');
             }} />
           <div className="profile-actions profile-save-row">
-            <button className="primary" type="submit" disabled={locked || (!!profile && !dirty)}>
+            <button className="primary" type="submit" disabled={locked || (!!profile && !dirty) || (!!draft.rendering && !renderingOrigin)}>
               {profile ? 'Save draft' : 'Create draft'}
             </button>
             {profile && !dirty && !locked && source.approval_status === 'approved' &&
@@ -320,7 +336,7 @@ function Workspace({ initialSource, initial }: { initialSource: Source; initial?
         </fieldset>
       </form>}
     </section>
-    {profile && !immutable && <ProfileChecks key={checkRevision} source={source} profile={profile}
+    {profile && !immutable && <ProfileChecks key={checkRevision} source={source} profile={profile} renderingOrigin={renderingOrigin}
       dirty={dirty} locked={locked} busy={!!busy} run={run}
       requests={{
         preview: async (sample, signal) => {

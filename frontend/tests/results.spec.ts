@@ -319,6 +319,7 @@ test('Evidence shows safe stored metadata, preserves lineage and links back to t
   await expect(page.getByText('http://127.0.0.1:8001/first', { exact: true })).toBeVisible();
   await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
   await expect(page.getByText('Stored hash recorded by the collection backend.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Rendered DOM', exact: true })).toHaveCount(0);
   await expect(page.getByText(/token=secret|username:password|never-render/)).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Download/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Open profile version ' + profileId })).toHaveAttribute('href', profilePath);
@@ -326,6 +327,22 @@ test('Evidence shows safe stored metadata, preserves lineage and links back to t
   await page.getByRole('link', { name: 'Open job ' + jobId }).click();
   await expect(page).toHaveURL(jobPath);
   await expect(page.getByRole('list', { name: 'Related records preview' })).toBeVisible();
+});
+
+test('rendered evidence distinguishes the derived DOM fingerprint and capture time from the original HTTP response', async ({ page }) => {
+  const dom = { sha256: 'a'.repeat(64), byte_count: 4216, engine: 'Chromium', rendered_at: '2026-11-26T12:12:42Z' };
+  await routeJson(page, evidencePath, { ...evidence, rendered_dom: dom });
+  await page.goto(evidencePath);
+  await expect(page.getByRole('heading', { name: 'Original response SHA-256' })).toBeVisible();
+  await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
+  const derived = page.getByRole('region', { name: 'Rendered DOM', exact: true });
+  await expect(derived.getByText(dom.sha256, { exact: true })).toBeVisible();
+  await expect(derived.getByText('4,216 bytes')).toBeVisible();
+  await expect(derived.getByText('Chromium')).toBeVisible();
+  await expect(derived.locator('time')).toHaveAttribute('datetime', dom.rendered_at);
+  await expect(page.getByText(/token=secret|username:password|never-render/)).toHaveCount(0);
+  await page.getByRole('heading', { name: 'Original response SHA-256' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
+  await expect(derived.getByText(dom.sha256, { exact: true })).toBeInViewport();
 });
 
 for (const [path, label] of [[recordPath, 'Record'], [evidencePath, 'Evidence']] as const) {

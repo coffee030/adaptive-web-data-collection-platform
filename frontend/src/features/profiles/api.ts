@@ -16,6 +16,18 @@ interface Extraction {
 }
 interface BaseConfiguration { config_schema_version: '1'; record_schema: Schema }
 interface NextLinkPagination { next_link_selector: string; max_pages: number }
+export interface RenderingRules { ready_selector: string; script_sha256: string[]; timeout_ms: number }
+export interface RenderingPolicy { eligible: boolean; origin: string | null }
+export const renderingProblems: Record<string, string> = {
+  render_origin_denied: 'Rendering is unavailable for this origin. Check the source approval and the installation’s permitted rendering origin.',
+  render_script_denied: 'The page contains a script outside the reviewed set. Review the source scripts and the hashes in this profile.',
+  render_resource_denied: 'The page requested a blocked resource. Use a self-contained document on the approved origin.',
+  render_policy_denied: 'The renderer cannot preserve this page’s content security policy. Use a compatible controlled document.',
+  render_timeout: 'The ready element did not appear in time. Check its CSS selector and the maximum wait in the profile.',
+  render_unavailable: 'The browser renderer is unavailable. Check the installation before retrying.',
+  render_dom_limit: 'The rendered document exceeds the size limit. Use a smaller controlled document.',
+  invalid_selector: 'A selector is invalid. Review its type and syntax in the profile.',
+};
 export interface KeywordSearch {
   origin: string; path: string; keyword_parameter: string;
   result_item_selector: string; detail_link_selector: string;
@@ -34,6 +46,7 @@ export type Configuration = BaseConfiguration & (
   | {
     adapter_type: 'web'; selector_type: SelectorType; item_selector: string; fields: Extraction[];
     pagination?: NextLinkPagination;
+    rendering?: RenderingRules;
     search?: KeywordSearch;
     article?: ArticleMapping;
   }
@@ -74,6 +87,8 @@ const version = (source: string, id: string) => `${versions(source)}/${encodeURI
 
 export const getProfile = (source: string, id: string, signal: AbortSignal) =>
   apiGet<Profile>(version(source, id), signal);
+export const getRenderingPolicy = (source: string, signal: AbortSignal) =>
+  apiGet<RenderingPolicy>(sourcePath(source) + '/rendering-policy', signal);
 export const createProfile = (source: string, configuration: Configuration, signal: AbortSignal) =>
   apiPost<Profile>(versions(source), { configuration }, signal);
 export const saveProfile = (source: string, id: string, configuration: Configuration,

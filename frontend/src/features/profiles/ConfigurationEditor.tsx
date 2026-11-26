@@ -4,13 +4,14 @@ import type { Adapter } from '../sources/api';
 import { articleFields, paginationLimits, selectorTypes, valueTypes, type ArticleField, type KeywordSearch } from './api';
 
 type Props = {
-  draft: Draft; adapter: Adapter; origins: string[]; errors: Record<string, string>;
+  draft: Draft; adapter: Adapter; origins: string[]; renderingOrigin: string | null; errors: Record<string, string>;
   change: (draft: Draft) => void;
 };
 
-export function ConfigurationEditor({ draft, adapter, origins, errors, change }: Props) {
+export function ConfigurationEditor({ draft, adapter, origins, renderingOrigin, errors, change }: Props) {
   const web = adapter === 'web';
   const search = draft.search;
+  const rendering = draft.rendering;
   function patchSearch(patch: Partial<KeywordSearch>) {
     if (search) change({ ...draft, search: { ...search, ...patch } });
   }
@@ -42,6 +43,7 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
     change({
       ...draft,
       search: mode === 'search' ? emptySearch(origins[0] ?? '') : undefined,
+      rendering: mode === 'rendered' ? { ready_selector: '', script_sha256: [], timeout_ms: 1500 } : undefined,
       article: undefined,
     });
   }
@@ -69,11 +71,31 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
       {web && <section className="operator-form-section" aria-labelledby="editor-collection">
         <h3 id="editor-collection">Collection and selectors</h3>
         <label>Collection mode
-          <select value={search ? 'search' : 'document'} onChange={event => setMode(event.target.value)}>
+          <select {...invalid('collection-mode')} value={rendering ? 'rendered' : search ? 'search' : 'document'} onChange={event => setMode(event.target.value)}>
             <option value="document">Controlled document</option>
             <option value="search">Keyword search and detail pages</option>
+            {(renderingOrigin || rendering) && <option value="rendered" disabled={!renderingOrigin || !!draft.nextLinkSelector.trim()}>Rendered document</option>}
           </select>
+          {error('collection-mode')}
         </label>
+        {renderingOrigin && draft.nextLinkSelector.trim() && <p className="muted">Clear the next-link selector to use single-page rendering.</p>}
+        {rendering && <div className="profile-form">
+          {renderingOrigin && <p>Core runs reviewed inline scripts from <strong>{renderingOrigin}</strong> and waits for the ready element before extracting fields.</p>}
+          <div className="profile-grid">
+            <label>Ready element (CSS selector)<input {...invalid('render-ready')} required value={rendering.ready_selector} maxLength={1024}
+              onChange={event => change({ ...draft, rendering: { ...rendering, ready_selector: event.target.value } })} />
+              {error('render-ready')}</label>
+            <label>Maximum wait (milliseconds)<input {...invalid('render-timeout')} type="number" min={250} max={5000} step={1} required
+              value={rendering.timeout_ms || ''} onChange={event => change({ ...draft, rendering: { ...rendering, timeout_ms: Number(event.target.value) } })} />
+              {error('render-timeout')}</label>
+          </div>
+          <label>Reviewed inline script SHA-256 hashes
+            <textarea {...invalid('render-hashes')} rows={3} wrap="off" required spellCheck={false} autoCapitalize="none"
+              aria-describedby={errors['render-hashes'] ? 'render-hash-help render-hashes-error' : 'render-hash-help'}
+              value={rendering.script_sha256.join('\n')} onChange={event => change({ ...draft, rendering: { ...rendering, script_sha256: event.target.value.split('\n') } })} />
+            {error('render-hashes')}</label>
+          <p id="render-hash-help" className="muted">Enter one lowercase hash per line, up to eight. External scripts are blocked.</p>
+        </div>}
         {search && <div className="profile-grid">
           <label>Search origin
             <select {...invalid('search-origin')} value={search.origin} onChange={event => patchSearch({ origin: event.target.value })}>
@@ -104,7 +126,7 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
             {error('item-selector')}
           </label>
         </div>
-        <details className="profile-options">
+        {!rendering && <details className="profile-options">
           <summary>Pagination and request limits</summary>
           <div className="profile-grid">
             {search && <>
@@ -139,7 +161,7 @@ export function ConfigurationEditor({ draft, adapter, origins, errors, change }:
               </select>
             </label>
           </div>
-        </details>
+        </details>}
       </section>}
       <section className="operator-form-section" aria-labelledby="editor-fields">
         <h3 id="editor-fields">Output fields</h3>

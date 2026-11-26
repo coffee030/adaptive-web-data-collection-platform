@@ -1,5 +1,6 @@
 import { TableRegion, Timestamp } from '../../components/feedback';
 import type { Candidate, Configuration, Rejection, Report } from './api';
+import { renderingProblems } from './api';
 
 function position(item: Rejection) {
   return `${item.source_position.kind === 'csv_row' ? 'CSV row' : 'HTML item'} ${item.source_position.index}`;
@@ -41,7 +42,7 @@ export function ValidationResult({ report }: { report: Report }) {
       <div><dt>Result counts</dt><dd>Valid {report.valid_count} · Invalid {report.invalid_count} · Duplicates {report.duplicate_count}</dd></div>
       {report.sample_location && <div><dt>Sample location</dt><dd className="identifier">{report.sample_location}</dd></div>}
     </dl>
-    {report.error && <p role="alert">{report.error.message} <code>{report.error.code}</code></p>}
+    {report.error && <p role="alert">{renderingProblems[report.error.code] ?? report.error.message} <code>{report.error.code}</code></p>}
     {report.invalid.length > 0 && <>
       <h4>Invalid records</h4>
       <ul className="profile-problems">{report.invalid.slice(0, 20).map((item, index) =>
@@ -68,6 +69,11 @@ export function ConfigurationSummary({ configuration: config }: { configuration:
       <div><dt>Identity field</dt><dd>{config.record_schema.identity_field ?? 'None'}</dd></div>
       {web && <div className="source-policy"><dt>Item selector ({config.selector_type})</dt>
         <dd><code>{config.item_selector}</code></dd></div>}
+      {web && config.rendering && <>
+        <div><dt>Collection mode</dt><dd>Rendered document</dd></div>
+        <div className="source-policy"><dt>Ready element (CSS)</dt><dd><code>{config.rendering.ready_selector}</code></dd></div>
+        <div><dt>Maximum wait</dt><dd>{config.rendering.timeout_ms.toLocaleString('en-GB')} ms</dd></div>
+      </>}
       {web && config.pagination && <>
         <div className="source-policy"><dt>Next-link selector ({config.selector_type})</dt>
           <dd><code>{config.pagination.next_link_selector}</code></dd></div>
@@ -94,6 +100,8 @@ export function ConfigurationSummary({ configuration: config }: { configuration:
       <dl className="source-metadata">
         <div><dt>Configuration schema</dt><dd>{config.config_schema_version}</dd></div>
         <div><dt>Record schema</dt><dd>{config.record_schema.schema_version}</dd></div>
+        {web && config.rendering && <div><dt>Reviewed inline script SHA-256 hashes</dt>
+          <dd className="identifier">{config.rendering.script_sha256.map(hash => <div key={hash}><code>{hash}</code></div>)}</dd></div>}
         {search && <>
           <div><dt>Request timeout</dt><dd>{search.timeout_seconds ?? 2} seconds</dd></div>
           <div><dt>Collection time budget</dt><dd>{search.max_seconds ?? 45} seconds</dd></div>

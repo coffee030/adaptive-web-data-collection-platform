@@ -40,6 +40,7 @@
   font-weight: 400;
 }
 .profile-form textarea { resize: vertical; }
+.profile-form #render-hashes { font-family: var(--mono); }
 .profile-form [aria-invalid="true"] { border-color: var(--error); }
 .profile-form :is(input, select, textarea):disabled { background: var(--page); }
 .profile-field { min-inline-size: 0; margin: 0; padding: var(--sm) 0 0; border: 0; border-block-start: 1px solid var(--divider); }
