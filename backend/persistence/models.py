@@ -132,7 +132,9 @@ class JobRow(Base):
         sa.Index("ix_job_status_created", "status", "created_at", "id"),
         sa.Index("ix_job_created", "created_at", "id"),
         sa.Index(
-            "ix_job_finished", "finished_at", postgresql_where=sa.text("finished_at IS NOT NULL")
+            "ix_job_finished",
+            "finished_at",
+            postgresql_where=sa.text("finished_at IS NOT NULL"),
         ),
         sa.CheckConstraint(
             "execution_attempt >= 0 AND dispatch_attempts >= 0 AND "
@@ -197,7 +199,9 @@ class EventRow(Base):
         sa.Index(
             "ix_event_worker_claim_time",
             "occurred_at",
-            postgresql_where=sa.text("kind = 'CLAIMED' AND worker_instance_id IS NOT NULL"),
+            postgresql_where=sa.text(
+                "kind = 'CLAIMED' AND worker_instance_id IS NOT NULL"
+            ),
         ),
     )
 
