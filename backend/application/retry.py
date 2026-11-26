@@ -7,6 +7,7 @@ from backend.core.contracts import CollectionError
 MAX_RETRY_AFTER = 300
 TRANSIENT = {
     "timeout",
+    "render_timeout",
     "transport_error",
     "database_unavailable",
     "origin_rate_unavailable",

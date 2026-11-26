@@ -9,8 +9,8 @@ import { ConfigurationSummary, PreviewResults, ValidationResult } from './Profil
 export type Action = 'create' | 'save' | 'preview' | 'validate' | 'approve' | 'reload';
 type RunAction = <T>(action: Action, request: (signal: AbortSignal) => Promise<T>, accept: (result: T) => void) => void;
 
-export function ProfileChecks({ source, profile, busy, dirty, locked, run, requests }: {
-  source: Source; profile: Profile; busy: boolean; dirty: boolean; locked: boolean;
+export function ProfileChecks({ source, profile, busy, dirty, locked, renderingOrigin, run, requests }: {
+  source: Source; profile: Profile; busy: boolean; dirty: boolean; locked: boolean; renderingOrigin: string | null;
   run: RunAction;
   requests: {
     preview: (sample: Sample, signal: AbortSignal) => Promise<Candidate[]>;
@@ -20,6 +20,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
 }) {
   const web = source.adapter_type === 'web';
   const search = profile.configuration.adapter_type === 'web' ? profile.configuration.search : undefined;
+  const rendered = profile.configuration.adapter_type === 'web' && !!profile.configuration.rendering;
   const allowed = allowedInputs(source);
   const [target, setTarget] = useState(allowed[0] ?? '');
   const [content, setContent] = useState('');
@@ -28,6 +29,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
   const [report, setReport] = useState<Report>();
   const [operator, setOperator] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const sampleTarget = rendered ? renderingOrigin ?? '' : search?.origin ?? target;
 
   function clearResults() {
     setPreview(undefined);
@@ -41,7 +43,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
     if (busy || disabled) return;
     const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'validate'
       ? 'validate' : 'preview';
-    const input = compileCollectionInput(source, search?.origin ?? target, content, !!search);
+    const input = compileCollectionInput(source, sampleTarget, content, !!search);
     if (!input.entry) {
       setError(input.error);
       return;
@@ -58,7 +60,7 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
     }
   }
 
-  const disabled = dirty || locked || source.approval_status !== 'approved' || !allowed.includes(search?.origin ?? target);
+  const disabled = dirty || locked || source.approval_status !== 'approved' || !allowed.includes(sampleTarget);
   const localOperator = isLocalOperator();
   const currentReport = report?.config_hash === profile.config_hash && report.profile_version_id === profile.profile_version_id;
   const eligible = report?.passed && currentReport && !disabled;
@@ -76,7 +78,8 @@ export function ProfileChecks({ source, profile, busy, dirty, locked, run, reque
         {locked && <p>Reload the server version before running sample checks.</p>}
         <form onSubmit={submit}>
           <fieldset className="profile-form" disabled={busy || disabled}>
-            {search ? <p className="muted">Samples use the first detail result from {search.origin}.</p> : <label>{web ? 'Allowed origin' : 'Allowed dataset ID'}
+            {rendered ? <p className="muted">{renderingOrigin ? 'Rendered sample origin · ' + renderingOrigin : 'Sample checks require access to the approved rendering origin.'}</p>
+              : search ? <p className="muted">Samples use the first detail result from {search.origin}.</p> : <label>{web ? 'Allowed origin' : 'Allowed dataset ID'}
               <select value={target} onChange={event => { setTarget(event.target.value); clearResults(); }}>
                 {allowed.map((item, index) => <option key={index} value={item}>{item}</option>)}
               </select>

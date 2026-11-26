@@ -33,6 +33,9 @@ const apiVersion = apiSource + '/versions/' + draft.profile_version_id;
 
 async function setup(page: Page, currentSource = source, initial = draft) {
   let saved = initial;
+  if (currentSource.adapter_type === 'web') {
+    await page.route(url => url.pathname === apiSource + '/rendering-policy', route => route.fulfill({ status: 404, json: {} }));
+  }
   await page.route(url => url.pathname === apiSource, route => route.fulfill({ json: currentSource }));
   await page.route(url => url.pathname === apiSource + '/versions', route =>
     route.request().method() === 'GET'
@@ -54,6 +57,84 @@ async function setup(page: Page, currentSource = source, initial = draft) {
 async function fillSample(page: Page) {
   await page.getByRole('textbox', { name: 'CSV sample' }).fill('Name\nRiver Walk\n');
 }
+
+const renderOrigin = 'http://127.0.0.1:8142';
+const renderSource: Source = { ...source, source_name: 'Controlled local catalogue', adapter_type: 'web', allowed_datasets: [], allowed_origins: [renderOrigin] };
+const staticPage: Configuration = {
+  adapter_type: 'web', config_schema_version: '1', record_schema: configuration.record_schema, selector_type: 'css', item_selector: 'article',
+  fields: [{ name: 'title', selector: 'h2', selector_type: null, mode: 'text', attribute: null, resolve_url: false }],
+};
+const reviewed = { ready_selector: '#complete', script_sha256: ['a'.repeat(64), 'b'.repeat(64)], timeout_ms: 1750 };
+
+test('rendered profile rules validate and round-trip through the editor, then return to the exact legacy static configuration', async ({ page }) => {
+  await setup(page, renderSource, { ...draft, configuration: staticPage });
+  await page.route(url => url.pathname === apiSource + '/rendering-policy', route => route.fulfill({ json: { eligible: true, origin: renderOrigin } }));
+  await page.goto(uiDraft);
+  const mode = page.getByLabel('Collection mode');
+  await page.getByText('Pagination and request limits', { exact: true }).click();
+  const next = page.getByLabel('Next-link selector (optional)');
+  await next.fill('a.next');
+  await expect(mode.locator('option[value="rendered"]')).toBeDisabled();
+  await next.fill('');
+  await mode.selectOption('rendered');
+  const selector = page.getByLabel('Ready element (CSS selector)');
+  const hashes = page.getByLabel('Reviewed inline script SHA-256 hashes');
+  const wait = page.getByLabel('Maximum wait (milliseconds)');
+  await expect(wait).toHaveValue('1500');
+  await expect(page.getByText('Pagination and request limits')).toHaveCount(0);
+  await selector.fill(reviewed.ready_selector);
+  await hashes.fill('A'.repeat(64));
+  await wait.fill('249');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(hashes).toHaveAttribute('aria-invalid', 'true');
+  await expect(wait).toHaveAttribute('aria-invalid', 'true');
+  await hashes.fill(reviewed.script_sha256.join('\n'));
+  await wait.fill(String(reviewed.timeout_ms));
+  const written = page.waitForRequest(req => req.method() === 'PUT' && req.url().endsWith(apiVersion));
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  expect((await written).postDataJSON().configuration).toEqual({ ...staticPage, rendering: reviewed });
+  await expect(page.getByText(/Draft saved\./)).toBeVisible();
+  await page.reload();
+  await expect(mode).toHaveValue('rendered');
+  await expect(hashes).toHaveValue(reviewed.script_sha256.join('\n'));
+  await expect(wait).toHaveValue('1750');
+  await expect(selector).toHaveValue('#complete');
+  await page.route(url => url.pathname === apiVersion + '/preview', route => route.fulfill({ status: 422, json: { error: { code: 'render_script_denied' } } }));
+  await page.getByLabel('Document path').fill('/catalogue');
+  const preview = page.waitForRequest(req => req.method() === 'POST' && req.url().endsWith('/preview'));
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  expect((await preview).postDataJSON()).toEqual({ adapter_type: 'web', url: renderOrigin + '/catalogue' });
+  await expect(page.getByText(/page contains a script outside the reviewed set/)).toBeVisible();
+  await mode.selectOption('document');
+  const restored = page.waitForRequest(req => req.method() === 'PUT' && req.url().endsWith(apiVersion));
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  expect((await restored).postDataJSON().configuration).toEqual(staticPage);
+  await expect(page.getByText(/Draft saved\./)).toBeVisible();
+});
+
+test('rendered configuration remains inspectable on a phone when its policy is unavailable and can recover without changing rules', async ({ page }) => {
+  const saved = { ...draft, configuration: { ...staticPage, rendering: reviewed } };
+  await setup(page, renderSource, saved);
+  let access = 'unavailable';
+  await page.route(url => url.pathname === apiSource + '/rendering-policy', route => access === 'unavailable'
+    ? route.fulfill({ status: 404, json: {} })
+    : route.fulfill({ json: { eligible: access === 'eligible', origin: access === 'eligible' ? renderOrigin : null } }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(uiDraft);
+  await expect(page.getByText(/Core could not confirm rendering access/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Validate sample' })).toBeDisabled();
+  await expect(page.getByLabel('Reviewed inline script SHA-256 hashes')).toHaveValue(reviewed.script_sha256.join('\n'));
+  access = 'denied';
+  await page.getByRole('button', { name: 'Retry rendering access' }).click();
+  await expect(page.getByText(/source is ineligible for browser rendering/)).toBeVisible();
+  access = 'eligible';
+  await page.getByRole('button', { name: 'Retry rendering access' }).click();
+  await expect(page.getByRole('button', { name: 'Validate sample' })).toBeEnabled();
+  await expect(page.getByLabel('Collection mode')).toHaveValue('rendered');
+  await expect(page.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  await page.getByLabel('Collection mode').evaluate(el => el.scrollIntoView({ block: 'start' }));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
 
 test('opens history, validates required fields and creates a structured CSV draft', async ({ page }) => {
   await setup(page);
@@ -174,7 +255,7 @@ test('empty preview, invalid selector response and failing report', async ({ pag
     status: 400, json: { error: { code: 'invalid_selector' } },
   }));
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('selector could not be parsed');
+  await expect(page.getByRole('alert')).toContainText('A selector is invalid. Review its type and syntax in the profile.');
   await page.getByRole('button', { name: 'Validate sample' }).click();
   await expect(page.getByRole('heading', { name: 'Validation failed' })).toBeVisible();
   await expect(page.getByText('Expected a string', { exact: false })).toBeVisible();

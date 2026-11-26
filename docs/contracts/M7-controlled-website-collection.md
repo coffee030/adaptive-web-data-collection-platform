@@ -55,3 +55,25 @@ The worker hard limit is 60 seconds and the PostgreSQL lease is 90 seconds. The 
 Public network transport uses libcurl DNS pinning. [libcurl CURLOPT_RESOLVE](https://curl.se/libcurl/c/CURLOPT_RESOLVE.html)
 
 Robots rule matching follows the applicable portions of the Robots Exclusion Protocol. [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+
+## Single-document rendering for controlled local fixtures
+
+An operator may opt in to a rendered DOM on a Web Profile for an approved, self-authored local HTTP fixture. Set `CORE_RENDER_FIXTURE_ORIGIN` on the API and worker to its exact registered controlled origin. The Source retains its path and permission checks. The source's `rendering-policy` endpoint reports the eligible origin. A Profile without a `rendering` field keeps its original configuration hash.
+
+```json
+{
+  "rendering": {
+    "ready_selector": "#catalog-ready",
+    "script_sha256": ["638895eb8531a2d47a01c9279503d990a3a04423e5fa5da717fd2457ac42c1d2"],
+    "timeout_ms": 1500
+  }
+}
+```
+
+The example hash identifies the inline script in the repository’s controlled catalogue. Supply the SHA-256 of the inline script’s parsed text encoded as UTF-8, including whitespace. HTML parsing normalizes line endings to LF. One to eight lowercase hexadecimal hashes are accepted. The CSS readiness selector must fit within 1,024 characters. The readiness timeout defaults to 1,500 ms and accepts 250–5,000 ms. This mode handles one URL per input. Search and pagination require their existing static Profiles.
+
+Provision Node.js, the frontend lockfile’s Playwright installation and a sandbox-capable Chromium on each execution host. `CORE_RENDER_NODE_MODULES` can identify that dependency directory. `CORE_RENDER_BROWSER` can specify the full browser executable path. The standard Core worker image does not provision this optional runtime. Chromium has up to ten seconds to start. The Profile readiness timer starts when the captured document is loaded. The worker caps the complete helper process at fifteen seconds plus the configured readiness interval. An unavailable renderer returns `render_unavailable`.
+
+The HTTP adapter checks the registered origin, robots policy and response before rendering. A restricted fresh browser runs the approved inline code with network access disabled. It omits a head link with exactly `rel="icon"` and `href="data:,"` from the offline document. This empty icon placeholder remains in the stored HTTP response. Publisher HTTP content security policy, unapproved scripts and disallowed resource requests end the attempt with a readable failure. Readiness timeouts use the Job’s existing bounded transient retry policy. The renderer caps serialized DOM at 1 MiB.
+
+Preview, validation and queued jobs extract from the generated DOM. Evidence retains the original HTTP bytes and digest. A successful render adds a distinct `rendered_dom` receipt with the derived HTML’s SHA-256, byte count, collection time and Chromium version. The Evidence store saves both files together and verifies both at readback. Records retain their source, Profile version and Evidence reference.

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -13,6 +14,7 @@ from backend.core.contracts import (
     Positive,
     Provenance,
     RecordProblem,
+    RenderedEvidence,
     Scalar,
     Sha256,
     SourcePosition,
@@ -23,7 +25,13 @@ from backend.persistence.collection import (
     ObservationRow,
     RequestJobRow,
 )
-from backend.persistence.models import EvidenceRow, JobRow, QuarantineRow, RecordRow
+from backend.persistence.models import (
+    EvidenceRow,
+    JobRow,
+    ProfileRow,
+    QuarantineRow,
+    RecordRow,
+)
 
 from .jobs import TERMINAL, Jobs
 from .record_export import MAX_EXPORT_ROWS, ExportFormat, encode_records
@@ -60,6 +68,9 @@ class Evidence(Contract):
     run_id: UUID
     page_number: Positive
     capture_kind: CaptureKind
+    rendered_dom: RenderedEvidence | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     captured_at: datetime
     content_hash: Sha256
     content_type: str | None
@@ -105,7 +116,21 @@ def materialize_record(row: RecordRow, job: JobRow, evidence: EvidenceRow) -> Re
     )
 
 
-def materialize_evidence(row: EvidenceRow, job: JobRow) -> Evidence:
+def _evidence_query():
+    return (
+        select(
+            EvidenceRow,
+            JobRow,
+            ProfileRow.configuration["rendering"].astext.is_not(None),
+        )
+        .join(JobRow, EvidenceRow.job_id == JobRow.id)
+        .join(ProfileRow, JobRow.profile_version_id == ProfileRow.id)
+    )
+
+
+def materialize_evidence(
+    row: EvidenceRow, job: JobRow, rendered_profile: bool
+) -> Evidence:
     return Evidence(
         evidence_id=row.id,
         job_id=row.job_id,
@@ -115,6 +140,7 @@ def materialize_evidence(row: EvidenceRow, job: JobRow) -> Evidence:
         run_id=row.run_id,
         page_number=row.page_number,
         capture_kind=row.capture_kind,
+        rendered_dom=row.rendered_dom if rendered_profile else None,
         captured_at=row.captured_at,
         content_hash=row.content_hash,
         content_type=row.content_type,
@@ -231,11 +257,7 @@ class Results:
             return encode_records(records, tuple(Record.model_fields), format)
 
     def evidence(self, evidence_id: UUID) -> Evidence:
-        query = (
-            select(EvidenceRow, JobRow)
-            .join(JobRow, EvidenceRow.job_id == JobRow.id)
-            .where(EvidenceRow.id == evidence_id)
-        )
+        query = _evidence_query().where(EvidenceRow.id == evidence_id)
         with self.sessions() as session:
             match = session.execute(query).one_or_none()
             if match is None:
@@ -250,13 +272,13 @@ class Results:
 
     def job_evidence_pages(self, job_id: UUID) -> list[Evidence]:
         with self.sessions() as session:
-            job = Jobs._get_row(session, job_id)
-            rows = session.scalars(
-                select(EvidenceRow)
+            Jobs._get_row(session, job_id)
+            rows = session.execute(
+                _evidence_query()
                 .where(EvidenceRow.job_id == job_id)
                 .order_by(EvidenceRow.page_number)
             )
-            return [materialize_evidence(row, job) for row in rows]
+            return [materialize_evidence(*row) for row in rows]
 
     def quarantine(
         self, job_id: UUID, limit: int, offset: int

@@ -38,6 +38,7 @@ class LocalEvidenceStore:
             requested_location=document.requested_location,
             captured_at=document.captured_at,
             content_hash=hashlib.sha256(document.body).hexdigest(),
+            rendered_dom=document.rendered_dom,
             http_status=document.http_status,
             content_type=document.content_type,
             page_number=document.page_number,
@@ -49,6 +50,8 @@ class LocalEvidenceStore:
                 entry = Path(staging) / "entry"
                 entry.mkdir()
                 (entry / "input.bin").write_bytes(document.body)
+                if document.rendered_body is not None:
+                    (entry / "rendered.html").write_bytes(document.rendered_body)
                 (entry / "metadata.json").write_text(
                     reference.model_dump_json(indent=2), encoding="utf-8"
                 )
@@ -76,6 +79,17 @@ class LocalEvidenceStore:
         try:
             reference = EvidenceReference.model_validate_json(metadata.read_bytes())
             body = content.read_bytes()
+            if derived := reference.rendered_dom:
+                dom = entry / "rendered.html"
+                if (
+                    dom.is_symlink()
+                    or dom.stat().st_size != derived.byte_count
+                    or hashlib.sha256(dom.read_bytes()).hexdigest() != derived.sha256
+                ):
+                    raise EvidenceError(
+                        "evidence_integrity_error",
+                        "Stored rendered DOM does not match its capture",
+                    )
         except FileNotFoundError as error:
             raise EvidenceError(
                 "evidence_not_found", "Evidence bytes or metadata are missing"

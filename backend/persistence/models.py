@@ -209,6 +209,7 @@ class EventRow(Base):
 
 class EvidenceRow(Base):
     __tablename__ = "raw_evidence"
+    __mapper_args__ = {"eager_defaults": False}
     __table_args__ = (
         sa.UniqueConstraint("job_id", "page_number", name="uq_evidence_job_page"),
         sa.UniqueConstraint("job_id", "id", name="uq_evidence_job_id"),
@@ -227,6 +228,9 @@ class EvidenceRow(Base):
     run_id: Mapped[UUID]
     page_number: Mapped[int] = mapped_column(server_default="1")
     capture_kind: Mapped[str] = mapped_column(server_default="input")
+    rendered_dom: Mapped[dict | None] = mapped_column(
+        JSONB(none_as_null=True), deferred=True, server_default=sa.FetchedValue()
+    )
     storage_reference: Mapped[str] = mapped_column(sa.String(42))
     captured_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True))
     content_type: Mapped[str | None] = mapped_column(sa.Text)

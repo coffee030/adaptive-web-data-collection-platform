@@ -6,6 +6,7 @@
 !backend/api/**/*.py
 !backend/application/**/*.py
 !backend/core/**/*.py
+!backend/core/render_document.cjs
 !backend/intelligence/**/*.py
 !backend/intelligence/wikidata-directory.json
 !backend/intelligence/commons-works.json

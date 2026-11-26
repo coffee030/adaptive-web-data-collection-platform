@@ -1,5 +1,5 @@
 import type { Adapter } from '../sources/api';
-import { articleFields, type ArticleField, type ArticleMapping, type Configuration, type KeywordSearch, type RecordField, type Schema, type SelectorType, type SuggestedMapping } from './api';
+import { articleFields, type ArticleField, type ArticleMapping, type Configuration, type KeywordSearch, type RecordField, type RenderingRules, type Schema, type SelectorType, type SuggestedMapping } from './api';
 
 interface Field extends RecordField {
   mapping: string;
@@ -16,6 +16,7 @@ export interface Draft {
   nextLinkSelector: string;
   maxPages: number;
   search?: KeywordSearch;
+  rendering?: RenderingRules;
   article?: Partial<Record<ArticleField, number>>;
   fields: Field[];
 }
@@ -41,6 +42,7 @@ export function draftFrom(configuration?: Configuration): Draft {
     nextLinkSelector: pagination?.next_link_selector ?? '',
     maxPages: pagination?.max_pages ?? 3,
     search,
+    rendering: configuration?.adapter_type === 'web' ? configuration.rendering : undefined,
     article: mapping && Object.fromEntries(Object.keys(articleFields).flatMap(key => {
       const field = key as ArticleField;
       const index = schema?.fields.findIndex(item => item.name === mapping[field]) ?? -1;
@@ -124,6 +126,19 @@ export function compileDraft(draft: Draft, adapter: Adapter) {
     next_link_selector: text(draft.nextLinkSelector, 'next-link-selector', 1024, 'a next-link selector'),
     max_pages: draft.maxPages,
   } : undefined;
+  let rendering: RenderingRules | undefined;
+  if (adapter === 'web' && draft.rendering) {
+    const ready = text(draft.rendering.ready_selector, 'render-ready', 1024, 'a CSS selector for the ready page');
+    if (ready.includes('\0')) errors['render-ready'] = 'Use a CSS selector without null characters.';
+    const hashes = draft.rendering.script_sha256.map(line => line.trim()).filter(Boolean);
+    if (hashes.length < 1 || hashes.length > 8 || hashes.some(hash => !/^[a-f0-9]{64}$/.test(hash))) {
+      errors['render-hashes'] = 'Enter one to eight lowercase SHA-256 hashes, one per line.';
+    }
+    const timeout = draft.rendering.timeout_ms;
+    if (!Number.isInteger(timeout) || timeout < 250 || timeout > 5000) errors['render-timeout'] = 'Enter a whole number from 250 to 5,000.';
+    if (draft.search || pagination) errors['collection-mode'] = 'Rendered collection requires a single document without pagination.';
+    rendering = { ready_selector: ready, script_sha256: hashes, timeout_ms: timeout };
+  }
   let search: KeywordSearch | undefined;
   if (adapter === 'web' && draft.search) {
     search = {
@@ -165,6 +180,7 @@ export function compileDraft(draft: Draft, adapter: Adapter) {
     ...base, adapter_type: 'web', selector_type: draft.selectorType,
     item_selector: text(draft.itemSelector, 'item-selector', 1024, 'an item selector'),
     ...(search ? { search } : pagination ? { pagination } : {}),
+    ...(rendering ? { rendering } : {}),
     ...(article ? { article } : {}),
     fields: draft.fields.map((field, index) => ({
       name: fields[index]!.name,

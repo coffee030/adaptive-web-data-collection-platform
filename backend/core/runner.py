@@ -24,6 +24,7 @@ from .ingestion import IngestionResult, ingest
 from .inputs import CapturedInput, CsvInput, InputError, KeywordInput, WebInput
 from .origin_rate import OriginRate
 from .profiles import ProfileError, ProfileRepository
+from .rendering import render_document
 from .search import SearchTraversal, initial_input
 from .web_adapter import capture_html, html_candidates, next_page, url_key
 
@@ -194,7 +195,7 @@ class CollectionRunner:
             entry = initial_input(source, config, entry)
             if search := self._search(source, config):
                 return search.sample(entry)
-        return self._capture(source, entry)
+        return self._capture(source, entry, config)
 
     def _documents(
         self, source: Source, config, entry: CollectionInput
@@ -206,7 +207,7 @@ class CollectionRunner:
         visited = set() if pagination else None
         for page_number in range(1, max_pages + 1):
             try:
-                document = self._capture(source, entry, visited=visited)
+                document = self._capture(source, entry, config, visited=visited)
             except InputError as error:
                 if error.capture:
                     yield error.capture, False
@@ -225,15 +226,26 @@ class CollectionRunner:
             entry = following
 
     def _capture(
-        self, source: Source, entry: CollectionInput, *, visited: set[str] | None = None
+        self,
+        source: Source,
+        entry: CollectionInput,
+        config,
+        *,
+        visited: set[str] | None = None,
     ) -> CapturedInput:
         if source.adapter_type == "web" and isinstance(entry, WebInput):
-            return capture_html(
+            document = capture_html(
                 source,
                 entry,
                 check_access=lambda: self.profiles.require_authorized(source.source_id),
                 visited=visited,
             )
+            if isinstance(config, ExtractionConfiguration) and config.rendering:
+                self.profiles.require_authorized(source.source_id)
+                rendered = render_document(source, document, config.rendering)
+                self.profiles.require_authorized(source.source_id)
+                return rendered
+            return document
         if source.adapter_type == "csv" and isinstance(entry, CsvInput):
             return capture_csv(source, entry)
         raise InputError(
