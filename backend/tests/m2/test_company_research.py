@@ -91,7 +91,12 @@ def test_durable_research_and_company_scope(workspace):
         )
         assert not result["research"]["examples"]
         assert result["next_steps"]
-        assert session.get(ResearchRunRow, run_id).revision
+        stored = session.get(ResearchRunRow, run_id)
+        assert stored.revision and len(stored.review["strategies"]) == 3
+        assert all(
+            set(item) == {"name", "platform", "currency", "budget_minor", "status"}
+            for item in stored.review["strategies"]
+        )
     with workspace.sessions.begin() as session:
         owned(session, "one", run_id, lock=True).revision = "superseded"
     with (
@@ -176,3 +181,26 @@ def test_broker_outage_is_retryable_and_source_failure_does_not_discard_other_ev
         run = owned(session, "one", run_id)
         assert run.state == "analyzing"
         assert run.sources[0]["error"] == "collection_failed"
+
+
+def test_focus_selects_eligible_refreshes_and_explicit_scenario():
+    from backend.intelligence.analytics import scenario
+
+    brief = new_request().brief
+    states = [{"key": "2"}, {"key": "inaturalist"}, {"key": "canadian-civil"}]
+    assert [s["key"] for s in research_analysis.planned_sources(brief, states)] == ["2"]
+    transit = brief.model_copy(
+        update={"discovery_focus": "港鐵 transit", "product": "MTR visitor guide"}
+    )
+    assert [s["key"] for s in research_analysis.planned_sources(transit, states)] == [
+        "2",
+        "canadian-civil",
+    ]
+    shaped = brief.model_validate(
+        {
+            **brief.model_dump(),
+            "scenario": {"currency": "HKD", "impressions": 1000, "click_rate": "0.02"},
+        }
+    )
+    result = scenario(shaped.scenario)
+    assert result.clicks.value == 20 and result.roi.value is None

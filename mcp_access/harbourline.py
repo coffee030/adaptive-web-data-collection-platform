@@ -260,6 +260,23 @@ def create_server(
             return row(await call(market + "/overview"))
 
         @server.tool(annotations=READ_ONLY)
+        async def compare_market_measurements(
+            creator_id: MarketId | None = None,
+            platform: Query = "",
+            days: Annotated[int, Field(ge=1, le=3650)] = 365,
+        ) -> Row:
+            """Read quartiles of latest authorized public counters per eligible work. Keep each platform’s definition and observation dates with its distribution."""
+            result = await call(
+                market + "/measurements",
+                params={
+                    "creator_id": creator_id,
+                    "platform": platform or None,
+                    "days": days,
+                },
+            )
+            return {"items": result} if isinstance(result, list) else row(result)
+
+        @server.tool(annotations=READ_ONLY)
         async def search_public_creators(
             query: Query = "", limit: Limit = 10, offset: Offset = 0
         ) -> Row:

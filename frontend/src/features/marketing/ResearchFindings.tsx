@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Panel } from '../../components/studio/Workspace';
-import { amount, date, platformOptions, type CampaignRequest, type Observed } from './intelligence';
+import { amount, date, platformOptions, type CampaignRequest, type Observed, type ScenarioRequest, type ScenarioResult } from './intelligence';
 
 export interface BusinessBrief {
   campaign: CampaignRequest;
@@ -9,6 +9,9 @@ export interface BusinessBrief {
   discovery_focus: string | null;
   test_share: number;
   alternative_platforms: CampaignRequest['platform'][];
+  scenario?: ScenarioRequest | null;
+  discovery_scope?: 'campaign_channels'|'all_sources';
+  max_evidence_age_days?: number | null;
 }
 
 interface Finding {
@@ -23,6 +26,12 @@ interface Finding {
   observed_at: string;
   license_url: string;
   basis: string;
+  tier: 'direct'|'context';
+  scope_notes: string[];
+  credit_role?: string | null;
+  credit_url?: string | null;
+  attribution?: string | null;
+  series_title?: string | null;
   metrics: { label: string; value: number }[];
   visual_evidence?: { source_text: string; interpretation: string };
 }
@@ -64,11 +73,15 @@ export interface ResearchReport {
     historical_ranking: string;
     historical_criteria: string;
     examples: Finding[];
+    direct_count: number;
+    publication_window_days: number | null;
+    requested_channels: string[];
     platform_activity: { platform: string; activities: number; creators: number; with_metrics: number }[];
   };
   strategies: Strategy[];
   next_steps: string[];
   outcome_basis: string;
+  scenario?: ScenarioResult | null;
 }
 const evidences: Record<string,string> = {
   market_activity: 'Published activity', related_market_activity: 'Related topic',
@@ -85,20 +98,25 @@ function explain(value:string) { return reasons[value] ?? value.replace('require
 
 function EvidenceList({report}:{report:ResearchReport}) {
   const [more,setMore] = useState(false);
+  const [context,setContext] = useState(false);
   const {examples, platform_activity} = report.research;
+  const direct=examples.filter(e=>e.tier==='direct'), other=examples.filter(e=>e.tier==='context');
+  const visible=context ? [...direct,...other] : direct;
   return <Panel title="Source evidence" description={`Research focus · ${report.research.focus}`}>
-    {examples.length === 0 ? <p className="rc-inset">No public record matched. Edit the discovery focus to try another topic.</p> :
-      <ol className="rc-evidence">{(more ? examples : examples.slice(0,5)).map(item =>
+    {!direct.length && <p className="rc-inset">No published work verifies the requested topic and channel{report.research.publication_window_days ? ` within the past ${report.research.publication_window_days} days` : ''}. A placement on this evidence would be unverified.</p>}
+    {other.length>0 && <button className="rc-context" aria-expanded={context} onClick={()=>{setContext(!context);setMore(true);}}>{context?'Hide':'Show'} background sources ({other.length})</button>}
+    {visible.length>0 && <ol className="rc-evidence">{(more ? visible : visible.slice(0,5)).map(item =>
         <li key={item.platform+'/'+item.id}>
           <div className="rc-evidence-meta">{evidences[item.basis] ?? 'Published activity'} <span>·</span> {item.platform} {item.published_at && <> <span>·</span> {date(item.published_at)}</>}</div>
+          {item.tier==='context' && <p className="rc-origin">Background only · {item.scope_notes.join(' · ')}</p>}
           <a className="rc-work-title" href={item.url} target="_blank" rel="noreferrer">{item.title} <span aria-hidden="true">↗</span></a>
-          <div className="rc-byline">By <a href={item.profile_url} target="_blank" rel="noreferrer">{item.name}</a></div>
+          <div className="rc-byline">{item.credit_role || (item.basis==='identity_lead'?'Directory entry for':item.basis.includes('market_activity')?'Published by':'Credited to')} <a href={item.profile_url} target="_blank" rel="noreferrer">{item.name}</a>{item.credit_url && <> · <a href={item.credit_url} target="_blank" rel="noreferrer">View credit</a></>}</div>
           {item.excerpt && <p>{item.excerpt}</p>}
           {item.visual_evidence && <p><strong>In the source</strong> {item.visual_evidence.source_text} · {item.visual_evidence.interpretation}</p>}
           {item.metrics.length>0 && <div className="rc-observation">{item.metrics.map(m => `${m.value.toLocaleString('en-HK')} ${m.label}`).join(' · ')}</div>}
-          <div className="rc-origin">Observed {date(item.observed_at)} · <a href={item.license_url} target="_blank" rel="noreferrer">Source licence</a></div>
+          <div className="rc-origin">{item.attribution && <>{item.attribution} · </>}Observed {date(item.observed_at)} · <a href={item.license_url} target="_blank" rel="noreferrer">Source licence</a></div>
         </li>)}</ol>}
-    {examples.length>5 && <button className="studio-secondary rc-more" onClick={()=>setMore(!more)}>{more?'Show fewer sources':`Show all ${examples.length} sources`}</button>}
+    {visible.length>5 && <button className="studio-secondary rc-more" onClick={()=>setMore(!more)}>{more?'Show fewer sources':`Show all ${visible.length} sources`}</button>}
     {platform_activity.length>0 && <div className="rc-inset"><h3>Activity in the reviewed results</h3><div role="region" aria-label="Observed platform coverage" tabIndex={0} className="studio-table-scroll"><table className="studio-table">
       <thead><tr><th>Platform</th><th>Creators</th><th>Activities</th><th>With measurements</th></tr></thead><tbody>{platform_activity.map(p=><tr key={p.platform}><th>{p.platform}</th><td>{p.creators}</td><td>{p.activities}</td><td>{p.with_metrics}</td></tr>)}</tbody></table></div></div>}
     {(report.research.historical_criteria || examples.length>0) && <details className="rc-method"><summary>How sources were matched</summary>
@@ -130,6 +148,10 @@ function Options({report,onUse}:{report:ResearchReport;onUse:UseOption}) {
       {option.topics.length>0 && <p>{option.topic_basis==='supplied'?'Topics in your brief':'Suggested topics'} · {option.topics.join(', ')}</p>}
       <button className="studio-secondary" onClick={()=>onUse(option.platform,option.budget_minor)}>Use these constraints in the campaign plan</button>
     </div>
+    {report.scenario && <div className="rc-inset"><h3>Company scenario assumptions</h3>
+      <p>Assumed impressions {report.scenario.assumptions.impressions?.toLocaleString() ?? 'unavailable'} · Assumed click rate {report.scenario.assumptions.click_rate!=null ? (Number(report.scenario.assumptions.click_rate)*100).toLocaleString()+'%':'unavailable'} · Assumed conversion rate {report.scenario.assumptions.conversion_rate!=null ? (Number(report.scenario.assumptions.conversion_rate)*100).toLocaleString()+'%':'unavailable'}.</p>
+      <p>Calculated clicks {report.scenario.clicks.value==null?'unavailable':Number(report.scenario.clicks.value).toLocaleString()} · Calculated conversions {report.scenario.conversions.value==null?'unavailable':Number(report.scenario.conversions.value).toLocaleString()}.</p>
+      <p>These values depend on the rates and volume entered in the brief.</p></div>}
   </Panel>;
 }
 
@@ -138,8 +160,8 @@ export function ResearchFindings({report,onUse}:{report:ResearchReport;onUse:Use
   const first=report.strategies[0];
   const quoted=first?.status==='optimal';
   return <div className="rc-report">
-    <section className="rc-decision"><h2>{quoted ? 'Review the quoted allocation' : report.research.examples.length ? 'Shortlist leads for outreach' : 'More evidence is needed'}</h2>
-      <p>{quoted && first ? `${first.selected.length} selected at ${amount(first.allocated_minor ?? 0,first.currency)} for your full-budget option.` : report.research.examples.length ? `${report.research.examples.length} source-linked records support discovery. ${first ? statuses[first.status] : 'A quote is needed'} for the requested campaign.` : 'Check the discovery focus, then request the missing evidence for your brief.'}</p>
+    <section className="rc-decision"><h2>{quoted ? 'Review the quoted allocation' : report.research.direct_count ? 'Review matched publications' : 'No direct evidence for this brief'}</h2>
+      <p>{quoted && first ? `${first.selected.length} selected at ${amount(first.allocated_minor ?? 0,first.currency)} for your full-budget option.` : report.research.direct_count ? `${report.research.direct_count} published works match your discovery criteria. ${first ? statuses[first.status] : 'A firm quote is needed'} for the campaign allocation.` : `No eligible publication supports a direct creator recommendation. ${report.research.examples.length ? 'Background sources are available separately.' : 'Try another channel or a broader discovery focus.'}`}</p>
       {report.next_steps.length>0 && <ul>{report.next_steps.map(text=><li key={text}>{text}</li>)}</ul>}
     </section>
     <div className="rc-switch" aria-label="Report section"><button aria-pressed={view==='sources'} onClick={()=>setView('sources')}>Source evidence <span>{report.research.examples.length}</span></button><button aria-pressed={view==='strategy'} onClick={()=>setView('strategy')}>Compare strategies <span>{report.strategies.length}</span></button></div>

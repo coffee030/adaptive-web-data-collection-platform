@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { PageHeader, Panel } from '../../components/studio/Workspace';
 import { ApiError, apiGet, apiPost } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
-import { amount, date, deliverableOptions, languageOptions, platformOptions, type CampaignRequest } from './intelligence';
+import { amount, briefOptions, date, deliverableOptions, languageOptions, platformOptions, type CampaignRequest } from './intelligence';
 import { ResearchFindings, type BusinessBrief, type ResearchReport } from './ResearchFindings';
 import { useMarketing } from './workspace';
 import './research-campaign.css';
@@ -13,6 +13,7 @@ interface Run {
   id: string; state: State; campaign_id: string | null; brief: BusinessBrief;
   created_at: string; updated_at: string; error: string | null;
   sources: { key:string; name:string; state:string; pending:boolean; error:string|null }[];
+  last_review?: { analyzed_at:string; example_count:number; strategies:{name:string;status:string}[] } | null;
 }
 const route='/marketing/companies/research-runs';
 const loadHistory=(signal:AbortSignal)=>apiGet<Run[]>(route+'?limit=12',signal);
@@ -81,6 +82,7 @@ function RunDetail({id,onRefresh,onAdjust}:{id:string;onRefresh:()=>void;onAdjus
         setChosen({...run.brief.campaign,platform,budget_minor});
       }}/> : report.state==='error' ? <div role="alert" className="rc-message">{failure(report.error)} <button className="studio-secondary" onClick={readReport}>Retry reading</button></div> : <p role="status" className="rc-message">Checking current permissions and opening the findings…</p>}
       <details className="rc-method"><summary>Source checks for this run</summary><ul>{run.sources.map(s=><li key={s.key}>{s.name} · {s.pending?'Collection pending at analysis':s.error?'Source temporarily unavailable':s.state.replaceAll('_',' ')}</li>)}</ul></details>
+      {run.last_review && <p className="rc-footnote">Saved review from {date(run.last_review.analyzed_at)} · {run.last_review.strategies.length} strategies examined · {run.last_review.example_count} source records at the time.</p>}
       <div className="rc-actions"><button className="studio-secondary" onClick={()=>onAdjust(run.brief)}>Adjust brief</button><button className="studio-secondary" disabled={!!action} onClick={()=>void command('resume')}>Refresh evidence</button>{run.campaign_id && <Link to={path('campaigns')}>Company campaigns</Link>}</div>
     </> : <Panel title={phases[run.state]} description={active(run.state)?'You can leave this page. The company will keep the brief and its progress.':undefined}>
       <ol className="rc-steps">{(['queued','collecting','analyzing','ready'] as const).map((step,i)=><li key={step} aria-current={step===run.state?'step':undefined}><span>{i+1}</span>{['Review brief','Check eligible sources','Analyze and compare','Publish findings'][i]}</li>)}</ol>
@@ -94,14 +96,14 @@ function RunDetail({id,onRefresh,onAdjust}:{id:string;onRefresh:()=>void;onAdjus
   </div>;
 }
 
-function BriefForm({initial,query,onOpen}:{initial:BusinessBrief|null;query:string;onOpen:(id:string)=>void}) {
-  const {draft,setDraft,campaignReceipt}=useMarketing();
-  const initialCampaign=initial?.campaign ?? draft.evaluation;
-  const [question,setQuestion]=useState(initial?.campaign.description ?? (query || initialCampaign?.description || draft.brief.description || ''));
-  const [product,setProduct]=useState(initial?.product ?? draft.brief.name ?? '');
+function BriefForm({initial,query,initialDestination,onOpen}:{initial:BusinessBrief|null;query:string;initialDestination:string|null;onOpen:(id:string)=>void}) {
+  const {draft,setDraft,campaignReceipt,openDraft,otherDrafts}=useMarketing();
+  const initialCampaign=initial?.campaign;
+  const [question,setQuestion]=useState(initialCampaign?.description ?? query);
+  const [product,setProduct]=useState(initial?.product ?? '');
   const [audience,setAudience]=useState(initial?.audience ?? '');
   const [focus,setFocus]=useState(initial?.discovery_focus ?? query.slice(0,120));
-  const [budget,setBudget]=useState(initialCampaign ? String(initialCampaign.budget_minor/100) : draft.brief.budget ? String(draft.brief.budget) : '');
+  const [budget,setBudget]=useState(initialCampaign ? String(initialCampaign.budget_minor/100) : '');
   const [channel,setChannel]=useState<CampaignRequest['platform']>(initialCampaign?.platform ?? 'instagram');
   const [deliverable,setDeliverable]=useState<CampaignRequest['deliverable']>(initialCampaign?.deliverable ?? 'social_post');
   const [objective,setObjective]=useState<CampaignRequest['objective']>(initialCampaign?.objective ?? 'awareness');
@@ -112,9 +114,18 @@ function BriefForm({initial,query,onOpen}:{initial:BusinessBrief|null;query:stri
   const [marketShare,setMarketShare]=useState(initialCampaign?.minimum_market_share!=null ? String(100*Number(initialCampaign.minimum_market_share)) : '');
   const [language,setLanguage]=useState<CampaignRequest['language']>(initialCampaign?.language);
   const [requireLanguage,setRequireLanguage]=useState(initialCampaign?.require_language ?? false);
-  const [link,setLink]=useState(true);
+  const assumptions=initial?.scenario;
+  const [impressions,setImpressions]=useState(assumptions?.impressions!=null ? String(assumptions.impressions) : '');
+  const [clickRate,setClickRate]=useState(assumptions?.click_rate!=null ? String(100*Number(assumptions.click_rate)) : '');
+  const [conversionRate,setConversionRate]=useState(assumptions?.conversion_rate!=null ? String(100*Number(assumptions.conversion_rate)) : '');
+  const fetchOptions=useCallback((signal:AbortSignal)=>briefOptions('partner',channel,signal),[channel]);
+  const {result:criteria}=useResource(fetchOptions);
+  const [destination,setDestination]=useState(initialDestination ?? 'new');
+  const [scope,setScope]=useState<BusinessBrief['discovery_scope']>(initial?.discovery_scope ?? 'campaign_channels');
+  const [freshDays,setFreshDays]=useState(initial?.max_evidence_age_days ? String(initial.max_evidence_age_days) : '');
+  const destinations=[...(campaignReceipt?.version ? [{key:campaignReceipt.id,name:draft.brief.name||draft.research?.title||'Untitled campaign'}]:[]),...otherDrafts()];
   const [busy,setBusy]=useState(false);
-  const [awaitingSave,setAwaitingSave]=useState<BusinessBrief|null>(null);
+  const [awaitingSave,setAwaitingSave]=useState<{brief:BusinessBrief;previous:string|null}|null>(null);
   const [error,setError]=useState('');
   const submission=useRef<{body:string;key:string} | null>(null);
   const live=useRef<AbortController|null>(null);
@@ -131,10 +142,16 @@ function BriefForm({initial,query,onOpen}:{initial:BusinessBrief|null;query:stri
     finally{if(!controller.signal.aborted)setBusy(false);}
   },[onOpen]);
   useEffect(()=>{
-    if(awaitingSave && campaignReceipt && campaignReceipt.version>0 && !campaignReceipt.pending){
-      setAwaitingSave(null);void send(awaitingSave,campaignReceipt.id);
+    if(!awaitingSave || !campaignReceipt || awaitingSave.previous===campaignReceipt.id) return;
+    if(campaignReceipt.version>0 && !campaignReceipt.pending){
+      setAwaitingSave(null);void send(awaitingSave.brief,campaignReceipt.id);return;
     }
-  },[awaitingSave,campaignReceipt,send]);
+    if(!campaignReceipt.version && !campaignReceipt.pending){
+      const {brief}=awaitingSave, c=brief.campaign;
+      setDraft(old=>({...old,saved:true,brief:{...old.brief,name:brief.product,description:c.description,budget:c.budget_minor/100,
+        platform:c.platform,objective:c.objective,deliverable:c.deliverable,market:c.market??'HK'},evaluation:c,scenario:brief.scenario??undefined}));
+    }
+  },[awaitingSave,campaignReceipt,send,setDraft]);
   function submit(event:FormEvent) {
     event.preventDefault();
     if(busy || awaitingSave) return;
@@ -142,25 +159,31 @@ function BriefForm({initial,query,onOpen}:{initial:BusinessBrief|null;query:stri
     const must=terms(required), preferences=terms(preferred);
     if([...must,...preferences].some(v=>! /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(v)) || Math.max(must.length,preferences.length)>10){setError('Enter up to ten reviewed fact IDs per field, separated by commas.');return;}
     const campaign:CampaignRequest={
-      market:'HK',minimum_creators:1,maximum_creators:4,
+      minimum_creators:1,maximum_creators:4,
       ...initialCampaign, description:question.trim(),platform:channel,objective,deliverable,
+      market:initialCampaign?.market || 'HK',
       language,require_language:!!language && requireLanguage,required_facts:must,preferred_facts:preferences,
       minimum_market_share:marketShare==='' ? undefined : String(Number(marketShare)/100),
       budget_minor:Math.round(Number(budget)*100),currency:'HKD',
     };
     const brief:BusinessBrief={product:product.trim(),audience:audience.trim(),discovery_focus:focus.trim()||null,
-      test_share:Number(testShare),alternative_platforms:alternative && alternative!==channel?[alternative]:[],campaign};
-    if(link && campaignReceipt && (!campaignReceipt.version || campaignReceipt.pending)){
-      if(!campaignReceipt.version) setDraft(old=>({...old,saved:true,brief:{...old.brief,name:brief.product,description:campaign.description,
-        budget:campaign.budget_minor/100,platform:channel,objective,deliverable,market:'HK'},evaluation:campaign}));
-      setAwaitingSave(brief);return;
+      test_share:Number(testShare),alternative_platforms:alternative && alternative!==channel?[alternative]:[],campaign,discovery_scope:scope,max_evidence_age_days:freshDays?Number(freshDays):null,
+      scenario:impressions==='' && clickRate==='' && conversionRate==='' ? null : {
+        ...assumptions,currency:'HKD',impressions:impressions===''?undefined:Number(impressions),
+        click_rate:clickRate===''?undefined:String(Number(clickRate)/100),conversion_rate:conversionRate===''?undefined:String(Number(conversionRate)/100)}};
+    if(destination==='new' && campaignReceipt){
+      const previous=campaignReceipt.version || campaignReceipt.pending ? campaignReceipt.id : null;
+      setAwaitingSave({brief,previous});
+      if(previous)openDraft();
+      return;
     }
-    void send(brief,link && campaignReceipt ? campaignReceipt.id:null);
+    void send(brief,destination==='standalone'?null:destination);
   }
   function useExample(){setQuestion(example.question);setProduct(example.product);setAudience(example.audience);setFocus(example.focus);setBudget('12000');}
   return <Panel title="Write a research brief" description="Describe the decision you need to make. Harbourline will check eligible sources and compare options within your budget.">
     <form onSubmit={submit} className="rc-form"><label>What are you trying to find?<textarea value={question} onChange={e=>setQuestion(e.target.value)} minLength={2} maxLength={1000} required rows={3} placeholder="Describe your campaign and the evidence you need." /></label>
       <button type="button" className="rc-example" onClick={useExample}>Use a Hong Kong dining brief</button>
+      <label>Save research to<select value={destination} onChange={e=>setDestination(e.target.value)}><option value="new">Create a new company campaign</option><option value="standalone">Company research library only</option>{destinations.map(item=><option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
       <div className="rc-pair"><label>Product or campaign<input value={product} onChange={e=>setProduct(e.target.value)} required minLength={2} maxLength={160}/></label>
         <label>Target audience<input value={audience} onChange={e=>setAudience(e.target.value)} required minLength={2} maxLength={300}/></label></div>
       <div className="rc-triplet"><label>Budget cap (HK$)<input type="number" inputMode="decimal" min="0" max="10000000" step=".01" value={budget} required onChange={e=>setBudget(e.target.value)}/></label>
@@ -168,14 +191,25 @@ function BriefForm({initial,query,onOpen}:{initial:BusinessBrief|null;query:stri
         <label>Primary channel<select value={channel} onChange={e=>setChannel(e.target.value as typeof channel)}>{Object.entries(platformOptions).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div>
       <details className="rc-settings"><summary>Research scope and alternatives</summary>
         <label>Discovery focus<input maxLength={120} value={focus} onChange={e=>setFocus(e.target.value)} placeholder="Optional topic, creator or source phrase"/></label>
+        <div className="rc-pair"><label>Discovery channels<select value={scope} onChange={e=>setScope(e.target.value as NonNullable<typeof scope>)}><option value="campaign_channels">Requested campaign channels</option><option value="all_sources">Any eligible publishing source</option></select></label><label>Maximum publication age (days)<input min={1} max={3650} type="number" value={freshDays} onChange={e=>setFreshDays(e.target.value)} placeholder="Use wording in the brief"/></label></div>
         <div className="rc-pair"><label>Required deliverable<select value={deliverable} onChange={e=>setDeliverable(e.target.value as typeof deliverable)}>{Object.entries(deliverableOptions).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
           <label>Also compare<select value={alternative===channel?'':alternative} onChange={e=>setAlternative(e.target.value as typeof alternative)}><option value="">No other channel</option>{Object.entries(platformOptions).filter(([key])=>key!==channel).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div>
         <label>Test allocation (% of full budget)<input type="number" min={10} max={90} required value={testShare} onChange={e=>setTestShare(e.target.value)}/></label>
         <div className="rc-pair"><label>Required market audience share (%)<input type="number" min={0} max={100} step=".01" placeholder="Optional" value={marketShare} onChange={e=>setMarketShare(e.target.value)}/></label><label>Content language<select value={language??''} onChange={e=>setLanguage(e.target.value ? e.target.value as CampaignRequest['language'] : undefined)}><option value="">Any language</option>{Object.entries(languageOptions).map(([key,text])=><option key={key} value={key}>{text}</option>)}</select></label></div>
         {language && <label className="rc-check"><input type="checkbox" checked={requireLanguage} onChange={e=>setRequireLanguage(e.target.checked)}/>Require evidence of this language</label>}
-        {(required || preferred || initialCampaign?.required_facts.length || initialCampaign?.preferred_facts.length) ? <div className="rc-pair"><label>Required reviewed facts<input value={required} onChange={e=>setRequired(e.target.value)}/></label><label>Preferred reviewed facts<input value={preferred} onChange={e=>setPreferred(e.target.value)}/></label></div> : null}
-        {campaignReceipt && <label className="rc-check"><input type="checkbox" checked={link} onChange={e=>setLink(e.target.checked)}/>{campaignReceipt.version?'Link to the current company campaign':'Save this brief as a company campaign'}</label>}
+        {Array.from(new Set([...(criteria.state==='ready'?criteria.data.reviewed_facts:[]),...required.split(',').map(x=>x.trim()),...preferred.split(',').map(x=>x.trim())])).filter(Boolean).map(fact=>{
+          const must=required.split(',').map(x=>x.trim()).filter(Boolean), nice=preferred.split(',').map(x=>x.trim()).filter(Boolean);
+          return <label key={fact}>{fact.replaceAll('_',' ')}<select value={must.includes(fact)?'required':nice.includes(fact)?'preferred':'any'} onChange={e=>{
+            setRequired([...must.filter(x=>x!==fact),...(e.target.value==='required'?[fact]:[])].join(', '));
+            setPreferred([...nice.filter(x=>x!==fact),...(e.target.value==='preferred'?[fact]:[])].join(', '));
+          }}><option value="any">No preference</option><option value="required">Must have reviewed evidence</option><option value="preferred">Prefer when supported</option></select></label>;
+        })}
       </details>
+      <details className="rc-settings"><summary>Outcome assumptions (optional)</summary>
+        <p>Enter your own assumptions to calculate a scenario. Leave unknown inputs blank.</p>
+        <div className="rc-triplet"><label>Impressions<input type="number" min="0" max="1000000000000" step="1" value={impressions} onChange={e=>setImpressions(e.target.value)}/></label>
+          <label>Click rate (%)<input type="number" min="0" max="100" step=".0001" value={clickRate} onChange={e=>setClickRate(e.target.value)}/></label>
+          <label>Conversion rate (%)<input type="number" min="0" max="100" step=".0001" value={conversionRate} onChange={e=>setConversionRate(e.target.value)}/></label></div></details>
       {error && <p className="rc-error" role="alert">{error}</p>}
       <div className="rc-actions"><button className="studio-primary" disabled={busy||!!awaitingSave} type="submit">{awaitingSave?'Saving campaign…':busy?'Starting research…':'Start research'}</button>
         {awaitingSave && <button type="button" className="studio-secondary" onClick={()=>setAwaitingSave(null)}>Back to brief</button>}</div>
@@ -193,7 +227,7 @@ export function ResearchCampaign() {
   function fresh(brief:BusinessBrief|null=null){setInitial(brief);setParams({});}
   if(!company) return <main className="rc-page"><PageHeader title="Campaign research" description="Sign in to a company workspace to run research with permitted sources and save your findings."/><Link className="studio-primary" to={path()}>Open company access</Link></main>;
   return <main className="rc-page"><PageHeader title="Campaign research" description={company.name} actions={selected?<button className="studio-secondary" onClick={()=>fresh()}>New research</button>:undefined}/>
-    <div className="rc-layout"><div>{selected ? <RunDetail key={selected} id={selected} onAdjust={fresh} onRefresh={retry}/> : <BriefForm key={params.get('q')??''} query={params.get('q')?.slice(0,1000)??''} initial={initial} onOpen={open}/>}</div>
+    <div className="rc-layout"><div>{selected ? <RunDetail key={selected} id={selected} onAdjust={fresh} onRefresh={retry}/> : <BriefForm key={params.get('q')??''} query={params.get('q')?.slice(0,1000)??''} initial={initial} initialDestination={params.get('campaign')} onOpen={open}/>}</div>
       <aside className="rc-history" aria-label="Recent research"><h2>Recent research</h2>
         {history.state==='error' ? <button className="studio-secondary" onClick={retry}>Retry history</button> : history.state==='loading' ? <p>Loading…</p> : history.data.length===0 ? <p>Your company’s saved research will appear here.</p> :
           <ul>{history.data.map(run=><li key={run.id}><button aria-current={selected===run.id?'page':undefined} onClick={()=>open(run.id)}><strong>{run.brief.product}</strong><span>{phases[run.state]} · {date(run.created_at)}</span></button></li>)}</ul>}

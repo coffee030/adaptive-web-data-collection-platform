@@ -48,6 +48,7 @@
 .rc-evidence p{max-width:80ch;margin:9px 0;overflow-wrap:anywhere}
 .rc-origin{margin-top:9px}
 .rc-more{margin:0 0 18px clamp(16px,2.2vw,30px)}
+.rc-context{margin:0 clamp(16px,2.2vw,30px) 16px;background:transparent;color:var(--studio-accent,#91c3ff);border:0;padding:6px 0;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .rc-strategy-table small{display:block;font-weight:400;color:var(--studio-muted,#bdc7d1)}
 .rc-candidate{padding:12px 0}
 .rc-candidate summary span{margin-left:8px;font-weight:400;color:var(--studio-muted,#bdc7d1)}

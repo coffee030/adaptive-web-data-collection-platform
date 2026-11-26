@@ -43,6 +43,7 @@ def receipt(row):
         "updated_at": row.updated_at,
         "sources": row.sources,
         "error": row.error,
+        "last_review": row.review,
     }
 
 
@@ -63,7 +64,11 @@ def start(session, company_id, body: NewResearch):
         )
     )
     if existing:
-        if request != existing.brief or body.campaign_id != existing.campaign_id:
+        if (
+            request
+            != BusinessBrief.model_validate(existing.brief).model_dump(mode="json")
+            or body.campaign_id != existing.campaign_id
+        ):
             raise MarketingError(
                 409,
                 "research_request_changed",
@@ -208,15 +213,25 @@ class ResearchRuns(IntelligenceStore):
                 row.company_id,
             )
         error, revision, sources, delay = None, None, None, timedelta()
+        review = None
         try:
             if phase == "queued":
-                sources = summarize(research_analysis.source_states(self.sessions))
+                sources = summarize(
+                    research_analysis.planned_sources(
+                        brief, research_analysis.source_states(self.sessions)
+                    )
+                )
                 following = "collecting"
             elif phase == "collecting":
-                statuses = research_analysis.source_states(self.sessions)
+                statuses = research_analysis.planned_sources(
+                    brief, research_analysis.source_states(self.sessions)
+                )
                 errors = research_analysis.collect_due(self.sessions, statuses)
                 sources = summarize(
-                    research_analysis.source_states(self.sessions), errors
+                    research_analysis.planned_sources(
+                        brief, research_analysis.source_states(self.sessions)
+                    ),
+                    errors,
                 )
                 waiting = any(s["pending"] for s in sources)
                 following = (
@@ -229,7 +244,8 @@ class ResearchRuns(IntelligenceStore):
                 elif waiting:
                     error = "collection_still_pending"
             else:
-                _, revision = research_analysis.analyze(self, company_id, brief)
+                report, revision = research_analysis.analyze(self, company_id, brief)
+                review = research_analysis.saved_review(report, now)
                 following = "ready"
         except MarketingError as exc:
             if exc.code == "catalog_changed":
@@ -250,6 +266,7 @@ class ResearchRuns(IntelligenceStore):
                 row.sources = sources
             if following == "ready":
                 row.revision = revision
+                row.review = review
             if error == "catalog_changed" and row.attempts >= 3:
                 following = "failed"
             elif error != "catalog_changed":

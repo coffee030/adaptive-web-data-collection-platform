@@ -23,6 +23,7 @@ def test_public_and_demo_tool_scopes():
                 "find_market_activity",
                 "compare_market_creators",
                 "market_activity_overview",
+                "compare_market_measurements",
             }
             assert all(tool.annotations.read_only_hint for tool in tools)
         async with connection(BASE, "demo") as demo:

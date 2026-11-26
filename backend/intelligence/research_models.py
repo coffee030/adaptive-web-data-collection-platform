@@ -50,3 +50,4 @@ class ResearchRunRow(Base):
     sources: Mapped[list] = mapped_column(JSONB)
     error: Mapped[str | None] = mapped_column(String(64))
     revision: Mapped[str | None] = mapped_column(String(64))
+    review: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))

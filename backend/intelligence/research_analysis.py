@@ -1,13 +1,16 @@
 import hashlib
 import json
 from collections import defaultdict
+from dataclasses import replace
 
 from backend.application.jobs import database_now
 from backend.marketing.store import MarketingError
 from . import commons_works, market_catalog, public_directory, public_feed, work_search
 from .catalog import Catalog
+from .analytics import scenario
 from .recommend import recommend
 from .research_contracts import BusinessBrief
+from .research_match import classify, evidence_intent
 from .retrieval import query_topics, required_words
 from .semantic import character_grams, embed, tfidf_scores
 from .store import Scope
@@ -94,6 +97,48 @@ def source_states(sessions):
     ]
 
 
+def planned_sources(brief, states):
+    focus, _ = discovery_queries(brief)
+    terms = set(
+        market_catalog.pieces(
+            " ".join((focus, brief.product, brief.campaign.description))
+        )
+    )
+    specializations = {
+        "inaturalist": {
+            "outdoor",
+            "nature",
+            "birds",
+            "plants",
+            "insects",
+            "flora",
+            "fauna",
+            "botany",
+            "biodiversity",
+            "ecology",
+        },
+        "canadian-civil": {
+            "mtr",
+            "rail",
+            "railway",
+            "urban",
+            "transit",
+            "transport",
+            "metro",
+        },
+    }
+    focused = bool(
+        query_topics(focus) or any(terms & group for group in specializations.values())
+    )
+    return [
+        s
+        for s in states
+        if not focused
+        or s["key"] not in specializations
+        or terms & specializations[s["key"]]
+    ]
+
+
 def collect_due(sessions, states):
     errors = {}
     for source in states:
@@ -110,8 +155,9 @@ def collect_due(sessions, states):
     return errors
 
 
-def public_examples(store, brief):
+def public_examples(store, brief, as_of):
     focus, queries = discovery_queries(brief)
+    intent = evidence_intent(brief, focus)
     hits = {}
     full_matches = set()
     for query in queries:
@@ -120,7 +166,8 @@ def public_examples(store, brief):
             hits.setdefault(record["id"], record)
             if query == focus:
                 full_matches.add(record["id"])
-    records = list(hits.values())
+    decisions = {key: classify(record, intent, as_of) for key, record in hits.items()}
+    records = [record for key, record in hits.items() if decisions[key] is not None]
     method = "source_search"
     if records:
         docs = [
@@ -156,6 +203,7 @@ def public_examples(store, brief):
             method = "character_tfidf"
         records.sort(
             key=lambda r: (
+                decisions[r["id"]]["tier"] == "direct",
                 r["id"] in full_matches,
                 scores[r["id"]],
                 str(r.get("published_at") or ""),
@@ -187,6 +235,11 @@ def public_examples(store, brief):
                 "profile_url": record["profile_url"],
                 "excerpt": record.get("excerpt"),
                 "core_record_id": record.get("core_record_id"),
+                "credit_role": record.get("credit_role"),
+                "credit_url": record.get("credit_url"),
+                "attribution": record.get("attribution"),
+                "series_title": record.get("series_title"),
+                "broadcaster_url": record.get("broadcaster_url"),
                 "platform": record["platform"],
                 "published_at": record["published_at"],
                 "observed_at": record["observed_at"],
@@ -196,6 +249,7 @@ def public_examples(store, brief):
                 else "related_market_activity",
                 "metrics": record.get("metrics", []),
                 "topics": record.get("topics", []),
+                **decisions[record["id"]],
             }
         )
     historical = work_search.snapshot(store.sessions, focus, store.config.model_dir)
@@ -240,7 +294,7 @@ def public_examples(store, brief):
                     "name": profile.name,
                     "title": profile.description,
                     "excerpt": profile.local_description or None,
-                    "url": f"https://www.wikidata.org/wiki/Special:EntityData/{profile.item}.json?revision={profile.revision}",
+                    "url": f"https://www.wikidata.org/w/index.php?title={profile.item}&oldid={profile.revision}",
                     "profile_url": f"https://www.wikidata.org/wiki/{profile.item}",
                     "platform": "Wikidata",
                     "published_at": None,
@@ -258,7 +312,21 @@ def public_examples(store, brief):
         "related_market_activity": 3,
         "identity_lead": 4,
     }
-    examples.sort(key=lambda item: order.get(item["basis"], 2))
+    eligible = []
+    for item in examples:
+        if "tier" not in item:
+            identity = item["basis"] == "identity_lead"
+            classification = classify(
+                item, intent, as_of, historical=not identity, identity=identity
+            )
+            if classification is None:
+                continue
+            item.update(classification)
+        eligible.append(item)
+    examples = sorted(
+        eligible,
+        key=lambda item: (item["tier"] != "direct", order.get(item["basis"], 2)),
+    )
     return {
         "focus": focus,
         "queries": queries,
@@ -267,6 +335,9 @@ def public_examples(store, brief):
         "historical_criteria": historical.criteria,
         "platform_activity": platform_activity,
         "examples": examples,
+        "direct_count": sum(item["tier"] == "direct" for item in examples),
+        "publication_window_days": intent["days"],
+        "requested_channels": sorted(intent["channels"]),
         "market_candidates_reviewed": len(records),
     }
 
@@ -344,12 +415,51 @@ def publication_version(states):
     )
 
 
+def saved_review(result, analyzed_at):
+    return {
+        "analyzed_at": analyzed_at.isoformat(),
+        "strategies": [
+            {
+                key: item[key]
+                for key in ("name", "platform", "currency", "budget_minor", "status")
+            }
+            for item in result["strategies"]
+        ],
+        "example_count": len(result["research"]["examples"]),
+        "objective": result["objective"],
+    }
+
+
+def reviewed_catalog(snapshot, brief):
+    catalog = Catalog(snapshot)
+    intent = evidence_intent(brief, discovery_queries(brief)[0])
+    for key, creator in catalog.creators.items():
+        supported = []
+        for post in creator.posts:
+            content = post.record.data
+            scope = classify(
+                {
+                    "platform": content.platform,
+                    "title": content.text,
+                    "published_at": content.published_at,
+                    "topics": [f.replace("_", " ") for f in content.reviewed_facts],
+                    "languages": content.languages,
+                },
+                intent,
+                snapshot.as_of,
+            )
+            if scope and scope["tier"] == "direct":
+                supported.append(post)
+        catalog.creators[key] = replace(creator, posts=supported)
+    return catalog
+
+
 def analyze(store, company_id: str, brief: BusinessBrief):
     scope = Scope("partner", company_id)
     before = publication_version(source_states(store.sessions))
     snapshot = store.snapshot(scope)
-    catalog = Catalog(snapshot)
-    examples = public_examples(store, brief)
+    catalog = reviewed_catalog(snapshot, brief)
+    examples = public_examples(store, brief, snapshot.as_of)
     campaign = brief.campaign
     strategies = [strategy(catalog, campaign, store.config.model_dir, "Full budget")]
     test = campaign.model_copy(
@@ -371,27 +481,36 @@ def analyze(store, company_id: str, brief: BusinessBrief):
             409, "catalog_changed", "Research sources changed during analysis"
         )
     gaps = []
-    if not examples["examples"]:
+    if not examples["direct_count"]:
         gaps.append(
-            "No source-linked public examples matched this focus. Try a broader topic or a different business question."
+            "No published example satisfies the direct discovery criteria. Review your topic, permitted channels or publication window before identifying outreach candidates."
         )
     baseline = strategies[0]
     exclusions = set(baseline["exclusions"])
-    if not baseline["reviewed"] or "confirmed_quote_unavailable" in exclusions:
+    if not examples["direct_count"] and not baseline["reviewed"]:
         gaps.append(
-            "Request current, firm quotes for the selected channel and deliverable before allocating spend."
+            "The company has no authorized creator profile for this channel. Obtain permission to review relevant creator content before requesting campaign terms."
+        )
+    elif not baseline["reviewed"] or "confirmed_quote_unavailable" in exclusions:
+        gaps.append(
+            f"Ask shortlisted publishers for a dated {campaign.currency} quote covering one {campaign.deliverable.replace('_', ' ')} on {campaign.platform}. Confirm usage rights and the quote’s expiry."
         )
     if not baseline["reviewed"] or any(
         not c["audience"] for c in baseline["candidates"]
     ):
         gaps.append(
-            "Request a recent, authorized audience breakdown to check the intended market."
+            f"Request an authorized audience breakdown for {campaign.market or 'the intended market'} to assess your audience: {brief.audience}."
         )
     if not baseline["candidates"] or all(
         c["historical"]["median_views"]["value"] is None for c in baseline["candidates"]
     ):
+        measure = (
+            "views"
+            if campaign.objective == "awareness"
+            else "views, likes and comments"
+        )
         gaps.append(
-            "Comparable seven-day post performance is unavailable. Obtain first-party measurements before estimating reach."
+            f"Request first-party seven-day {measure} for comparable posts before evaluating expected {campaign.objective}."
         )
     result = {
         "research": examples,
@@ -400,6 +519,9 @@ def analyze(store, company_id: str, brief: BusinessBrief):
         "objective": campaign.objective,
         "audience": brief.audience,
         "product": brief.product,
+        "scenario": scenario(brief.scenario).model_dump(mode="json")
+        if brief.scenario
+        else None,
         "outcome_basis": "No campaign outcomes are predicted. Each allocation uses current firm quotes for the stated deliverable.",
     }
-    return result, digest([snapshot.revision, before, result])
+    return result, digest(result)
