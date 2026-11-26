@@ -42,6 +42,9 @@ from backend.persistence.database import (
     settings,
 )
 
+from backend.trends.api import router as trends_router
+from backend.trends.service import TrendError
+
 from .articles import router as articles_router
 from .collection import router as collection_router
 from .jobs import router as jobs_router
@@ -197,6 +200,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         collection_router,
         articles_router,
         results_router,
+        trends_router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=core_access)
     app.include_router(marketing_router, prefix="/api/v1")
@@ -210,6 +214,10 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         with request.app.state.sessions() as session:
             session.execute(text("SELECT 1"))
         return {"status": "ok"}
+
+    @app.exception_handler(TrendError)
+    def trend_error(_: Request, error: TrendError):
+        return error_response(error.status, error.code, str(error))
 
     @app.exception_handler(ProfileError)
     def profile_error(_: Request, error: ProfileError):
