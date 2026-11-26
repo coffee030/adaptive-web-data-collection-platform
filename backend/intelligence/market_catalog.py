@@ -4,18 +4,27 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 import re
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import distinct, func, select, true
 
 from backend.application.jobs import database_now
 from backend.marketing.store import MarketingError
 from backend.persistence.models import JobRow, SourceRow
 
-from .market_models import MarketActivity as A, MarketMeasure, MarketSource
+from .market_models import MarketActivity as A, MarketMeasure, MarketSource, MarketBatch
 from .market_sources import FRESH, SOURCES
 from .market_collection import allowed
 from .operator_receipt import receipt
 
 ALIASES = {
+    "transit": "transport",
+    "dining": "food",
+    "cuisine": "food",
+    "restaurant": "food",
+    "restaurants": "food",
+    "平價": "affordable",
+    "平价": "affordable",
+    "cheap": "affordable",
+    "budget": "affordable",
     "hiking": "outdoor",
     "outdoors": "outdoor",
     "birdwatching": "birds",
@@ -132,7 +141,7 @@ def facets(session, scope, creator=False):
     topics = func.unnest(keys.c.topics).table_valued("topic").render_derived().lateral()
     t = session.execute(
         select(topics.c.topic, count)
-        .select_from(keys.join(topics, sql_true()))
+        .select_from(keys.join(topics, true()))
         .group_by(topics.c.topic)
     )
     return {
@@ -141,10 +150,30 @@ def facets(session, scope, creator=False):
     }
 
 
-def sql_true():
-    from sqlalchemy import true
-
-    return true()
+def related_dining(result, q, platform, topic, search, sessions, **filters):
+    if (
+        result["total"]
+        or topic not in (None, "Dining", "Food")
+        or not {"affordable", "food"}.issubset(pieces(q))
+    ):
+        return result
+    related = search(
+        sessions,
+        q="food",
+        platform=platform,
+        topic=topic or "Dining",
+        page_size=3,
+        **filters,
+    )
+    if related["total"]:
+        result["related"] = dict(
+            query="food",
+            topic=topic or "Dining",
+            total=related["total"],
+            items=related["items"],
+            basis="dining_coverage_without_price_evidence",
+        )
+    return result
 
 
 def search_activity(
@@ -160,13 +189,16 @@ def search_activity(
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
-        return dict(
+        result = dict(
             items=[item(r) for r in rows],
             total=total,
             page=page,
             page_size=page_size,
             facets=facets(session, scope),
         )
+    return related_dining(
+        result, q, platform, topic, search_activity, sessions, creator_id=creator_id
+    )
 
 
 def creator_summary(rows):
@@ -221,13 +253,16 @@ def search_creators(
             scope.where(A.creator_id.in_(ids)).order_by(A.published.desc(), A.id)
         ):
             groups[row.creator_id].append(row)
-        return dict(
+        result = dict(
             items=[creator_summary(group) for group in groups.values() if group],
             total=session.scalar(select(func.count()).select_from(grouped)),
             page=page,
             page_size=page_size,
             facets=facets(session, scope, True),
         )
+    return related_dining(
+        result, q, platform, topic, search_creators, sessions, sort=sort
+    )
 
 
 def creator_detail(sessions, creator_id):
@@ -384,6 +419,7 @@ def source_status(sessions, key):
         if state:
             jobs = (
                 select(JobRow)
+                .join(MarketBatch, MarketBatch.job_id == JobRow.id)
                 .where(
                     JobRow.source_id == state.source_id,
                     JobRow.profile_version_id == state.profile_id,

@@ -56,7 +56,7 @@ def entry(key, records):
 
 
 def allowed(session, state):
-    if not state or state.key not in SOURCES:
+    if not state or state.key not in SOURCES or state.error == "operator_withdrawn":
         return False
     source = session.get(SourceRow, state.source_id)
     profile = session.get(ProfileRow, state.profile_id)
@@ -121,7 +121,12 @@ def install(sessions, evidence, key, *, restore=False):
             or any(p.approval_status == "retired" for p, _ in versions)
         ):
             return "operator decision preserved"
-        sample = list(spec.load(Reader(), datetime.now(UTC), sample=True))
+        try:
+            sample = list(spec.load(Reader(), datetime.now(UTC), sample=True))
+        except PublisherError as error:
+            if error.code == "publisher_access_blocked":
+                profiles.set_authorization(source_id, "revoked")
+            raise
         if not sample:
             raise MarketingError(
                 409,
@@ -174,12 +179,15 @@ def install(sessions, evidence, key, *, restore=False):
 def withdraw(sessions, key):
     with sessions.begin() as session:
         state = session.get(MarketSource, key, with_for_update=True)
-        if state:
-            Profiles(sessions).set_authorization(state.source_id, "revoked")
-            clear(state)
-            state.observed = state.full_checked = state.revision = None
-            state.error = "operator_withdrawn"
-            session.execute(delete(MarketActivity).where(MarketActivity.source == key))
+        if not state:
+            raise MarketingError(
+                409, "market_not_installed", "This publisher has not been installed"
+            )
+        Profiles(sessions).set_authorization(state.source_id, "revoked")
+        clear(state)
+        state.observed = state.full_checked = state.revision = None
+        state.error = "operator_withdrawn"
+        session.execute(delete(MarketActivity).where(MarketActivity.source == key))
 
 
 def claim(sessions, key):

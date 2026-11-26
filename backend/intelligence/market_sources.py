@@ -1,6 +1,7 @@
 """Acquire attributed publications from bounded, explicitly licensed publisher APIs."""
 
 import html
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -73,8 +74,6 @@ class Reader:
                     if len(body) > MAX_BYTES:
                         raise PublisherError("publisher_response_too_large")
                 self.byte_count += len(body)
-                import json
-
                 return json.loads(body), response.headers
         except (httpx2.HTTPError, ValueError, UnicodeError) as error:
             raise PublisherError("publisher_unavailable") from error
@@ -306,7 +305,8 @@ def video_rows(reader, now, since=None, sample=False):
             2: CC + "licenses/by-sa/4.0/",
             7: LICENSES["cc0"],
         }.get((value.get("licence") or {}).get("id"))
-        profile = owned_url(channel.get("url"), host, "/video-channels/")
+        channel_url = owned_url(channel.get("url"), host, "/video-channels/")
+        profile = owned_url(account.get("url"), host, "/accounts/")
         url = owned_url(value.get("url"), host, "/videos/watch/")
         if (
             not HK.search(name)
@@ -317,6 +317,7 @@ def video_rows(reader, now, since=None, sample=False):
             or value.get("isLive")
             or not profile
             or not url
+            or not channel_url
             or account.get("host") != host
             or channel.get("host") != host
         ):
@@ -324,7 +325,7 @@ def video_rows(reader, now, since=None, sample=False):
         row = publication(
             "pt",
             value.get("uuid"),
-            channel.get("displayName"),
+            account.get("displayName"),
             profile,
             name,
             value.get("publishedAt"),
@@ -340,7 +341,19 @@ def video_rows(reader, now, since=None, sample=False):
             ],
         )
         if row:
+            row.update(
+                credit_role="Publishing account",
+                channel_url=channel_url,
+                channel_name=text(channel.get("displayName")),
+                original_published_at=value.get("originallyPublishedAt"),
+            )
             yield row
+
+
+def television_rows(reader, now, since=None, sample=False):
+    from .market_television import food_programmes
+
+    return food_programmes(reader, now, since, sample)
 
 
 @dataclass(frozen=True)
@@ -357,6 +370,15 @@ class SourceSpec:
 SOURCES = {
     s.key: s
     for s in (
+        SourceSpec(
+            "tvmaze-food",
+            "Hong Kong food series and presenting credits",
+            "Television · TVmaze",
+            "https://www.tvmaze.com/api#licensing",
+            "Dated TV episode and series presenting credits; no audience measurement",
+            television_rows,
+            False,
+        ),
         SourceSpec(
             "inaturalist",
             "Hong Kong nature observations",
