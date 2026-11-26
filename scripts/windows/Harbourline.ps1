@@ -112,7 +112,7 @@ function Invoke-PublicResearchProvisioning {
     $public = Invoke-Compose @('exec', '-T', 'api', 'python', '-m', 'backend.intelligence.install_public_research') 145
     if ($public.Code -ne 0) { Write-Step '[WARN] Public research setup needs attention in Data Operations.' }
     foreach ($line in ($public.Out -split '\r?\n')) {
-        if ($line -match '^Public research:') { Write-Step $line }
+        if ($line -match '^(Public|Publisher) research:') { Write-Step $line }
     }
 }
 
