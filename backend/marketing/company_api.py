@@ -6,7 +6,7 @@ from secrets import compare_digest, token_bytes, token_urlsafe
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, SecretStr, StringConstraints
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -354,6 +354,46 @@ def campaigns(user: User, session: Database) -> list[Saved]:
         .order_by(CompanyCampaignRow.updated_at.desc())
     )
     return [Saved.model_validate(row, from_attributes=True) for row in rows]
+
+
+class CampaignSummary(BaseModel):
+    id: UUID
+    name: str
+    version: int
+    updated_at: datetime
+
+
+@router.get("/campaigns/summaries")
+def campaign_summaries(
+    user: User,
+    session: Database,
+    limit: Annotated[int, Query(ge=1, le=26)] = 10,
+    offset: Annotated[int, Query(ge=0, le=2147483647)] = 0,
+) -> list[CampaignSummary]:
+    campaigns = (
+        select(
+            CompanyCampaignRow.id,
+            CompanyCampaignRow.draft["brief"]["name"].astext.label("name"),
+            CompanyCampaignRow.version,
+            CompanyCampaignRow.updated_at,
+        )
+        .where(CompanyCampaignRow.company_id == user.id)
+        .order_by(CompanyCampaignRow.updated_at.desc(), CompanyCampaignRow.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return [
+        CampaignSummary.model_validate(row)
+        for row in session.execute(campaigns).mappings()
+    ]
+
+
+@router.get("/campaigns/{campaign_id}", response_model_exclude_none=True)
+def read_campaign(campaign_id: UUID, user: User, session: Database) -> Saved:
+    row = session.get(CompanyCampaignRow, (user.id, campaign_id))
+    if row is None:
+        raise MarketingError(404, "campaign_unavailable", "Campaign unavailable")
+    return Saved.model_validate(row, from_attributes=True)
 
 
 @router.put("/campaigns/{campaign_id}", response_model_exclude_none=True)

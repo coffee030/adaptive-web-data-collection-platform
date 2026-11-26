@@ -1,0 +1,14 @@
+[mcp_servers.harbourline]
+command = '<ABSOLUTE_CHECKOUT_PATH>\mcp_access\.venv\Scripts\python.exe'
+args = ["-m", "mcp_access.harbourline"]
+cwd = '<ABSOLUTE_CHECKOUT_PATH>'
+env_vars = [
+    "FYP_MCP_API_BASE",
+    "HARBOURLINE_MCP_WORKSPACE",
+    "HARBOURLINE_MCP_COMPANY_ID",
+    "HARBOURLINE_MCP_SESSION",
+    "HARBOURLINE_MCP_ALLOW_BUDGET_EDITS",
+]
+
+[mcp_servers.harbourline.tools.change_campaign_budget]
+approval_mode = "prompt"
