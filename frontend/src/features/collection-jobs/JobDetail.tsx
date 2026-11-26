@@ -194,6 +194,10 @@ function ExecutionDiagnostics({ job, active }: { job: JobDetailResponse; active:
           <div><dt>Latest claim owner</dt><dd>{job.execution_attempt > 0
             ? <ExecutionOwner workerId={job.latest_claim_worker_instance_id} origin={job.latest_claim_execution_origin} />
             : 'Awaiting first claim'}</dd></div>
+          {job.latest_claim_worker_instance_id && <div><dt>Last worker heartbeat (UTC)</dt>
+            <dd>{job.latest_worker_heartbeat_at ? <Timestamp value={job.latest_worker_heartbeat_at} /> : 'No heartbeat recorded'}</dd></div>}
+          {job.latest_worker_offline_detected_at && <div><dt>Worker marked offline (UTC)</dt>
+            <dd><Timestamp value={job.latest_worker_offline_detected_at} /></dd></div>}
           {pending && job.next_attempt_at && <div><dt>Earliest scheduled retry (UTC)</dt>
             <dd><Timestamp value={job.next_attempt_at} /></dd></div>}
           {lease && <div><dt>Execution lease deadline (UTC)</dt><dd><Timestamp value={lease} /></dd></div>}
