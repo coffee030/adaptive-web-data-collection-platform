@@ -68,6 +68,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
 
   return {
     publicDir: false,
+    build: { license: { fileName: 'licenses/dependencies.md' } },
     plugins: [react(), approvalBoundary(localApproval), {
       name: 'third-party-notices',
       generateBundle() {

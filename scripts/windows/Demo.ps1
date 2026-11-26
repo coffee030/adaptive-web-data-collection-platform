@@ -99,7 +99,7 @@ function Invoke-DemoProvisioning {
     }
 }
 
-function Write-DemoDiagnosis {
+function Write-DemoDiagnosis([switch]$FrontendReady) {
     $fixtureReady = (Get-ServiceState 'collection-fixture') -match '^running/healthy/'
     Write-Step "[INFO] Synthetic Demo fixture healthy: $fixtureReady."
     if ((Get-ServiceState api) -notmatch '^running/') {
@@ -114,7 +114,7 @@ function Write-DemoDiagnosis {
         if ($capability.demo_intelligence -eq 'available') {
             $status = Invoke-RestMethod -Uri "$api/intelligence/demo/processing" -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
             Write-Step "[INFO] Harbourline catalog state: $($status.state). Indexed $($status.indexed_datasets) of $($status.eligible_datasets) eligible datasets."
-            Write-Step "URL: http://127.0.0.1:$($Config.FRONTEND_PORT)/demo/connected"
+            if ($FrontendReady) { Write-Step "[INFO] Harbourline Demo: http://127.0.0.1:$($Config.FRONTEND_PORT)/demo/connected" }
             return
         }
     } catch {

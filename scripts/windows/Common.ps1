@@ -6,10 +6,14 @@ $script:Utf8 = New-Object System.Text.UTF8Encoding($false)
 $script:DockerHost = 'npipe:////./pipe/dockerDesktopLinuxEngine'
 $script:LogFile = $null
 
-function Set-LauncherMode([switch]$Demo, [switch]$Pilot) {
+function Set-LauncherMode([switch]$Demo, [switch]$Pilot, [switch]$Harbourline) {
     $script:PilotMode = [bool]$Pilot
     $script:DemoMode = [bool]$Demo
     $script:Local = Join-Path $Root $(if ($Demo) { '.local-demo' } elseif ($Pilot) { '.local-pilot' } else { '.local' })
+    $script:StartCommand = if ($Pilot) { 'Start-Harbourline-Pilot.bat' } elseif ($Harbourline) { 'Start-Harbourline-Demo.bat' } elseif ($Demo) { 'Start-FYP-Demo.bat' } else { 'Start-Platform.bat' }
+    $modeArgument = if ($Pilot) { ' -Pilot' } elseif ($Demo) { ' -Demo' } else { '' }
+    $script:DiagnoseCommand = "Diagnose-Platform.bat$modeArgument"
+    $script:StopCommand = "Stop-Platform.bat$modeArgument"
 }
 
 function Write-LauncherLog($Level, $Message) {
