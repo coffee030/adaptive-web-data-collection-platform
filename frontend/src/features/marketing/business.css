@@ -543,6 +543,86 @@
   grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
   gap: 1rem;
 }
+.comparison-evidence {
+  margin-top: 1rem;
+}
+.comparison-evidence > summary {
+  color: var(--studio-accent);
+  cursor: pointer;
+}
+.measure-table .measure-sample,
+.measure-table .measure-label {
+  display: none;
+}
+@media (max-width: 680px) {
+  .measure-table .studio-table,
+  .measure-table tbody {
+    display: block;
+    min-width: 0;
+  }
+  .measure-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .measure-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+    gap: 0.3rem 0.5rem;
+    align-items: start;
+    padding-block: 0.7rem;
+    border-bottom: 1px solid var(--biz-rule);
+  }
+  .measure-table .studio-table tbody :is(td, th) {
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+  .measure-table .measure-platform,
+  .measure-table .measure-range {
+    grid-column: 1 / -1;
+  }
+  .measure-table .measure-median {
+    text-align: right;
+  }
+  .measure-table .measure-label {
+    display: inline;
+  }
+  .measure-table .measure-sample {
+    display: block;
+    margin-top: 0.2rem;
+  }
+  .measure-table tbody tr > :last-child {
+    display: none;
+  }
+  .market-compare {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+  .market-compare > section {
+    min-width: 0;
+  }
+  .market-compare .compare-facts > div {
+    display: block;
+    padding-block: 0.45rem;
+  }
+  .market-compare .compare-facts dd {
+    text-align: left;
+  }
+  .market-compare .market-platform,
+  .market-compare .studio-secondary {
+    white-space: normal;
+  }
+  .market-compare .comparison-evidence,
+  .market-compare h3 {
+    overflow-wrap: anywhere;
+  }
+  .market-compare > section:has(.comparison-evidence[open]) {
+    grid-column: 1 / -1;
+  }
+}
 .market-compare > section {
   padding: 1rem;
   border: 1px solid var(--biz-rule);

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { PageHeader, Panel } from '../../components/studio/Workspace';
 import { blankBrief } from './contracts';
+import { deliverableOptions, languageOptions } from './intelligence';
 import { apiAttachment } from '../../lib/api';
 import {
   BusinessProblem,
@@ -9,6 +10,7 @@ import {
   displayDate,
   marketBase,
   money,
+  platformName,
   Platform,
   SaveMarketLead,
   useBusinessResource,
@@ -18,6 +20,73 @@ import {
 import { Overlay } from './components';
 import { PerformanceReport } from './PerformanceReport';
 import { useMarketing } from './workspace';
+
+function CampaignConditions() {
+  const { draft } = useMarketing();
+  const brief = draft.brief;
+  const criteria = draft.evaluation;
+  const channel = criteria?.platform ?? brief.platform;
+  const kind = criteria?.deliverable ?? brief.deliverable;
+  const lang = criteria?.language ?? brief.language;
+  const language = languageOptions[lang as keyof typeof languageOptions] ?? lang;
+  const requiredLanguage = criteria?.require_language ?? brief.requireCantonese;
+  const low = criteria?.minimum_creators ?? brief.creatorCount;
+  const high = criteria?.maximum_creators ?? low;
+  const audience =
+    criteria?.minimum_market_share != null
+      ? Number(criteria.minimum_market_share) * 100
+      : brief.minAudience;
+  const target = criteria?.market ?? brief.market;
+  const required = [
+    requiredLanguage && language ? language + ' language evidence' : '',
+    audience
+      ? 'At least ' + Number(audience.toFixed(2)) + '% of the measured audience in ' + target
+      : '',
+    (criteria?.required_facts?.join(', ') ?? brief.requiredFacts)?.replaceAll('_', ' '),
+    brief.required,
+  ].filter(Boolean);
+  const preferred = [
+    !requiredLanguage && language ? language + ' content' : '',
+    (criteria?.preferred_facts?.join(', ') ?? brief.preferredFacts)?.replaceAll('_', ' '),
+    brief.preferred,
+  ].filter(Boolean);
+  return (
+    <>
+      {channel && (
+        <div>
+          <dt>Channel</dt>
+          <dd>{platformName(channel)}</dd>
+        </div>
+      )}
+      {kind && (
+        <div>
+          <dt>Deliverable</dt>
+          <dd>{deliverableOptions[kind as keyof typeof deliverableOptions] ?? kind}</dd>
+        </div>
+      )}
+      <div>
+        <dt>Creator slots</dt>
+        <dd>{low === high ? low : low + '–' + high}</dd>
+      </div>
+      {target && (
+        <div>
+          <dt>Target market</dt>
+          <dd>{target === 'HK' ? 'Hong Kong' : target}</dd>
+        </div>
+      )}
+      <div>
+        <dt>Required evidence</dt>
+        <dd>{required.join(' · ') || 'None specified'}</dd>
+      </div>
+      {preferred.length > 0 && (
+        <div>
+          <dt>Preferences</dt>
+          <dd>{preferred.join(' · ')}</dd>
+        </div>
+      )}
+    </>
+  );
+}
 
 function SavedLead({ id }: { id: string }) {
   const request = useBusinessResource<CreatorDetail>(marketBase + '/creators/' + encodeURIComponent(id));
@@ -146,14 +215,7 @@ export function CampaignDetail({ report = false }: { report?: boolean }) {
                   <dt>Objective</dt>
                   <dd>{draft.brief.objective || 'Unspecified'}</dd>
                 </div>
-                <div>
-                  <dt>Required</dt>
-                  <dd>{draft.brief.required || 'None specified'}</dd>
-                </div>
-                <div>
-                  <dt>Preferred</dt>
-                  <dd>{draft.brief.preferred || 'None specified'}</dd>
-                </div>
+                <CampaignConditions />
               </dl>
               <Link className="studio-primary" to={'/research?' + new URLSearchParams({ campaign: id })}>
                 Research this campaign

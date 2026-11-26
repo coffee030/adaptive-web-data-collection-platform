@@ -55,7 +55,7 @@ export function MarketMeasures({ creatorId }: { creatorId?: string }) {
         <p>No interaction measurements are available for this selection.</p>
       ) : (
         <div
-          className="studio-table-scroll"
+          className="studio-table-scroll measure-table"
           role="region"
           tabIndex={0}
           aria-label="Historical interaction measures"
@@ -74,14 +74,22 @@ export function MarketMeasures({ creatorId }: { creatorId?: string }) {
               {state.data.map((row) => (
                 <tr key={row.platform + ':' + row.key}>
                   {!creatorId && (
-                    <td>
+                    <td className="measure-platform">
                       <Platform value={row.platform} />
                     </td>
                   )}
                   <th scope="row">{row.label}</th>
-                  <td>{value(row.median)}</td>
+                  <td className="measure-median">
+                    <span className="measure-label">Median </span>
+                    {value(row.median)}
+                    <small className="measure-sample">
+                      {value(row.works)} {row.works === 1 ? 'work' : 'works'} ·{' '}
+                      {displayDate(row.observed_through)}
+                    </small>
+                  </td>
                   {!creatorId && (
-                    <td>
+                    <td className="measure-range">
+                      <span className="measure-label">Middle 50% · </span>
                       {row.works >= 4
                         ? value(row.lower_quartile) + ' – ' + value(row.upper_quartile)
                         : 'Fewer than 4 works'}

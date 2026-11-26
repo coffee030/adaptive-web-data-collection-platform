@@ -85,9 +85,12 @@ function ComparisonColumn({ id }: { id: string }) {
           <dd>{creator.topics.slice(0, 4).join(', ') || 'Unavailable'}</dd>
         </div>
       </dl>
-      {creator.example && <SampleWork post={creator.example} />}
-      <MarketMeasures creatorId={creator.id} />
       <SaveMarketLead creator={creator} showCampaignLink />
+      <details className="comparison-evidence">
+        <summary>View source and interactions</summary>
+        {creator.example && <SampleWork post={creator.example} />}
+        <MarketMeasures creatorId={creator.id} />
+      </details>
     </section>
   );
 }
