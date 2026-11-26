@@ -322,6 +322,8 @@
 .rc-method p {
   color: var(--studio-muted, #bdc7d1);
 }
+.rc-measurement { margin: 1rem 0; padding-inline-start: .85rem; border-inline-start: 2px solid var(--studio-border); }
+.rc-measurement p { margin: .25rem 0; overflow-wrap: anywhere; }
 .rc-steps li {
   display: flex;
   align-items: center;

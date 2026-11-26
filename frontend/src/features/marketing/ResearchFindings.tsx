@@ -5,6 +5,7 @@ import {
   date,
   platformOptions,
   type CampaignRequest,
+  type ContentEvidence,
   type Observed,
   type ScenarioRequest,
   type ScenarioResult,
@@ -51,6 +52,8 @@ interface Candidate {
   eligible: boolean;
   limitations: string[];
   content: Observed<{ text: string; published_at: string }> | null;
+  performance?: ContentEvidence['performance'];
+  other_window?: ContentEvidence['performance'];
   quote: Observed<{ amount_minor: number; valid_until: string; terms: string }> | null;
   audience: Observed<{ market: string; share: string | null }> | null;
   historical: { median_views: { value: string | null; observations: number | null } };
@@ -70,6 +73,41 @@ interface Strategy {
   candidates: Candidate[];
   topics: string[];
   topic_basis: string;
+}
+
+function ReportedMeasurement({
+  measurement,
+  comparable,
+}: {
+  measurement: NonNullable<ContentEvidence['performance']>;
+  comparable: boolean;
+}) {
+  const { data, evidence } = measurement;
+  const counts = (['views', 'likes', 'comments'] as const).flatMap((unit) =>
+    data[unit] != null ? [data[unit].toLocaleString() + ' ' + unit] : [],
+  );
+  return (
+    <div className="rc-measurement">
+      <strong>{comparable ? 'Seven-day post measurement' : 'Latest other reported window'}</strong>
+      <p>
+        {counts.length ? counts.join(' · ') : 'Counts unavailable'} · Window ended{' '}
+        <time dateTime={data.window_end}>{data.window_end}</time>.
+      </p>
+      {!comparable && (
+        <p>This measurement uses a different cutoff and is excluded from seven-day comparisons.</p>
+      )}
+      <p>
+        {evidence.attribution} ·{' '}
+        {evidence.source_url ? (
+          <a href={evidence.source_url} target="_blank" rel="noreferrer">
+            {evidence.reference}
+          </a>
+        ) : (
+          evidence.reference
+        )}
+      </p>
+    </div>
+  );
 }
 
 export interface ResearchReport {
@@ -383,8 +421,13 @@ function Options({ report, onUse }: { report: ResearchReport; onUse: UseOption }
             {c.historical.median_views.value != null && (
               <p>
                 Median seven-day views {Number(c.historical.median_views.value).toLocaleString()} ·{' '}
-                {c.historical.median_views.observations} measured posts.
+                  {c.historical.median_views.observations} measured{' '}
+                  {c.historical.median_views.observations === 1 ? 'post' : 'posts'}.
               </p>
+            )}
+            {c.performance && <ReportedMeasurement measurement={c.performance} comparable />}
+            {c.other_window && (
+              <ReportedMeasurement measurement={c.other_window} comparable={false} />
             )}
             {c.limitations.length > 0 && <p>{c.limitations.map(explain).join(' · ')}</p>}
           </details>

@@ -201,9 +201,9 @@ company_check() (
     curl --fail --silent --max-time 10 "$normal_url/harbourline-installation.json" | grep -q '"workspace":"pilot"' || return 1
     normal exec -T frontend sh -ec 'test -z "$(find /usr/share/nginx/html/assets -name "*-portrait-*.webp" -o -name "*-post-*.webp")"' || return 1
     M4_FRONTEND_PORT="$normal_web" HARBOURLINE_RESEARCH_TEST_PILOT=1 \
-        npm --prefix frontend test -- campaign-research.integration.ts market-sources.integration.ts --workers=1
+        npm --prefix frontend test -- campaign-research.integration.ts first-party-window.integration.ts market-sources.integration.ts --workers=1
 )
-check "Company discovery, campaign research and publisher navigation" company_check
+check "Company discovery, research, evidence intake and publisher navigation" company_check
 if (( ${#failures[@]} )); then
     printf 'FAIL %s\n' "${failures[@]}"
     exit 1

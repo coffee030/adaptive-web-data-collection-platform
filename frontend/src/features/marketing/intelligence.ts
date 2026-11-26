@@ -59,6 +59,7 @@ interface Post {
 export interface ContentEvidence {
   content: Observed<Post>;
   performance: Observed<{ views: number | null; likes: number | null; comments: number | null; window_end: string }> | null;
+  other_window?: ContentEvidence['performance'];
 }
 export type MatchBasis = 'name' | 'description' | 'post_text' | 'reviewed_topic' | 'related_content';
 export interface CreatorSummary {
@@ -159,7 +160,8 @@ export async function runCampaign(mode: DataMode, input: CampaignRequest, signal
   const report = scoped(await apiPost<CampaignResult>(prefix(mode) + '/campaign-briefs', input, signal, 30_000), mode);
   const visible = report.recommendations.every(candidate => visibleFor(mode, candidate.profile_evidence)
     && candidate.evidence.every(post => visibleFor(mode, post.content.evidence)
-      && (!post.performance || visibleFor(mode, post.performance.evidence)))
+      && (!post.performance || visibleFor(mode, post.performance.evidence))
+      && (!post.other_window || visibleFor(mode, post.other_window.evidence)))
     && Object.values(candidate.requirement_evidence).every(item => visibleFor(mode, item))
     && (!candidate.market_evidence || visibleFor(mode, candidate.market_evidence.evidence))
     && (!candidate.quote || (visibleFor(mode, candidate.quote.evidence) && isFresh(candidate.quote.data.valid_until))));
@@ -225,7 +227,7 @@ export const visibleFor = (mode: DataMode, evidence: EvidenceRef) =>
 export function campaignExpiry(report: CampaignResult) {
   const times = report.recommendations.flatMap(candidate => [
     candidate.profile_evidence.expires_at,
-    ...candidate.evidence.flatMap(post => [post.content.evidence.expires_at, post.performance?.evidence.expires_at]),
+    ...candidate.evidence.flatMap(post => [post.content.evidence.expires_at, post.performance?.evidence.expires_at, post.other_window?.evidence.expires_at]),
     ...Object.values(candidate.requirement_evidence).map(evidence => evidence.expires_at),
     candidate.market_evidence?.evidence.expires_at, candidate.quote?.evidence.expires_at, candidate.quote?.data.valid_until,
   ]).map(value => Date.parse(value ?? '')).filter(Number.isFinite);

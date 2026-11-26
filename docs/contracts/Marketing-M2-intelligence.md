@@ -10,7 +10,7 @@ The import contract follows the commercial readiness package's stable creator re
 | --- | --- |
 | `profile` | Creator ID, display name, optional bio, and one or more stable platform accounts. |
 | `content` | Stable post ID for the platform, creator account ID, publication time, creator-authored text, explicit languages, and separately reviewed content facts. |
-| `performance` | Independently authorized, distinct per-post observation from the seven days starting at publication. Views, likes, and comments are nullable counts. |
+| `performance` | Independently authorized per-post observation with its reported end time and nullable views, likes and comments. Comparison uses only reports ending exactly seven elapsed days after the same creator's linked publication, including seconds and fractional seconds. Other reported windows keep their own counts and evidence reference. |
 | `quote` | Platform, deliverable, currency, fee in minor units, firm or indicative status, issue and end timestamps, and terms. |
 | `audience` | Independently run opt-in survey, country or market bucket, period, denominator, and share on a 0–1 scale. Only aggregate observations from 30 or more respondents provide a usable share. |
 

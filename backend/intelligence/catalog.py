@@ -1,7 +1,8 @@
 """Eligible catalog projection with evidence at every creator-facing boundary."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -18,6 +19,19 @@ from .semantic import content_key
 from .store import Dataset, Snapshot
 
 AUDIENCE_WINDOW = timedelta(days=90)
+
+
+def seven_day_cutoff(published_at: datetime) -> datetime:
+    return (published_at.astimezone(UTC) + timedelta(days=7)).astimezone(
+        published_at.tzinfo
+    )
+
+
+class MeasurementWindow(BaseModel):
+    status: Literal["linked", "matches", "other_window", "content_unavailable"]
+    published_at: datetime | None = None
+    expected_window_end: datetime | None = None
+    reported_window_end: datetime | None = None
 
 
 class Evidence(BaseModel):
@@ -43,6 +57,7 @@ class EligibleContent:
     grams: dict[str, int]
     vector: list[float] | None
     performance: Observed[Performance] | None = None
+    other_window: Observed[Performance] | None = None
 
 
 @dataclass
@@ -115,7 +130,7 @@ class Catalog:
                 self.creators[row.creator_id] = Creator(
                     Observed[Profile](data=row, evidence=evidence(dataset, row))
                 )
-        posts: dict[tuple[str, str], EligibleContent] = {}
+        posts: dict[tuple[str, str, str], EligibleContent] = {}
         survey = []
         performance = []
         for dataset, row in entries:
@@ -140,7 +155,7 @@ class Catalog:
                     dataset.vectors.get(key),
                 )
                 creator.posts.append(post)
-                posts[row.platform, row.id] = post
+                posts[row.creator_id, row.platform, row.id] = post
             elif isinstance(row, Performance):
                 performance.append(
                     Observed[Performance](data=row, evidence=evidence(dataset, row))
@@ -158,17 +173,14 @@ class Catalog:
                 )
         for item in _newest(performance):
             row = item.data
-            post = posts.get((row.platform, row.post_id))
-            if (
-                post
-                and not post.performance
-                and (
-                    post.record.data.creator_id == row.creator_id
-                    and row.window_end
-                    == post.record.data.published_at + timedelta(days=7)
-                )
-            ):
-                post.performance = item
+            post = posts.get((row.creator_id, row.platform, row.post_id))
+            if not post:
+                continue
+            if row.window_end == seven_day_cutoff(post.record.data.published_at):
+                if post.performance is None:
+                    post.performance = item
+            elif post.other_window is None:
+                post.other_window = item
         groups = set()
         for item in _newest(survey):
             row = item.data
@@ -183,6 +195,32 @@ class Catalog:
             )
             creator.quotes = _newest(creator.quotes)
 
+    def measurement_window(
+        self,
+        creator_id: str,
+        platform: str,
+        post_id: str,
+        reported: datetime | None = None,
+    ) -> MeasurementWindow:
+        creator = self.creators.get(creator_id)
+        if creator:
+            for post in creator.posts:
+                content = post.record.data
+                if content.platform == platform and content.id == post_id:
+                    cutoff = seven_day_cutoff(content.published_at)
+                    status = "linked"
+                    if reported is not None:
+                        status = "matches" if reported == cutoff else "other_window"
+                    return MeasurementWindow(
+                        status=status,
+                        published_at=content.published_at,
+                        expected_window_end=cutoff,
+                        reported_window_end=reported,
+                    )
+        return MeasurementWindow(
+            status="content_unavailable", reported_window_end=reported
+        )
+
 
 class CreatorSummary(BaseModel):
     profile: Observed[Profile]
@@ -194,6 +232,7 @@ class CreatorSummary(BaseModel):
 class PostDetail(BaseModel):
     content: Observed[Content]
     performance: Observed[Performance] | None
+    other_window: Observed[Performance] | None = None
 
 
 class CreatorDetail(CreatorSummary):
@@ -221,7 +260,11 @@ def detail(creator: Creator) -> CreatorDetail:
     return CreatorDetail(
         **summary(creator).model_dump(),
         posts=[
-            PostDetail(content=post.record, performance=post.performance)
+            PostDetail(
+                content=post.record,
+                performance=post.performance,
+                other_window=post.other_window,
+            )
             for post in creator.posts[:20]
         ],
         historical=historical[platforms[0]] if len(platforms) == 1 else None,

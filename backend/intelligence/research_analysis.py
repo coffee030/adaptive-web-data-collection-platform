@@ -355,23 +355,26 @@ def strategy(catalog, campaign, model_dir, name):
     candidates = []
     for row in rows[: max(6, len(selected))]:
         support = row.evidence[0] if row.evidence else None
-        candidates.append(
-            {
-                "id": row.creator_id,
-                "name": row.name,
-                "selected": row.creator_id in selected,
-                "eligible": row.eligible,
-                "limitations": row.limitations,
-                "quote": row.quote.model_dump(mode="json") if row.quote else None,
-                "audience": row.market_evidence.model_dump(mode="json")
-                if row.market_evidence
-                else None,
-                "historical": row.historical.model_dump(mode="json"),
-                "content": support.content.model_dump(mode="json") if support else None,
-                "factors": row.factors,
-                "weight": row.factor_weights,
-            }
-        )
+        candidate = {
+            "id": row.creator_id,
+            "name": row.name,
+            "selected": row.creator_id in selected,
+            "eligible": row.eligible,
+            "limitations": row.limitations,
+            "quote": row.quote.model_dump(mode="json") if row.quote else None,
+            "audience": row.market_evidence.model_dump(mode="json")
+            if row.market_evidence
+            else None,
+            "historical": row.historical.model_dump(mode="json"),
+            "content": support.content.model_dump(mode="json") if support else None,
+            "factors": row.factors,
+            "weight": row.factor_weights,
+        }
+        if support and support.performance:
+            candidate["performance"] = support.performance.model_dump(mode="json")
+        if support and support.other_window:
+            candidate["other_window"] = support.other_window.model_dump(mode="json")
+        candidates.append(candidate)
     quoted = any(c.quote for c in report.recommendations)
     state = report.plan.status
     if state == "infeasible" and (

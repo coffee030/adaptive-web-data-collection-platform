@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type FormEventHandler } from 'react';
 import { ApiError, apiLocal, getOperatorCredential } from '../../lib/api';
 
 const origins = {
@@ -9,6 +9,21 @@ const origins = {
   audience: 'creator_opt_in_survey',
 } as const;
 type Kind = keyof typeof origins;
+interface MeasurementWindow {
+  status: 'linked' | 'matches' | 'other_window' | 'content_unavailable';
+  published_at?: string | null;
+  expected_window_end?: string | null;
+  reported_window_end?: string | null;
+}
+interface ReviewedReceipt {
+  dataset_id: string;
+  performance_window?: MeasurementWindow | null;
+}
+const timestampPattern = String.raw`\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+\-]\d{2}:\d{2})?`;
+function sourceTime(value: string) {
+  const iso = value.replace(' ', 'T');
+  return /(?:Z|[+-]\d{2}:\d{2})$/.test(iso) ? iso : iso + '+08:00';
+}
 const referencePattern = '[A-Za-z0-9][A-Za-z0-9_.\\-]{0,63}';
 function Reference({ name, label }: { name: string; label: string }) {
   return (
@@ -22,7 +37,16 @@ function Timestamp({ name, label }: { name: string; label: string }) {
   return (
     <label>
       {label}
-      <input name={name} type="datetime-local" required />
+      <input
+        name={name}
+        type="text"
+        pattern={timestampPattern}
+        aria-describedby="evidence-time-format"
+        placeholder="YYYY-MM-DD HH:MM:SS"
+        autoComplete="off"
+        spellCheck={false}
+        required
+      />
     </label>
   );
 }
@@ -50,17 +74,70 @@ function Numeric({
 export function FirstPartyEvidence({ company }: { company: string }) {
   const [kind, setKind] = useState<Kind>('profile');
   const [error, setError] = useState('');
-  const [receipt, setReceipt] = useState('');
+  const [receipt, setReceipt] = useState<ReviewedReceipt | null>(null);
+  const [linked, setLinked] = useState<MeasurementWindow | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const lookupRequest = useRef<AbortController | undefined>(undefined);
+  const formRef = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false);
   const flight = useRef<AbortController | undefined>(undefined);
-  useEffect(() => () => flight.current?.abort(), []);
+  useEffect(
+    () => () => {
+      flight.current?.abort();
+      lookupRequest.current?.abort();
+    },
+    [],
+  );
+  async function checkContent() {
+    const form = formRef.current;
+    if (!form) return;
+    const fields = new FormData(form);
+    const query = new URLSearchParams({ company });
+    for (const [field, parameter] of [
+      ['creator', 'creator_id'],
+      ['platform', 'platform'],
+      ['post', 'post_id'],
+    ] as const) {
+      const control = form.elements.namedItem(field) as HTMLInputElement | HTMLSelectElement;
+      if (!control.reportValidity()) return;
+      query.set(parameter, String(fields.get(field) ?? '').trim());
+    }
+    lookupRequest.current?.abort();
+    const controller = new AbortController();
+    lookupRequest.current = controller;
+    setLookupBusy(true);
+    setLinked(null);
+    setError('');
+    try {
+      const result = await apiLocal<MeasurementWindow>(
+        '/marketing/intelligence/operator/partner/performance-window?' + query,
+        getOperatorCredential(),
+        controller.signal,
+      );
+      if (!controller.signal.aborted) setLinked(result);
+    } catch {
+      if (!controller.signal.aborted)
+        setError('The linked content could not be checked. Check the references and try again.');
+    } finally {
+      if (!controller.signal.aborted) setLookupBusy(false);
+    }
+  }
+  const change: FormEventHandler<HTMLFormElement> = (event) => {
+    setError('');
+    setReceipt(null);
+    if (['kind', 'creator', 'platform', 'post'].includes((event.target as HTMLInputElement).name)) {
+      lookupRequest.current?.abort();
+      setLookupBusy(false);
+      setLinked(null);
+    }
+  };
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (flight.current) return;
     const form = e.currentTarget,
       fields = new FormData(form);
     const get = (key: string) => String(fields.get(key) ?? '').trim();
-    const time = (key: string) => new Date(get(key)).toISOString();
+    const time = (key: string) => sourceTime(get(key));
     const record: Record<string, unknown> = {
       kind,
       id: get('record'),
@@ -131,17 +208,17 @@ export function FirstPartyEvidence({ company }: { company: string }) {
     const ctrl = new AbortController();
     flight.current = ctrl;
     setError('');
-    setReceipt('');
+    setReceipt(null);
     setBusy(true);
     try {
-      const added = await apiLocal<{ dataset_id: string }>(
+      const added = await apiLocal<ReviewedReceipt>(
         '/marketing/intelligence/operator/partner/receipts?company=' + encodeURIComponent(company),
         getOperatorCredential(),
         ctrl.signal,
         'POST',
-        { grant, records: [record] }
+        { grant, records: [record] },
       );
-      setReceipt(added.dataset_id);
+      if (!ctrl.signal.aborted) setReceipt(added);
     } catch (cause) {
       if (!ctrl.signal.aborted)
         setError(
@@ -149,7 +226,7 @@ export function FirstPartyEvidence({ company }: { company: string }) {
             ? 'This record already exists with different contents. Review the original before replacing it.'
             : cause instanceof ApiError && cause.status === 403
               ? 'The operator or supplied permission does not authorize this use.'
-              : 'Check the references, reported dates, permission dates and figures.'
+              : 'Check the references, reported dates, permission dates and figures.',
         );
     } finally {
       flight.current = undefined;
@@ -160,23 +237,21 @@ export function FirstPartyEvidence({ company }: { company: string }) {
     <details className="first-party-entry">
       <summary>Record creator-supplied evidence</summary>
       <p>
-        Use a separate permission record for each type of evidence. Only record material the creator has
-        authorized this company to analyze and display.
+        Use a separate permission record for each type of evidence. Only record material the creator
+        has authorized this company to analyze and display.
       </p>
-      <form
-        className="period-form"
-        onSubmit={submit}
-        onChange={() => {
-          setError('');
-          setReceipt('');
-        }}
-      >
+      <form ref={formRef} className="period-form" onSubmit={submit} onChange={change}>
         <fieldset disabled={busy}>
           <legend>Source record</legend>
+          <p id="evidence-time-format">
+            Dates use Hong Kong time unless you include a UTC offset or Z. Paste the source time
+            with its seconds and any fractional seconds, for example
+            2026-11-23T08:30:45.123456+08:00.
+          </p>
           <div className="form-pair">
             <label>
               Evidence type
-              <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+              <select name="kind" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
                 <option value="profile">Creator profile</option>
                 <option value="content">Published content</option>
                 <option value="quote">Commercial quote</option>
@@ -210,8 +285,8 @@ export function FirstPartyEvidence({ company }: { company: string }) {
             <Timestamp name="observed" label="Observed or received at" />
           </div>
           <p>
-            Reuse the same creator reference across their records. References accept letters, digits,
-            periods, underscores and hyphens.
+            Reuse the same creator reference across their records. References accept letters,
+            digits, periods, underscores and hyphens.
           </p>
           <label>
             Source link (optional)
@@ -289,6 +364,54 @@ export function FirstPartyEvidence({ company }: { company: string }) {
               <>
                 <Reference name="post" label="Published content record identifier" />
                 <Timestamp name="window" label="Measurement window ended" />
+                <div className="first-party-window">
+                  <p>
+                    Record the actual end of the source’s measurement window. Historical comparisons
+                    use the interval ending exactly seven days after publication.
+                  </p>
+                  <button
+                    type="button"
+                    className="studio-secondary"
+                    disabled={lookupBusy}
+                    onClick={checkContent}
+                  >
+                    {lookupBusy ? 'Checking linked content…' : 'Check linked content'}
+                  </button>
+                  {linked?.status === 'content_unavailable' && (
+                    <p role="status">
+                      No eligible linked publication was found. Check the company, creator, platform
+                      and content identifier, and the profile and content permissions.
+                    </p>
+                  )}
+                  {linked?.expected_window_end && (
+                    <>
+                      <p role="status">
+                        Published <time>{linked.published_at}</time>. Seven-day cutoff{' '}
+                        <time>{linked.expected_window_end}</time>.
+                      </p>
+                      <p>
+                        Use this cutoff only when the source confirms this exact measurement window.
+                      </p>
+                      <button
+                        type="button"
+                        className="studio-secondary"
+                        onClick={() => {
+                          const field = formRef.current?.elements.namedItem(
+                            'window',
+                          ) as HTMLInputElement | null;
+                          if (field && linked.expected_window_end) {
+                            field.value = linked.expected_window_end;
+                            field.focus();
+                            setReceipt(null);
+                            setError('');
+                          }
+                        }}
+                      >
+                        Use confirmed seven-day cutoff
+                      </button>
+                    </>
+                  )}
+                </div>
                 {['views', 'likes', 'comments'].map((key) => (
                   <Numeric key={key} name={key} label={key[0]!.toUpperCase() + key.slice(1)} />
                 ))}
@@ -336,7 +459,32 @@ export function FirstPartyEvidence({ company }: { company: string }) {
         {error && <p role="alert">{error}</p>}
         {receipt && (
           <p role="status">
-            Evidence registered for the selected company. Reference <code>{receipt}</code>.
+            Evidence registered for the selected company. Reference{' '}
+            <code>{receipt.dataset_id}</code>.
+            {receipt.performance_window?.status === 'matches' && (
+              <>
+                {' '}
+                The reported window matches the linked publication’s seven-day cutoff at{' '}
+                <time>{receipt.performance_window.expected_window_end}</time>.
+              </>
+            )}
+            {receipt.performance_window?.status === 'other_window' && (
+              <>
+                {' '}
+                Saved with its actual end at{' '}
+                <time>{receipt.performance_window.reported_window_end}</time>, outside the seven-day
+                comparison. The eligible cutoff is{' '}
+                <time>{receipt.performance_window.expected_window_end}</time>. A separate
+                source-confirmed observation ending then can enter that comparison.
+              </>
+            )}
+            {receipt.performance_window?.status === 'content_unavailable' && (
+              <>
+                {' '}
+                The observation is saved. Its seven-day comparison needs a matching authorized
+                profile and publication for this creator, platform and content identifier.
+              </>
+            )}
           </p>
         )}
       </form>
