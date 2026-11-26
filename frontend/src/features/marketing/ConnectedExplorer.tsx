@@ -80,6 +80,17 @@ function ComparisonQuotes({ creator, mode, platform }: { creator: CreatorDetail;
   </div>)}</> : <>Unavailable</>;
 }
 
+function ComparisonAudience({ creator, mode, platform }: { creator: CreatorDetail; mode: DataMode; platform: Platform | '' }) {
+  const surveys = creator.audiences.filter(survey => (!platform || survey.data.platform === platform) && visibleFor(mode, survey.evidence));
+  if (!surveys.length) return <>Audience data unavailable</>;
+  return surveys.map(({data, evidence}) => {
+    const share = data.share !== null && data.data_status === 'observed'
+      ? new Intl.NumberFormat('en-HK', {style:'percent', maximumFractionDigits:1}).format(Number(data.share))
+      : 'Audience share suppressed';
+    return <div key={evidence.dataset_id+'/'+evidence.row_id}>{platformOptions[data.platform]} · {data.market} · {share}</div>;
+  });
+}
+
 function CompareRecords({ mode, ids, platform, close }: { mode: DataMode; ids: string[]; platform: Platform | ''; close: () => void }) {
   const load = useCallback((signal: AbortSignal) => compareCreators(mode,ids,signal), [mode,ids]);
   const request = useResource(load, useCatalogRevision());
@@ -95,9 +106,9 @@ function CompareRecords({ mode, ids, platform, close }: { mode: DataMode; ids: s
       {result.unavailable_ids.length > 0 && <p role="status">{result.unavailable_ids.length} selected creators are unavailable in this workspace.</p>}
       {creators.length === 0 ? <p>No eligible comparison records are available.</p> :
         <TableRegion label="Creator comparison"><table className="hl-comparison"><thead><tr><th scope="col">Creator</th><th scope="col">Platforms</th>
-          <th scope="col">Current firm quotes</th><th scope="col">Evidence coverage</th>{platform && <th scope="col">{platformOptions[platform]} · Median views (7-day window)</th>}</tr></thead>
+          <th scope="col">Current firm quotes</th><th scope="col">Audience evidence</th>{platform && <th scope="col">{platformOptions[platform]} · Median views (7-day window)</th>}</tr></thead>
           <tbody>{creators.map(creator => <tr key={creator.profile.data.creator_id}><th scope="row">{creator.profile.data.name}</th>
-            <td>{creator.profile.data.accounts.map(account => platformOptions[account.platform]).join(', ')}</td><td><ComparisonQuotes creator={creator} mode={mode} platform={platform} /></td><td><Coverage creator={creator} /></td>
+            <td>{creator.profile.data.accounts.map(account => platformOptions[account.platform]).join(', ')}</td><td><ComparisonQuotes creator={creator} mode={mode} platform={platform} /></td><td><ComparisonAudience creator={creator} mode={mode} platform={platform}/></td>
             {platform && <td>{measureText(creator.historical_by_platform[platform]?.median_views)}</td>}</tr>)}</tbody></table></TableRegion>}
       {creators.length > 0 && <p className="hl-note">Use firm quotes to compare costs for the same deliverable. {platform && comparable.includes(platform)
         ? 'Median views describe observed posts on this platform.'

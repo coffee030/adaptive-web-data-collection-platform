@@ -185,7 +185,7 @@ def create_server(
             work_limit: Limit = 3,
             work_offset: Offset = 0,
         ) -> Row:
-            """Find attributed, licensed historical works and their named contributors. Cite the contributor, revision and license for each work. Historical fees or pageviews do not establish a current quote, audience or sponsorship performance."""
+            """Find attributed, licensed historical works and their named contributors. Cite the contributor, revision and license for each work. Prices documented in a work concern its historical subject. Report file-page views separately from sponsorship performance, audience and current creator quotes."""
             path = (
                 API + "/public-research/works"
                 if workspace == "public"

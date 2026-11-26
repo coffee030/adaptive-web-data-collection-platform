@@ -50,7 +50,7 @@ export function PublishedWorks({isolated,query,preview=false}:{isolated:boolean;
   return <section className="hl-published" aria-label="Published work results">
     <header className="hl-section-bar"><div><h2>{preview?'Research leads':'Published work matches'}</h2><p>{preview?'Historical sources for the suggested search.':all.length+' credited contributors'+(query?' for “'+query+'”':'')}</p></div>
       {preview ? <Link to={path('directory')+'?'+new URLSearchParams({q:query})}>View results →</Link> : brief.leads.length>0 && <Link to={path('research-plan')}>Open research shortlist ({brief.leads.length}) →</Link>}</header>
-    {!preview && result.data.criteria && <p className="hl-note">{result.data.criteria}</p>}
+    {!preview && result.data.criteria && <p className="hl-note">{result.data.criteria} {result.data.retrieval==='evidence_filter_with_granite' && 'Matching works are ordered by multilingual relevance.'}</p>}
     {!all.length && <div className="hl-evidence-notice"><strong>No published work matched this search.</strong><p>Try a place, dish or contributor name. Public identity records can help you find someone to investigate.</p>
       {/(茶餐廳|cha chaan teng)/i.test(query) && <Link to={path('directory')+'?q='+encodeURIComponent('茶餐廳')}>Find tea restaurant works without a price filter →</Link>}
       <Link to={path('directory')}>Browse all published works →</Link></div>}

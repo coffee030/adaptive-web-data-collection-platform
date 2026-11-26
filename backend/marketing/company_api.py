@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, SecretStr, StringConstraints
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -373,7 +373,11 @@ def campaign_summaries(
     campaigns = (
         select(
             CompanyCampaignRow.id,
-            CompanyCampaignRow.draft["brief"]["name"].astext.label("name"),
+            func.coalesce(
+                func.nullif(CompanyCampaignRow.draft["brief"]["name"].astext, ""),
+                func.nullif(CompanyCampaignRow.draft["research"]["title"].astext, ""),
+                "Untitled campaign",
+            ).label("name"),
             CompanyCampaignRow.version,
             CompanyCampaignRow.updated_at,
         )

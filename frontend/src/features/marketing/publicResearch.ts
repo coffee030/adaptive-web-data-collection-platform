@@ -16,7 +16,7 @@ export interface PublishedWork {
 export interface Contributor {
   id:string; name:string; profile_url:string; matched_works:PublishedWork[]; match_basis:'historical_cost'|'historical_topic'|'creator'|'browse';
 }
-export interface Works {criteria?:string; state:'available'|'unavailable'|'expired'; observed:string|null; expires?:string|null; contributors:Contributor[]}
+export interface Works {criteria?:string; retrieval?:'evidence_filter'|'evidence_filter_with_granite'; state:'available'|'unavailable'|'expired'; observed:string|null; expires?:string|null; contributors:Contributor[]}
 export function publicPath(isolated:boolean, kind:'works'|'directory', query='') {
   const resource=isolated ? 'public-research/'+kind : 'partner/'+(kind==='works'?'public-works':'public-directory');
   return '/marketing/intelligence/'+resource+'?q='+encodeURIComponent(query);
