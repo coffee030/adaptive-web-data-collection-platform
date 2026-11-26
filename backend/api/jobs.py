@@ -6,7 +6,13 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, Response
 
 from backend.application.inputs import Entry
-from backend.application.jobs import ExecutionEvent, Job, JobDetail, JobStatus
+from backend.application.jobs import (
+    ExecutionEvent,
+    Job,
+    JobAction,
+    JobDetail,
+    JobStatus,
+)
 from backend.core.contracts import Contract
 
 router = APIRouter(prefix="/collection-jobs", tags=["collection jobs"])
@@ -20,6 +26,10 @@ class CreateJob(Contract):
     profile_version_id: UUID
     entry: Entry
     request_key: UUID | None = None
+
+
+class ControlJob(Contract):
+    action: JobAction
 
 
 @router.post("", response_model=Job, status_code=201, responses={200: {"model": Job}})
@@ -53,3 +63,8 @@ def get_job(request: Request, job_id: UUID):
 @router.get("/{job_id}/events", response_model=list[ExecutionEvent])
 def list_events(request: Request, job_id: UUID):
     return request.app.state.jobs.events(job_id)
+
+
+@router.post("/{job_id}/control", response_model=Job)
+def control_job(request: Request, job_id: UUID, body: ControlJob):
+    return request.app.state.jobs.control(job_id, body.action)

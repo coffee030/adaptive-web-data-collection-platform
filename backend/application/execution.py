@@ -4,6 +4,7 @@ import logging
 from uuid import UUID
 
 from pydantic import TypeAdapter
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,10 +13,12 @@ from backend.core.contracts import CollectionError, CollectionRunResult
 from backend.core.evidence import EvidenceError, LocalEvidenceStore
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.core.runner import CollectionRunner
+from backend.persistence.models import JobRow, SourceRow
+from backend.persistence.profiles import source_from_row
 from backend.persistence.results import publish_results
 
 from .inputs import Entry
-from .jobs import Job, Jobs, job_from_row
+from .jobs import ACTIVE_ATTEMPT, Job, Jobs, job_from_row
 from .profiles import Profiles
 from .retry import retry_delay
 
@@ -67,14 +70,33 @@ class JobExecutor:
             return self._fail(job, self._database_error(error))
 
     def _run(self, job: Job, entry: dict) -> CollectionRunResult:
-        source = self.profiles.get_source(job.source_id)
+        def active_source(source_id: str):
+            with self.sessions() as session:
+                source = session.scalar(
+                    select(SourceRow)
+                    .join(JobRow, JobRow.source_id == SourceRow.id)
+                    .where(
+                        JobRow.id == job.job_id,
+                        JobRow.status.in_(ACTIVE_ATTEMPT),
+                        JobRow.execution_attempt == job.execution_attempt,
+                        JobRow.lease_expires_at > func.clock_timestamp(),
+                        SourceRow.id == UUID(source_id),
+                    )
+                )
+                if source is None:
+                    raise ProfileError(
+                        "job_attempt_ended", "This attempt no longer owns the job"
+                    )
+                return source_from_row(source)
+
+        source = active_source(job.source_id.hex)
         version = self.profiles.get_version(job.source_id, job.profile_version_id)
         if version.config_hash != job.config_hash:
             raise ProfileError(
                 "job_profile_changed", "Job profile hash no longer matches the pin"
             )
         repo = ProfileRepository.from_snapshot(
-            source, version, check_source_access=self.profiles._check_source_access
+            source, version, check_source_access=active_source
         )
         return CollectionRunner(repo, self.evidence, rate=self.profiles.rate).run(
             version.profile_version_id, ENTRY.validate_python(entry).collection_input()

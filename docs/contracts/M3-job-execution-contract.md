@@ -1,6 +1,10 @@
 # M3 Job Execution Contract
 
-The `/api/v1/collection-jobs` request and initial 201 and idempotent replay 200 remain compatible. A 201 confirms that the Job and dispatch intent were written to PostgreSQL. Clients use `GET /api/v1/collection-jobs/{job_id}` or filter the list with `status`. The status enum remains pending, running, succeeded, partial, and failed.
+The `/api/v1/collection-jobs` request and initial 201 and idempotent replay 200 remain compatible. A 201 confirms that the Job and dispatch intent were written to PostgreSQL. Clients use `GET /api/v1/collection-jobs/{job_id}` or filter the list with `status`. Jobs can be pending, running, pausing, paused, cancelled, succeeded, partial or failed.
+
+Operators use `POST /api/v1/collection-jobs/{job_id}/control` with an `action` of `pause`, `resume` or `cancel`. A pending Job becomes paused immediately. A running Job becomes pausing and its active attempt may finish. When an active paused attempt would retry, the Job becomes paused and keeps its original retry deadline. Resume makes it dispatchable when that deadline is due. Repeated deliveries cannot claim a held Job.
+
+Cancellation ends unfinished work, removes its dispatch and lease, and fences subsequent publication. A request already in flight can finish. Future HTTP operations check the current attempt and source authorization. Previously committed results remain available. Finished Jobs reject control changes with HTTP 409. Repeating cancellation on a cancelled Job returns the same result. Upgrade to `core_job_control_01` before starting the updated services. The prior schema cannot store control history, so reverting after controls have been used requires a pre-upgrade backup.
 
 | New Job field | Meaning |
 | --- | --- |

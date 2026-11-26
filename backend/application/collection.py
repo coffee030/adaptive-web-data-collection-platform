@@ -314,6 +314,8 @@ def request_status(jobs):
     states = {item.job.status for item in jobs}
     if states == {"pending"} and not any(item.job.execution_attempt for item in jobs):
         return "pending"
+    if "paused" in states and states <= TERMINAL | {"paused"}:
+        return "paused"
     if not states <= TERMINAL:
         return "running"
     if len(states) == 1:

@@ -129,8 +129,9 @@ class JobRow(Base):
         ),
         sa.UniqueConstraint("source_id", "request_key", name="uq_job_request"),
         sa.CheckConstraint(
-            "(status = 'pending' AND started_at IS NULL AND finished_at IS NULL AND input_payload IS NOT NULL) OR "
-            "(status = 'running' AND started_at IS NOT NULL AND finished_at IS NULL AND input_payload IS NOT NULL) OR "
+            "(status IN ('pending', 'paused') AND started_at IS NULL AND finished_at IS NULL AND input_payload IS NOT NULL) OR "
+            "(status IN ('running', 'pausing') AND started_at IS NOT NULL AND finished_at IS NULL AND input_payload IS NOT NULL) OR "
+            "(status = 'cancelled' AND finished_at IS NOT NULL AND input_payload IS NULL) OR "
             "(status IN ('succeeded', 'partial', 'failed') AND started_at IS NOT NULL "
             "AND finished_at IS NOT NULL AND input_payload IS NULL)",
             name="ck_job_state",
@@ -143,10 +144,10 @@ class JobRow(Base):
         sa.Index("ix_job_created", "created_at", "id"),
         sa.CheckConstraint(
             "execution_attempt >= 0 AND dispatch_attempts >= 0 AND "
-            "((status = 'running' AND execution_attempt > 0 AND lease_expires_at IS NOT NULL) OR "
-            "(status <> 'running' AND lease_expires_at IS NULL)) AND "
+            "((status IN ('running','pausing') AND execution_attempt > 0 AND lease_expires_at IS NOT NULL) OR "
+            "(status NOT IN ('running','pausing') AND lease_expires_at IS NULL)) AND "
             "((status = 'pending') = (dispatch_due_at IS NOT NULL)) AND "
-            "(next_attempt_at IS NULL OR (status = 'pending' AND execution_attempt > 0))",
+            "(next_attempt_at IS NULL OR (status IN ('pending','paused') AND execution_attempt > 0))",
             name="ck_job_attempt",
         ),
         sa.Index(
@@ -159,7 +160,7 @@ class JobRow(Base):
             "ix_job_lease_due",
             "lease_expires_at",
             "id",
-            postgresql_where=sa.text("status = 'running'"),
+            postgresql_where=sa.text("status IN ('running', 'pausing')"),
         ),
     )
 
@@ -197,7 +198,7 @@ class EventRow(Base):
     __tablename__ = "execution_events"
     __table_args__ = (
         sa.CheckConstraint(
-            "status IN ('pending', 'running', 'succeeded', 'partial', 'failed')",
+            "status IN ('pending', 'running', 'pausing', 'paused', 'cancelled', 'succeeded', 'partial', 'failed')",
             name="ck_event_status",
         ),
         sa.UniqueConstraint("job_id", "sequence", name="uq_event_job_sequence"),
