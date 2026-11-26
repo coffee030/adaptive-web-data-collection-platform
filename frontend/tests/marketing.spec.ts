@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { blankBrief } from '../src/features/marketing/contracts';
 
 const capabilityPath = '**/api/v1/marketing/capabilities';
 const capability = { provider: 'youtube_data_api', policy_url: 'https://developers.google.com/youtube/terms/developer-policies',
@@ -210,4 +211,30 @@ test('research shortlist pins matched works and checks current evidence before e
   expect(csv).toContain('Current public evidence unavailable');
   expect(csv).toContain('12000');
   expect(csv).not.toContain(work.title);
+});
+
+test('company export refreshes changed source permissions and keeps the saved brief available', async ({ page }) => {
+  const id = '91c047ea-7111-4ba5-a1f6-d766ff1474b0';
+  const evaluation = {description:'Local lunch',objective:'awareness',platform:'instagram',deliverable:'short_video',
+    currency:'HKD',budget_minor:35000,minimum_creators:1,maximum_creators:1,required_facts:[],preferred_facts:[]};
+  const draft = {brief:{...blankBrief,name:'Lunch research'},saved:true,shortlist:[],explorer:'',lines:[],evaluation};
+  let permitted = true;
+  await page.route(capabilityPath, r => r.fulfill({json:{...capability,company_accounts:true,customer_intelligence:'available'}}));
+  await page.route('**/companies/session', r => r.fulfill({json:{id:'example-company',username:'example-member',name:'Test company',role:'member'}}));
+  await page.route('**/companies/campaigns', r => r.fulfill({json:[{id,version:1,draft}]}));
+  await page.route('**/partner/processing', r => r.fulfill({json:{mode:'partner',revision:'one',state:'ready'}}));
+  await page.route('**/partner/campaign-briefs', r => r.fulfill({json:{
+    mode:'partner',state:'incomplete',as_of:'2026-11-01T12:00:00Z',revision:'one',retrieval:'character_tfidf',
+    campaign:evaluation,reviewed_count:1,exclusions:{missing_quote:1},recommendations:[],unavailable_shortlist_ids:[],
+    plan:{status:'infeasible',selected:[],total_minor:null},allocation_export_receipt:permitted?'a'.repeat(64):null,
+  }}));
+  await page.route('**/export?**', r => {
+    expect(new URL(r.request().url()).searchParams.get('allocation')).toBe('a'.repeat(64));
+    permitted=false;
+    return r.fulfill({status:403,json:{error:{code:'plan_export_restricted'}}});
+  });
+  await page.goto('/plan');
+  await page.getByRole('button',{name:'Export infeasible assessment CSV'}).click();
+  await expect(page.getByRole('alert')).toContainText('export permission changed');
+  await expect(page.getByRole('button',{name:'Export draft CSV'})).toBeEnabled();
 });

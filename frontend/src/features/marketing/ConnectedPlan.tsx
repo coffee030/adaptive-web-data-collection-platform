@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { apiAttachment } from '../../lib/api';
+import { ApiError, apiAttachment } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, measureText } from './IntelligenceEvidence';
 import { EvaluationScope } from './EvaluationScope';
@@ -111,7 +111,19 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
         const link = document.createElement('a'); link.href=href; link.download='harbourline-campaign.csv'; link.click();
         window.setTimeout(()=>URL.revokeObjectURL(href),1000);
         setExported(true);
-      } catch { if (!controller.signal.aborted) setExportError('Could not export this campaign. Check your sign-in and reopen its latest saved version.'); }
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        if (cause instanceof ApiError && (cause.code==='plan_export_restricted' || cause.code==='catalog_changed')) {
+          retry();
+          setExportError('The available evidence or its export permission changed. Review the refreshed plan and its export options.');
+        } else if (cause instanceof ApiError && cause.status===409) {
+          setExportError('A newer company draft is available. Reopen the campaign before exporting.');
+        } else if (cause instanceof ApiError && cause.status===401) {
+          setExportError('Sign in to the company again to export this campaign.');
+        } else {
+          setExportError('The export could not be completed. Check the connection and try again.');
+        }
+      }
       finally { exportRequest.current=undefined; if (!controller.signal.aborted) setCheckingExport(false); }
       return;
     }
