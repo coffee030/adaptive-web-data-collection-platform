@@ -4,6 +4,8 @@ import { Loading, Status, Timestamp } from '../../components/feedback';
 import { getOperatorCredential, ApiError, apiLocal } from '../../lib/api';
 import { CompanyRegistry } from './CompanyRegistry';
 import { FirstPartyEvidence } from './FirstPartyEvidence';
+import { getMarketingCapability } from '../marketing/api';
+import { useResource } from '../../lib/useResource';
 import { operationsPath } from './OperationsTasks';
 
 interface DatasetStatus { dataset_id: string; state: string; record_count: number; imported_at: string; expires_at: string | null; refresh_error?: string | null }
@@ -20,6 +22,8 @@ const refreshIssues: Record<string, string> = {
 };
 
 export function IntelligenceDatasets() {
+  const capability = useResource(getMarketingCapability);
+  const archiveAvailable = capability.result.state === 'ready' && capability.result.data.demo_intelligence === 'available' && !capability.result.data.company_accounts;
   const [result,setResult] = useState<DatasetStatus>();
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
@@ -118,7 +122,7 @@ export function IntelligenceDatasets() {
         }
       }}>
         <fieldset className="operator-form-block"><legend>Dataset access</legend>
-          <label>Workspace<select name="mode"><option value="partner">Partner data</option><option value="demo">Fictional demo</option></select></label>
+          {archiveAvailable ? <label>Workspace<select name="mode"><option value="partner">Partner data</option><option value="demo">Fictional demo</option></select></label> : <input name="mode" type="hidden" value="partner"/>}
           {!getOperatorCredential() && <label>Marketing operator token<input type="password" name="token" required minLength={24} maxLength={512} autoComplete="off" /></label>}
           <div><button type="submit" value="list" disabled={pending}>List datasets</button></div>
         </fieldset>

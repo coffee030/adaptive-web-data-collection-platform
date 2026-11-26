@@ -155,7 +155,7 @@ export function CampaignDetail({ report = false }: { report?: boolean }) {
                   <dd>{draft.brief.preferred || 'None specified'}</dd>
                 </div>
               </dl>
-              <Link className="studio-primary" to="/research">
+              <Link className="studio-primary" to={'/research?' + new URLSearchParams({ campaign: id })}>
                 Research this campaign
               </Link>
             </Panel>

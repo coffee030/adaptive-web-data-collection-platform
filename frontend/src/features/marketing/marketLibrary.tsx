@@ -1,4 +1,5 @@
 import { useCallback, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { apiGet, ApiError } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { useMarketing } from './workspace';
@@ -84,6 +85,7 @@ export interface Results<T> {
   facets: { platforms: Facet[]; topics: Facet[] };
 }
 export interface MarketSummary {
+  latest_by_source: Activity[];
   creator_count: number;
   activity_count: number;
   platforms: {
@@ -161,32 +163,43 @@ export function Platform({ value }: { value: string }) {
   );
 }
 
-export function SaveMarketLead({ creator }: { creator: CreatorRecord }) {
-  const { draft, setDraft } = useMarketing();
+export function SaveMarketLead({
+  creator,
+  showCampaignLink = false,
+}: {
+  creator: CreatorRecord;
+  showCampaignLink?: boolean;
+}) {
+  const { draft, setDraft, campaignReceipt } = useMarketing();
   const selected = draft.market_leads ?? [];
   const saved = selected.includes(creator.id);
   const full = selected.length >= 120 && !saved;
   return (
-    <button
-      type="button"
-      className="studio-secondary"
-      disabled={full}
-      aria-pressed={saved}
-      onClick={() =>
-        setDraft((old) => {
-          const leads = old.market_leads ?? [];
-          const removing = leads.includes(creator.id);
-          if (!removing && leads.length >= 120) return old;
-          return {
-            ...old,
-            saved: true,
-            brief: { ...old.brief, name: old.brief.name || 'Creator shortlist' },
-            market_leads: removing ? leads.filter((id) => id !== creator.id) : [...leads, creator.id],
-          };
-        })
-      }
-    >
-      {saved ? 'Saved to campaign' : full ? 'Shortlist full' : 'Save to campaign'}
-    </button>
+    <span className="market-save-actions">
+      <button
+        type="button"
+        className="studio-secondary"
+        disabled={full}
+        aria-pressed={saved}
+        onClick={() =>
+          setDraft((old) => {
+            const leads = old.market_leads ?? [];
+            const removing = leads.includes(creator.id);
+            if (!removing && leads.length >= 120) return old;
+            return {
+              ...old,
+              saved: true,
+              brief: { ...old.brief, name: old.brief.name || 'Creator shortlist' },
+              market_leads: removing ? leads.filter((id) => id !== creator.id) : [...leads, creator.id],
+            };
+          })
+        }
+      >
+        {saved ? 'Saved to campaign' : full ? 'Shortlist full' : 'Save to campaign'}
+      </button>
+      {showCampaignLink && saved && campaignReceipt && (
+        <Link to={'/campaigns/' + campaignReceipt.id}>Open shortlist</Link>
+      )}
+    </span>
   );
 }

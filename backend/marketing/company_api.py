@@ -142,7 +142,7 @@ def db(request: Request):
         yield session
 
 
-Database = Annotated[Session, Depends(db)]
+Database = Annotated[Session, Depends(db, scope="function")]
 
 
 def password_hash(password: SecretStr, salt: str) -> str:
@@ -656,6 +656,11 @@ def export_rate_request(
             "Supporting work",
             "Source",
             "Source license",
+            "Attribution",
+            "Credited role",
+            "Credit source",
+            "Series",
+            "Broadcaster",
             "Availability",
             "Firm or indicative",
             "Fee (HKD)",
@@ -670,13 +675,18 @@ def export_rate_request(
             writer.writerow(
                 [
                     *[
-                        protect_csv_text(work[key])
+                        protect_csv_text(str(work.get(key) or ""))
                         for key in (
                             "creator_name",
                             "profile_url",
                             "title",
                             "url",
                             "license_url",
+                            "attribution",
+                            "credit_role",
+                            "credit_url",
+                            "series_title",
+                            "broadcaster_url",
                         )
                     ],
                     "",

@@ -87,7 +87,7 @@ function ComparisonColumn({ id }: { id: string }) {
       </dl>
       {creator.example && <SampleWork post={creator.example} />}
       <MarketMeasures creatorId={creator.id} />
-      <SaveMarketLead creator={creator} />
+      <SaveMarketLead creator={creator} showCampaignLink />
     </section>
   );
 }
@@ -298,16 +298,15 @@ export function MarketDiscovery() {
           </>
         ) : (
           <div className="business-empty">
-            <h3>{page > 1 ? 'No creators on this page' : 'No matching publications yet'}</h3>
+            <h3>{page > 1 ? 'No creators on this page' : 'No exact matches in these creator sources'}</h3>
             <p>
-              Broaden your search or ask Campaign Advisor to check available sources against your brief.
+              Campaign Advisor can also check archived work and company evidence for this brief.
             </p>
             {data.related?.basis === 'dining_coverage_without_price_evidence' && (
               <section className="related-discovery">
                 <h3>Related dining coverage</h3>
                 <p>
-                  These presenters cover Hong Kong food. Their source records do not confirm an
-                  affordable price point.
+                  These presenters cover Hong Kong food. Meal prices are unverified in their published credits.
                 </p>
                 <ul>
                   {data.related.items.map((creator) => (
@@ -385,7 +384,7 @@ export function MarketProfile() {
           <PageHeader
             title={state.data.name}
             description={<Platform value={state.data.platform} />}
-            actions={<SaveMarketLead creator={state.data} />}
+            actions={<SaveMarketLead creator={state.data} showCampaignLink />}
           />
           <div className="biz-two-col">
             <section>

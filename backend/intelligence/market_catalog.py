@@ -348,6 +348,14 @@ def overview(sessions):
             creator_count=sum(p["creator_count"] for p in platforms),
             activity_count=sum(p["activity_count"] for p in platforms),
             platforms=platforms,
+            latest_by_source=[
+                item(row)
+                for row in session.scalars(
+                    scope.distinct(A.source).order_by(
+                        A.source, A.published.desc(), A.id
+                    )
+                )
+            ],
             topics=facets(session, scope)["topics"],
             latest_observed_at=observed.isoformat() if observed else None,
             months=[dict(month=m, activity_count=c) for m, c in months.items()],

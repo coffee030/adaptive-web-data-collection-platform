@@ -11,10 +11,8 @@ import {
   Platform,
   SourceLink,
   useBusinessResource,
-  type Activity,
   type CampaignSummary,
   type MarketSummary,
-  type Results,
 } from './marketLibrary';
 
 function PublicationTrend({ summary }: { summary: MarketSummary }) {
@@ -167,9 +165,15 @@ export function PlatformAnalysis() {
 export function MarketOverview() {
   const navigate = useNavigate();
   const market = useBusinessResource<MarketSummary>(marketBase + '/overview');
-  const activity = useBusinessResource<Results<Activity>>(marketBase + '/activity?page_size=5');
   const campaigns = useBusinessResource<CampaignSummary[]>(campaignBase + '/summaries?limit=5');
   const available = market.result.state === 'ready' ? market.result.data : undefined;
+  const topics = available?.topics.map((entry) => entry.value) ?? [];
+  const entryTopics = [...new Set(['Dining', 'Urban travel', 'Outdoor photography', ...topics])]
+    .filter((topic) => topics.includes(topic))
+    .slice(0, 3);
+  const latest = [...(available?.latest_by_source ?? [])].sort((a, b) =>
+    b.published_at.localeCompare(a.published_at)
+  );
   return (
     <div className="biz-page overview-desk">
       <PageHeader
@@ -203,12 +207,19 @@ export function MarketOverview() {
             />
             <button className="studio-primary">Search creators</button>
           </form>
-          {available && available.topics.length > 0 && (
+          {entryTopics.length > 0 && (
             <p className="suggested-topics">
-              Browse topics{' '}
-              {available.topics.slice(0, 3).map((t) => (
-                <Link key={t.value} to={'/creators?topic=' + encodeURIComponent(t.value)}>
-                  {t.value}
+              Try a search{' '}
+              {entryTopics.map((topic) => (
+                <Link
+                  key={topic}
+                  to={
+                    topic === 'Dining'
+                      ? '/creators?q=affordable+dining'
+                      : '/creators?topic=' + encodeURIComponent(topic)
+                  }
+                >
+                  {topic === 'Dining' ? 'Affordable dining' : topic}
                 </Link>
               ))}
             </p>
@@ -217,11 +228,14 @@ export function MarketOverview() {
       </section>
       <div className="biz-two-col">
         <div className="overview-primary">
-          <Panel title="Latest publications" actions={<Link to="/creators">Explore creators →</Link>}>
-            {activity.result.state === 'ready' ? (
-              activity.result.data.items.length ? (
+          <Panel
+            title="Latest work from each source"
+            actions={<Link to="/creators">Explore creators →</Link>}
+          >
+            {available ? (
+              latest.length ? (
                 <ol className="latest-works">
-                  {activity.result.data.items.map((a) => (
+                  {latest.map((a) => (
                     <li key={a.id}>
                       <div>
                         <Platform value={a.platform} />
@@ -241,8 +255,8 @@ export function MarketOverview() {
                   <Link to="/research">Research a campaign brief</Link> to check available sources.
                 </p>
               )
-            ) : activity.result.state === 'error' ? (
-              <BusinessProblem error={activity.result.error} retry={activity.retry} />
+            ) : market.result.state === 'error' ? (
+              <BusinessProblem error={market.result.error} retry={market.retry} />
             ) : (
               <p role="status">Opening publications…</p>
             )}

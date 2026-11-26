@@ -1,3 +1,5 @@
+import csv
+import io
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -101,6 +103,8 @@ def test_market_generation_history_withdrawal_and_role_gates(
         creator_name="Test Byline",
         profile_url="https://www.inaturalist.org/people/test",
         title="Test Hong Kong bird",
+        attribution="Credited test record",
+        credit_role="Observation author",
         excerpt=None,
         published_at=now.isoformat(),
         url="https://www.inaturalist.org/observations/10",
@@ -186,6 +190,47 @@ def test_market_generation_history_withdrawal_and_role_gates(
             503,
         )
 
+    from test_company_workspaces import BASE, DRAFT
+
+    monkeypatch.setenv("MARKETING_PILOT_PASSWORD", "controlled-local-installation")
+    monkeypatch.setenv("HARBOURLINE_SELF_REGISTRATION", "1")
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://localhost",
+    ) as company:
+        account = company.post(
+            BASE + "/register",
+            json={
+                "username": "rate-worksheet",
+                "password": "controlled-qa-login",
+                "name": "Test company",
+            },
+        )
+        assert account.status_code == 201
+        campaign = BASE + "/campaigns/" + str(uuid4())
+        saved = company.put(
+            campaign,
+            json={
+                "version": 0,
+                "draft": {
+                    **DRAFT,
+                    "market_leads": [publication["creator_id"], uuid4().hex],
+                },
+            },
+        )
+        assert saved.status_code == 200
+        download = company.get(campaign + "/rate-request?version=1")
+        assert download.status_code == 200
+        sheet = list(csv.reader(io.StringIO(download.content.decode("utf-8-sig"))))
+        assert ["Unavailable or withdrawn leads omitted", "1"] in sheet
+        work = dict(zip(sheet[-2], sheet[-1], strict=True))
+        assert work["Source"] == publication["url"]
+        assert work["Attribution"] == "Credited test record"
+        assert work["Credited role"] == "Observation author"
+        assert work["Availability"] == work["Fee (HKD)"] == ""
+        assert company.get(campaign + "/rate-request?version=0").status_code == 409
+        company_cookies = company.cookies
+
     def denied(*args, **kwargs):
         raise PublisherError("publisher_access_blocked")
 
@@ -197,6 +242,12 @@ def test_market_generation_history_withdrawal_and_role_gates(
     assert collection.install(sessions, evidence, key) == "operator decision preserved"
     collection.withdraw(sessions, key)
     assert catalog.source_status(sessions, key)["state"] == "revoked"
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://localhost",
+        cookies=company_cookies,
+    ) as company:
+        assert company.get(campaign + "/rate-request?version=1").status_code == 409
     assert collection.install(sessions, evidence, key) == "operator decision preserved"
 
 

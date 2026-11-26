@@ -5,7 +5,13 @@ from fastapi.testclient import TestClient
 
 from backend.api.app import create_app
 from test_company_workspaces import BASE, DRAFT
-from test_intelligence import CUSTOMER_TOKEN, OP, OPERATOR_TOKEN, WORKSPACE, partner_body
+from test_intelligence import (
+    CUSTOMER_TOKEN,
+    OP,
+    OPERATOR_TOKEN,
+    WORKSPACE,
+    partner_body,
+)
 
 
 def test_reviewed_receipts_cannot_claim_another_company_or_overwrite_evidence(

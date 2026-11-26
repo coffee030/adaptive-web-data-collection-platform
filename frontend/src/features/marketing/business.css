@@ -267,6 +267,12 @@
   color: var(--studio-muted);
   font-size: 0.88rem;
 }
+.market-save-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
 .trend-panel {
   background: var(--studio-surface);
   border: 1px solid var(--studio-border);
