@@ -1,5 +1,3 @@
-# Copy the table to the checkout's .codex/config.toml and replace the placeholders.
-# start_collection submits a collection. Keep the host's write-tool approval controls.
 [mcp_servers.fyp]
 command = '<ABSOLUTE_CHECKOUT_PATH>\mcp_access\.venv\Scripts\python.exe'
 args = ["-m", "mcp_access.server"]

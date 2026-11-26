@@ -1,3 +1,6 @@
+import json
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -10,6 +13,7 @@ from backend.api.app import create_app
 from backend.intelligence.contracts import ImportDataset
 from backend.intelligence.indexing import Indexing
 from backend.intelligence.models import DatasetRow
+from backend.intelligence.refresh import refresh_partner_files
 from backend.intelligence.store import DEMO, Config, Scope
 
 BASE = "/api/v1/marketing/intelligence"
@@ -174,6 +178,52 @@ def partner_body():
     }
 
 
+def test_private_browser_pilot_separates_customer_operator_and_core(
+    pg_engine, tmp_path, monkeypatch
+):
+    password = "local-pilot-customer-password-01"
+    login = ("partner", password)
+    monkeypatch.setenv("MARKETING_PARTNER_WORKSPACE", WORKSPACE)
+    monkeypatch.setenv("MARKETING_CUSTOMER_TOKEN", CUSTOMER_TOKEN)
+    monkeypatch.setenv("MARKETING_OPERATOR_TOKEN", OPERATOR_TOKEN)
+    monkeypatch.setenv("MARKETING_PILOT_PASSWORD", password)
+    with TestClient(
+        create_app(engine=pg_engine, evidence_root=tmp_path),
+        base_url="http://localhost",
+    ) as client:
+        catalog = BASE + "/partner/creators"
+        dataset = BASE + "/operator/partner/datasets/pilot-one"
+        denied = client.get(catalog)
+        assert denied.status_code == 401
+        assert denied.headers["WWW-Authenticate"] == 'Basic realm="Harbourline partner"'
+        assert client.get(catalog, auth=("partner", "incorrect")).status_code == 401
+        assert client.get(catalog, auth=login).json()["state"] == "empty"
+        assert client.get(catalog, headers=CUSTOMER).status_code == 200
+        assert client.put(dataset, json=partner_body(), auth=login).status_code == 403
+        assert client.get("/api/v1/sources", auth=login).status_code == 401
+        assert client.get("/api/v1/sources", headers=CUSTOMER).status_code == 401
+        assert (
+            client.get("/api/v1/sources", auth=("operator", OPERATOR_TOKEN)).status_code
+            == 200
+        )
+        assert client.put(dataset, json=partner_body(), headers=OP).status_code == 200
+        directory = BASE + "/operator/partner/datasets"
+        assert client.get(directory, auth=login).status_code == 403
+        assert client.get(directory, headers=OP).json() == ["pilot-one"]
+        assert (
+            client.get(directory, headers=OP, params={"after": "pilot-one"}).json()
+            == []
+        )
+
+        assert client.get(catalog, auth=login).json()["state"] == "available"
+        assert client.delete(dataset, auth=login).status_code == 403
+        assert client.delete(dataset, headers=OP).status_code == 204
+        assert client.get(catalog, auth=login).json()["state"] == "empty"
+        monkeypatch.setenv("MARKETING_PILOT_PASSWORD", OPERATOR_TOKEN)
+        assert client.get(dataset, headers=OP).status_code == 403
+        assert client.get(catalog, auth=("partner", OPERATOR_TOKEN)).status_code == 403
+
+
 def test_customer_end_to_end_and_permission_isolation(
     pg_engine, sessions, tmp_path, monkeypatch
 ):
@@ -243,6 +293,36 @@ def test_customer_end_to_end_and_permission_isolation(
             params={"language": "yue", "market": "HK", "query": "affordable"},
         ).json()
         assert len(discovery["creators"]) == 3
+        weeks = discovery["activity"]
+        assert len(weeks) == 12
+        published = datetime.fromisoformat(
+            next(
+                item["published_at"]
+                for item in payload["records"]
+                if item["kind"] == "content"
+            )
+        ).date()
+        week_start = (published - timedelta(days=published.weekday())).isoformat()
+        observed_posts = sum(item["post_count"] for item in discovery["creators"])
+        assert observed_posts > 0
+        assert [week for week in weeks if week["posts"]] == [
+            {"start": week_start, "posts": observed_posts}
+        ]
+        partner_weeks = client.get(BASE + "/partner/creators", headers=CUSTOMER).json()[
+            "activity"
+        ]
+        assert all(week["posts"] == 0 for week in partner_weeks)
+        for item in discovery["creators"]:
+            assert "affordable" in item["preview"]["data"]["text"].lower()
+            assert item["preview"]["evidence"]["origin"] == "synthetic"
+        protected = BASE + "/partner/brief-options?platform=other"
+        assert client.get(protected).status_code == 403
+        assert client.get(protected, headers=CUSTOMER).json()["reviewed_facts"] == []
+        options = client.get(
+            BASE + "/demo/brief-options", params={"platform": BRIEF["platform"]}
+        ).json()
+        assert set(BRIEF["required_facts"]) <= set(options["reviewed_facts"])
+        assert BRIEF["deliverable"] in options["quoted_deliverables"]
         briefing = client.post(BASE + "/demo/campaign-briefs", json=BRIEF)
         assert briefing.status_code == 200, briefing.text
         assert briefing.headers["cache-control"] == "no-store"
@@ -323,7 +403,7 @@ def test_index_reuses_unchanged_vectors_and_discards_withdrawn_claims(
     sessions, monkeypatch
 ):
     monkeypatch.setattr("backend.intelligence.indexing.embed", fixture_embeddings)
-    indexer = Indexing(sessions, Config(model_dir=Path("fixture")))
+    indexer = Indexing(sessions, Config(model_dir=Path("fixture"), demo_enabled=True))
     body = demo_body()
     indexer.ingest(DEMO, "batch", ImportDataset.model_validate(body))
     dispatch = []
@@ -394,3 +474,86 @@ def test_real_dispatcher_indexes_after_restart(
         result = client.post(BASE + "/demo/campaign-briefs", json=BRIEF).json()
         assert result["plan"]["selected"] == ["a", "b"]
         assert result["retrieval"] == "character_tfidf"
+
+
+def test_partner_refresh_obeys_revision_grant_workspace_expiry_and_withdrawal(
+    sessions, pg_url, pg_schema, tmp_path
+):
+    store = Indexing(sessions, Config(workspace=WORKSPACE))
+    scope = Scope("partner", WORKSPACE)
+    dataset_id = "opt-in-profile"
+    directory = tmp_path / WORKSPACE
+    directory.mkdir()
+    filename = directory / (dataset_id + ".json")
+    body = partner_body()
+    imported = store.ingest(scope, dataset_id, ImportDataset.model_validate(body))
+    update_file = {
+        "expected_imported_at": imported.imported_at.isoformat(),
+        "dataset": body,
+    }
+    body["records"][0]["name"] = "Updated fixture owner"
+    filename.write_text(json.dumps(update_file), encoding="utf-8")
+    env = child_environment(pg_url, pg_schema, tmp_path) | {
+        "MARKETING_PARTNER_REFRESH_DIR": str(tmp_path),
+        "MARKETING_PARTNER_WORKSPACE": WORKSPACE,
+        "MARKETING_MODEL_DIR": "",
+        "MARKETING_YOUTUBE_RESEARCH": "0",
+    }
+    subprocess.run(
+        [sys.executable, "-m", "backend.queue.dispatcher", "--once"],
+        env=env,
+        timeout=30,
+        check=True,
+    )
+    refreshed = store.status(scope, dataset_id)
+    assert refreshed.imported_at > imported.imported_at
+    assert (
+        store.snapshot(scope).datasets[0].body.records[0].name
+        == "Updated fixture owner"
+    )
+    refresh_partner_files(store, tmp_path)
+    assert store.status(scope, dataset_id) == refreshed
+    filename.write_text("{", encoding="utf-8")
+    refresh_partner_files(store, tmp_path)
+    assert store.status(scope, dataset_id).refresh_error == "refresh_invalid_dataset"
+    assert store.status(scope, dataset_id).imported_at == refreshed.imported_at
+    body["records"][0]["name"] = "Stale fixture"
+    filename.write_text(json.dumps(update_file), encoding="utf-8")
+    refresh_partner_files(store, tmp_path)
+    assert store.status(scope, dataset_id).refresh_error == "refresh_conflict"
+    assert store.status(scope, dataset_id).imported_at == refreshed.imported_at
+    update_file["expected_imported_at"] = refreshed.imported_at.isoformat()
+    body["grant"]["authorization_ref"] = "different-grant"
+    filename.write_text(json.dumps(update_file), encoding="utf-8")
+    refresh_partner_files(store, tmp_path)
+    assert store.status(scope, dataset_id).refresh_error == "refresh_grant_changed"
+    assert store.status(scope, dataset_id).imported_at == refreshed.imported_at
+    with sessions.begin() as session:
+        session.execute(
+            update(DatasetRow).values(expires_at=func.now() - timedelta(seconds=1))
+        )
+    refresh_partner_files(store, tmp_path)
+    assert store.status(scope, dataset_id).state == "expired"
+    store.withdraw(scope, dataset_id)
+    refresh_partner_files(store, tmp_path)
+    assert store.status(scope, dataset_id).state == "withdrawn"
+    assert not store.snapshot(scope).datasets
+
+
+def test_disabled_workspace_cannot_index_previously_scheduled_data(
+    sessions, monkeypatch
+):
+    def unexpected(*args):
+        raise AssertionError("Disabled workspace attempted to embed or publish")
+
+    active = Indexing(sessions, Config(model_dir=Path("fixture"), demo_enabled=True))
+    disabled = Indexing(
+        sessions, Config(model_dir=Path("fixture"), workspace=WORKSPACE)
+    )
+    active.ingest(DEMO, "batch", ImportDataset.model_validate(demo_body()))
+    assert not disabled.dispatch(unexpected)
+    claims = []
+    assert active.dispatch(lambda *args: claims.append(args))
+    monkeypatch.setattr("backend.intelligence.indexing.embed", unexpected)
+    disabled.execute(*claims[0])
+    assert not active.snapshot(DEMO).datasets[0].vectors

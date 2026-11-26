@@ -351,14 +351,12 @@ def test_real_worker_killed_during_collection_is_recovered(
     env["CELERY_BROKER_URL"] = broker_url
     first_log = tmp_path / "interrupted.log"
     log = tmp_path / "worker.log"
-    # Hold a PostgreSQL lock that the worker will encounter at result publication.
     with server(env, tmp_path / "api.log") as (_, client):
         job_id = csv_submission(client, config)["job_id"]
         with sessions.begin() as lock:
             lock.connection().exec_driver_sql(
                 "LOCK TABLE raw_evidence IN ACCESS EXCLUSIVE MODE"
             )
-            # Acquire the publication lock before the dispatcher can claim the job.
             with (
                 worker(env, first_log) as first,
                 dispatcher(env, tmp_path / "dispatcher.log"),

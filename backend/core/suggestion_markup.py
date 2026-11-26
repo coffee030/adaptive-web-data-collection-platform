@@ -232,7 +232,6 @@ def listing_mapping(page: Selector, source: Source, url: str) -> Listing:
         )
     groups: dict[str, list[Selector]] = {}
     for item in rows:
-        # A structural path ending in the row tag generalizes across sibling rows.
         path = "/" + "/".join(_tag(node) for node in [*reversed(item.path), item])
         groups.setdefault(path, []).append(item)
     verified: dict[tuple[str, ...], Listing] = {}
@@ -306,7 +305,6 @@ def detail_mapping(
     item_selector = None
     item = None
     if len(matches) == 1:
-        # Choose the nearest semantic content container, keeping page chrome outside it.
         container = next(
             (
                 node
@@ -367,7 +365,6 @@ def _field_mapping(
     allow_fallback = True
     usable = []
     for selector, reason in candidates.items():
-        # The adjacent fallback comes last and is used only if no named candidate remains.
         if reason is None and not allow_fallback:
             break
         matches = item.xpath(selector) if len(selector) <= 1024 else ()

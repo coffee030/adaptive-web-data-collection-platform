@@ -5,11 +5,13 @@ import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../featu
 import { evidencePath, recordsPath } from '../features/results/api';
 import { sourcesPath } from '../features/sources/api';
 
+import { datasetsPath, directoryPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
+
 export function WorkspaceNavigation() {
   const { pathname, key } = useLocation();
   const [openFor, setOpenFor] = useState<string>();
   const open = openFor === key;
-  const operationsCurrent = [sourcesPath, topicsPath, jobsPath].some(path =>
+  const operationsCurrent = [sourcesPath, topicsPath, jobsPath, researchPath, datasetsPath, directoryPath].some(path =>
     pathname === path || pathname.startsWith(path + '/'),
   );
   const resultsContext = [articlesPath, evidencePath].some(path =>
@@ -18,9 +20,9 @@ export function WorkspaceNavigation() {
 
   return <nav className="workspace-navigation" aria-label="Main navigation">
     <div className="nav-workspace">
-      <p className="nav-group-label">Workspace</p>
+      <p className="nav-group-label">Collection workspace</p>
       <div className="nav-links">
-        <NavLink to="/" end>Overview</NavLink>
+        <NavLink to={pathname === "/" && __PLATFORM_SYNTHETIC_DEMO__ ? "/" : operationsPath} end>Overview</NavLink>
         <NavLink to={newRequestPath} end>New Collection</NavLink>
         <NavLink to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
         {resultsContext
@@ -34,7 +36,7 @@ export function WorkspaceNavigation() {
       setOpenFor(undefined);
       event.preventDefault();
     }}>
-      <p className="nav-group-label">Operations</p>
+      <p className="nav-group-label">Administration</p>
       <button className="operations-toggle" type="button" aria-controls="operations-links"
         aria-expanded={open} data-current={operationsCurrent}
         onClick={() => setOpenFor(open ? undefined : key)}>
@@ -45,6 +47,9 @@ export function WorkspaceNavigation() {
         <NavLink to={topicsPath}>Topics &amp; bindings</NavLink>
         <NavLink to={jobsPath} end={pathname === newJobPath}>Collection Jobs</NavLink>
         <NavLink to={newJobPath} end className="nav-secondary">Single-source &amp; CSV</NavLink>
+        <NavLink to={directoryPath} className="nav-secondary">Public directory</NavLink>
+        <NavLink to={researchPath} className="nav-secondary">Creator research</NavLink>
+        <NavLink to={datasetsPath} className="nav-secondary">Intelligence datasets</NavLink>
       </div>
     </div>
   </nav>;

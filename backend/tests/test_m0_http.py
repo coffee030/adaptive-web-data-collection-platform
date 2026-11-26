@@ -14,7 +14,6 @@ BODY = b"<html><title>Controlled response</title></html>"
 
 @pytest.fixture
 def site(monkeypatch):
-    # All actual network traffic in this module stays on this loopback interface.
     monkeypatch.setenv("NO_PROXY", "127.0.0.1")
     requests = []
 
@@ -176,7 +175,6 @@ def test_unrestricted_follow_shows_final_url_and_redirect_limit(site):
 
 
 def checked_fixture_url(origin, location):
-    # The exception is confined to one test server's literal IP and ephemeral port.
     if any(ord(char) <= 32 or char in "\\\x7f" for char in location):
         raise ValueError("Invalid URL characters")
     target = urldefrag(urljoin(f"{origin}/", location)).url

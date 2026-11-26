@@ -81,7 +81,6 @@ for (const adapter of ['web', 'csv'] as const) {
       await page.getByRole('checkbox', { name: /confirm approval/ }).check();
     }
     if (!web) {
-      // Restore the same hash after a server-side edit. The old report is still stale by revision.
       const changed: Configuration = { ...saved.configuration,
         record_schema: { ...saved.configuration.record_schema, record_type: 'another_revision' } };
       const intervening = await request.put(version, { data: { configuration: changed, expected_revision: saved.revision } });

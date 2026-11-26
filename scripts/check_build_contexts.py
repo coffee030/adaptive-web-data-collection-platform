@@ -76,10 +76,17 @@ if __name__ == "__main__":
     )
     check(
         root / "frontend/.dockerignore",
-        ("index.html", "src/main.tsx", "src/assets/workspace-icon.png"),
+        (
+            "index.html",
+            "src/main.tsx",
+            "src/assets/workspace-icon.png",
+            "public/licenses/Geist.txt",
+            "public/licenses/Tremor.txt",
+        ),
         (
             "public/.env",
             "public/private-export.csv",
+            "public/licenses/private-export.csv",
             "src/.env.local",
             "dist/index.html",
         ),

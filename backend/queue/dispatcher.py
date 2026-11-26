@@ -2,6 +2,8 @@
 
 import argparse
 import logging
+import os
+from pathlib import Path
 from collections.abc import Callable
 from datetime import timedelta
 from time import monotonic, sleep
@@ -15,6 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.application.jobs import Jobs, database_now
 from backend.core.contracts import CollectionError
 from backend.intelligence.indexing import INDEX_CLAIM_WINDOW, Indexing
+from backend.intelligence.public_directory import refresh as refresh_public_directory
+from backend.intelligence.refresh import refresh_partner_files
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.marketing.pipeline import CLAIM_WINDOW as MARKETING_CLAIM_WINDOW
 from backend.marketing.pipeline import Pipeline
@@ -146,11 +150,16 @@ def main() -> None:
     dispatcher = Dispatcher(sessions)
     marketing = Pipeline(sessions, ResearchSettings.load())
     intelligence = Indexing(sessions, IntelligenceConfig.load())
+    partner_directory = os.getenv("MARKETING_PARTNER_REFRESH_DIR")
     try:
         if args.once:
             dispatcher.poll()
             marketing.maintain()
             marketing.dispatch(publish_marketing)
+            if partner_directory:
+                refresh_partner_files(intelligence, Path(partner_directory))
+            if intelligence.config.workspace:
+                refresh_public_directory(sessions)
             intelligence.maintain()
             intelligence.dispatch(publish_intelligence)
             return
@@ -195,6 +204,10 @@ def main() -> None:
                     purge = monotonic() >= indexing_cleanup_due
                     intelligence.maintain(purge=purge)
                     if purge:
+                        if intelligence.config.workspace:
+                            refresh_public_directory(sessions)
+                        if partner_directory:
+                            refresh_partner_files(intelligence, Path(partner_directory))
                         indexing_cleanup_due = monotonic() + MARKETING_CLEANUP_SECONDS
                     intelligence.dispatch(publish_intelligence)
                 except SQLAlchemyError as error:

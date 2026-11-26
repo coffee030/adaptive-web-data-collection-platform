@@ -64,7 +64,6 @@ def test_failed_dispatch_remains_durable_and_can_be_republished(sessions, execut
     assert pending.dispatch_attempts == 2
     assert pending.last_dispatched_at is not None
     assert pending.dispatch_error_code is None
-    # Simulate a consumer that vanished before claiming.
     expire(sessions, job_id, JobRow.dispatch_due_at)
     assert Dispatcher(sessions, delivered.append).dispatch_one()
     assert delivered == [job_id, job_id]

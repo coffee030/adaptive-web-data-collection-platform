@@ -108,6 +108,19 @@ function Write-DemoDiagnosis {
     }
     $migration = Invoke-Compose @('exec', '-T', 'api', 'python', '-m', 'alembic', 'current', '--check-heads') 20
     Write-Step "[INFO] Demo database is at the expected migration head: $($migration.Code -eq 0)."
+    $api = "http://127.0.0.1:$($Config.API_PORT)/api/v1/marketing"
+    try {
+        $capability = Invoke-RestMethod -Uri "$api/capabilities" -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
+        if ($capability.demo_intelligence -eq 'available') {
+            $status = Invoke-RestMethod -Uri "$api/intelligence/demo/processing" -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
+            Write-Step "[INFO] Harbourline catalog state: $($status.state). Indexed $($status.indexed_datasets) of $($status.eligible_datasets) eligible datasets."
+            Write-Step "URL: http://127.0.0.1:$($Config.FRONTEND_PORT)/demo/connected"
+            return
+        }
+    } catch {
+        Write-Step '[WARN] Could not read the demo workspace status. Check API health and the dispatcher diagnostics above.'
+        return
+    }
     $result = Invoke-DemoCheck -ReadOnly
     Write-Step "[INFO] All Synthetic Demo baselines verified: $($fixtureReady -and $migration.Code -eq 0 -and $result.Code -eq 0)."
 }

@@ -1,3 +1,4 @@
+import { OperationsTasks } from '../operator/OperationsTasks';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Status, Timestamp } from '../../components/feedback';
@@ -140,6 +141,7 @@ export function Overview() {
     <header className="overview-title">
       <h1>Data Collection Overview</h1>
     </header>
+    <OperationsTasks />
     <TopicDirectory />
     <section className="collection-activity" aria-labelledby="request-ledger-title">
       <div className="overview-section-heading">

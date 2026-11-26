@@ -2,7 +2,6 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import type { CollectionJob, JobInput } from '../src/features/collection-jobs/api';
 import type { ProfileVersion, Source } from '../src/features/sources/api';
-import { captureM15 } from './m15Capture';
 
 const api = '/api/v1';
 const jobs = '/collection-jobs';
@@ -77,7 +76,6 @@ test('Jobs creates one controlled HTML job by keyboard and preserves list filter
   await page.getByRole('textbox', { name: 'Document path' }).fill('/table.html');
   await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText('Controlled document path');
   await expect(page.getByRole('region', { name: 'Review job submission' })).toContainText('/table.html');
-  await captureM15(page, 'guided-web-review');
   await page.getByRole('textbox', { name: 'Document path' }).press('Enter');
   await expect(page).toHaveURL(jobs + '/' + id);
   await expect(page.getByRole('region', { name: 'Run overview' })).toContainText('Partial');
@@ -179,7 +177,6 @@ for (const failure of ['503', 'network', 'timeout'] as const) {
     await expect(alert).toContainText(failure === 'timeout' ? 'timed out' : 'did not confirm', { timeout: 15_000 });
     await expect(page.getByRole('textbox', { name: 'CSV content' })).toBeDisabled();
     await expect(page.getByRole('combobox', { name: 'Source', exact: true })).toBeDisabled();
-    if (failure === '503') await captureM15(page, 'uncertain-submission');
     await page.getByRole('button', { name: 'Retry submission' }).click();
     await expect(page).toHaveURL(jobs + '/' + id);
     expect(sent).toHaveLength(2);
@@ -254,7 +251,6 @@ test('active monitoring polls status and events, loads records once pending ends
   });
   await page.goto(jobs + '/' + id);
   await expect(page.getByText('Waiting for execution.', { exact: false })).toBeVisible();
-  await captureM15(page, 'pending-job');
   const overview = page.getByRole('region', { name: 'Run overview' });
   status = 'running';
   await expect(overview.getByText('Running', { exact: true })).toBeVisible({ timeout: 8000 });
@@ -279,7 +275,6 @@ for (const width of [1440, 1280, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await fillCsv(page);
     await expect(submit(page)).toBeVisible();
-    if (width === 1440) await captureM15(page, 'contextual-csv-review');
     await page.getByRole('textbox', { name: 'CSV content' }).press('Tab');
     await expect(submit(page)).toBeFocused();
     expect(await submit(page).evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');

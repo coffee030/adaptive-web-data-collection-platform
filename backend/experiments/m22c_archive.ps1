@@ -18,7 +18,6 @@ if ($Session.StartsWith('reference') -and $events[-1].event -eq 'rehearsal_finis
     $until = $events[-1].utc
 } elseif ($start -and $stop) {
     $since = $start.utc
-    # Preserve the tail for classifying requests already in flight at the stop.
     $until = ([DateTimeOffset]::Parse($events[-1].utc)).AddSeconds(2).ToString('o')
 } else {
     throw 'No complete observation window. Preserve the evidence and record the gap.'

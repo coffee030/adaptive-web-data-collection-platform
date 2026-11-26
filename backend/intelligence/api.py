@@ -1,5 +1,6 @@
 """Campaign, catalog and operator endpoints for the separate intelligence store."""
 
+from datetime import date, timedelta
 from secrets import compare_digest
 from typing import Annotated, Literal
 
@@ -8,13 +9,19 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from backend.marketing.api import NonCacheableRoute, bearer, operator_store
+from backend.marketing.company_api import COOKIE, authenticated
+from backend.marketing.company_models import CompanyRow
+from backend.marketing.pilot_access import BrowserLogin, pilot_customer
 from backend.marketing.store import MarketingError
 
 from .analytics import ScenarioResult, scenario
-from .catalog import Catalog, CreatorDetail, CreatorSummary, detail, summary
+from .catalog import Catalog, CreatorDetail, CreatorSummary, Observed, detail, summary
 from .contracts import (
     Campaign,
     CompareRequest,
+    Content,
+    Platform,
+    Deliverable,
     CreatorFilter,
     ImportDataset,
     Mode,
@@ -53,12 +60,25 @@ def scope_for(mode: Mode, config: Config, *, administrative: bool = False) -> Sc
 
 
 def customer_scope(
-    mode: Mode, request: Request, credentials: credentials_dependency
+    mode: Mode,
+    request: Request,
+    credentials: credentials_dependency,
+    login: BrowserLogin,
 ) -> Scope:
     config = request.app.state.intelligence.config
     scope = scope_for(mode, config)
     if mode == "partner":
+        if COOKIE in request.cookies or request.headers.get("X-Harbourline-Company"):
+            with request.app.state.sessions() as session:
+                return Scope("partner", authenticated(request, session).id)
+        with request.app.state.sessions() as session:
+            if session.get(CompanyRow, config.workspace):
+                raise MarketingError(
+                    403, "company_account_required", "Sign in with your company account"
+                )
         expected = partner_token(config)
+        if credentials is None and pilot_customer(login):
+            return scope
         actual = credentials.credentials if credentials else ""
         if not expected or not compare_digest(actual.encode(), expected.encode()):
             raise MarketingError(
@@ -77,10 +97,20 @@ def intelligence(request: Request) -> IntelligenceStore:
 Store = Annotated[IntelligenceStore, Depends(intelligence)]
 
 
+class DiscoveryItem(CreatorSummary):
+    preview: Observed[Content] | None
+
+
+class ActivityWeek(BaseModel):
+    start: date
+    posts: int
+
+
 class DiscoveryResponse(BaseModel):
     mode: Mode
     state: Literal["available", "empty"]
-    creators: list[CreatorSummary]
+    creators: list[DiscoveryItem]
+    activity: list[ActivityWeek]
 
 
 class Comparison(BaseModel):
@@ -91,6 +121,7 @@ class Comparison(BaseModel):
 
 
 class Processing(BaseModel):
+    revision: str
     mode: Mode
     state: Literal["empty", "preparing", "ready", "fallback"]
     eligible_datasets: int
@@ -104,11 +135,23 @@ def discover_creators(
     filters: Annotated[CreatorFilter, Query()],
 ) -> DiscoveryResponse:
     snapshot = store.snapshot(scope)
-    creators = [
-        summary(creator)
-        for creator in Catalog(snapshot).creators.values()
-        if creator.matches(filters)
+    creators = []
+    today = snapshot.as_of.date()
+    first_monday = today - timedelta(days=today.weekday(), weeks=11)
+    activity = [
+        ActivityWeek(start=first_monday + timedelta(weeks=index), posts=0)
+        for index in range(12)
     ]
+    for creator in Catalog(snapshot).creators.values():
+        preview = creator.preview(filters)
+        if creator.matches(filters, preview):
+            for post in creator.posts:
+                week = (post.record.data.published_at.date() - first_monday).days // 7
+                if 0 <= week < len(activity):
+                    activity[week].posts += 1
+            creators.append(
+                DiscoveryItem(**summary(creator).model_dump(), preview=preview)
+            )
     creators.sort(
         key=lambda item: (
             item.profile.data.name.casefold(),
@@ -117,7 +160,43 @@ def discover_creators(
     )
     store.assert_current(scope, snapshot.revision)
     return DiscoveryResponse(
-        mode=scope.mode, state="available" if creators else "empty", creators=creators
+        mode=scope.mode,
+        state="available" if creators else "empty",
+        creators=creators,
+        activity=activity,
+    )
+
+
+class BriefOptions(BaseModel):
+    mode: Mode
+    reviewed_facts: list[str]
+    quoted_deliverables: list[Deliverable]
+
+
+@router.get("/{mode}/brief-options")
+def brief_options(
+    platform: Platform, scope: CustomerScope, store: Store
+) -> BriefOptions:
+    snapshot = store.snapshot(scope)
+    creators = Catalog(snapshot).creators.values()
+    facts = {
+        fact
+        for creator in creators
+        for post in creator.posts
+        if post.record.data.platform == platform
+        for fact in post.record.data.reviewed_facts
+    }
+    quoted = {
+        quote.data.deliverable
+        for creator in creators
+        for quote in creator.active_quotes()
+        if quote.data.platform == platform and quote.data.currency == "HKD"
+    }
+    store.assert_current(scope, snapshot.revision)
+    return BriefOptions(
+        mode=scope.mode,
+        reviewed_facts=sorted(facts),
+        quoted_deliverables=sorted(quoted),
     )
 
 
@@ -167,8 +246,7 @@ def calculate_scenario(body: Scenario, scope: CustomerScope) -> ScenarioResult:
 
 @router.get("/{mode}/processing")
 def processing(scope: CustomerScope, store: Store) -> Processing:
-    snapshot = store.snapshot(scope)
-    states = {dataset.state for dataset in snapshot.datasets}
+    revision, states, eligible, indexed = store.processing_status(scope)
     if not states:
         state = "empty"
     elif store.config.model_dir is None or "fallback" in states:
@@ -180,11 +258,39 @@ def processing(scope: CustomerScope, store: Store) -> Processing:
     return Processing(
         mode=scope.mode,
         state=state,
-        eligible_datasets=len(snapshot.datasets),
-        indexed_datasets=sum(
-            dataset.state == "ready" and bool(dataset.vectors)
-            for dataset in snapshot.datasets
-        ),
+        revision=revision,
+        eligible_datasets=eligible,
+        indexed_datasets=indexed,
+    )
+
+
+def dataset_scope(
+    mode: Mode, store: Store, company: Ref | None, *, administrative: bool = False
+) -> Scope:
+    configured = scope_for(mode, store.config, administrative=administrative)
+    if company is None:
+        if mode == "partner":
+            with store.sessions() as session:
+                if session.get(CompanyRow, configured.workspace):
+                    raise MarketingError(
+                        409,
+                        "company_destination_required",
+                        "Select the company that owns this dataset",
+                    )
+        return configured
+    if mode == "partner":
+        with store.sessions() as session:
+            if session.get(CompanyRow, company) is not None:
+                return Scope("partner", company)
+    raise MarketingError(404, "company_unavailable", "Company unavailable")
+
+
+@router.get("/operator/{mode}/datasets", dependencies=[Depends(operator_store)])
+def dataset_directory(
+    mode: Mode, store: Store, after: Ref | None = None, company: Ref | None = None
+) -> list[str]:
+    return store.dataset_ids(
+        dataset_scope(mode, store, company, administrative=True), after
     )
 
 
@@ -192,16 +298,24 @@ def processing(scope: CustomerScope, store: Store) -> Processing:
     "/operator/{mode}/datasets/{dataset_id}", dependencies=[Depends(operator_store)]
 )
 def ingest(
-    mode: Mode, dataset_id: Ref, body: ImportDataset, store: Store
+    mode: Mode,
+    dataset_id: Ref,
+    body: ImportDataset,
+    store: Store,
+    company: Ref | None = None,
 ) -> DatasetStatus:
-    return store.ingest(scope_for(mode, store.config), dataset_id, body)
+    return store.ingest(dataset_scope(mode, store, company), dataset_id, body)
 
 
 @router.get(
     "/operator/{mode}/datasets/{dataset_id}", dependencies=[Depends(operator_store)]
 )
-def dataset_status(mode: Mode, dataset_id: Ref, store: Store) -> DatasetStatus:
-    return store.status(scope_for(mode, store.config, administrative=True), dataset_id)
+def dataset_status(
+    mode: Mode, dataset_id: Ref, store: Store, company: Ref | None = None
+) -> DatasetStatus:
+    return store.status(
+        dataset_scope(mode, store, company, administrative=True), dataset_id
+    )
 
 
 @router.delete(
@@ -209,6 +323,8 @@ def dataset_status(mode: Mode, dataset_id: Ref, store: Store) -> DatasetStatus:
     status_code=204,
     dependencies=[Depends(operator_store)],
 )
-def withdraw(mode: Mode, dataset_id: Ref, store: Store) -> Response:
-    store.withdraw(scope_for(mode, store.config, administrative=True), dataset_id)
+def withdraw(
+    mode: Mode, dataset_id: Ref, store: Store, company: Ref | None = None
+) -> Response:
+    store.withdraw(dataset_scope(mode, store, company, administrative=True), dataset_id)
     return Response(status_code=204)

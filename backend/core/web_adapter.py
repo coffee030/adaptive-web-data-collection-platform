@@ -531,7 +531,6 @@ def _retry_after(value: str | None) -> int | None:
         return None
     value = value.strip()
     if value.isascii() and value.isdecimal():
-        # Saturate large values without converting an unbounded integer.
         return min(86_400, int((value.lstrip("0") or "0")[:6]))
     try:
         date = parsedate_to_datetime(value)

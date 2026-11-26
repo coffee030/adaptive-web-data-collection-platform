@@ -9,7 +9,6 @@ import type { CollectionJob, ExecutionEvent, JobInput } from '../src/features/co
 import type { Profile, Report } from '../src/features/profiles/api';
 import type { EvidenceMetadata, GenericRecord, QuarantineEntry } from '../src/features/results/api';
 import type { Source } from '../src/features/sources/api';
-import { captureM15 } from './m15Capture';
 
 const api = '/api/v1';
 const jobs = '/collection-jobs';
@@ -176,7 +175,6 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
   await evidence.getByRole('link', { name: 'Open evidence ' + captures[2]!.evidence_id }).click();
   await expect(page.getByText('Detail page', { exact: true })).toBeVisible();
   await expect(page.getByText(captures[2]!.content_hash, { exact: true })).toBeVisible();
-  await captureM15(page, 'persisted-detail-evidence');
   await scan(page, 'm7-detail-evidence', [1440, 390]);
   console.log(`M7 browser Job ${job.job_id}: five captures and three detail-linked records`);
 
@@ -192,7 +190,6 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
     if (query === 'detail429') {
       await expect(page.getByText('Earliest scheduled retry (UTC)', { exact: true })).toBeVisible({ timeout: 20_000 });
       await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('HTTP 429');
-      await captureM15(page, 'persisted-scheduled-retry');
     }
     await expect(page.getByRole('region', { name: 'Run overview' }).locator('.status')).toHaveText(
       terminal === 'partial' ? 'Partial' : 'Failed', { timeout: 115_000 });
@@ -207,7 +204,6 @@ test('M7 browser workflow authorizes a source and traces keyword results to deta
       expect(final.valid_count).toBeGreaterThan(0);
     } else {
       expect(final.valid_count).toBe(0);
-      await captureM15(page, 'persisted-failed');
     }
     console.log(`M15 ${terminal} Job ${final.job_id}, execution attempts ${final.execution_attempt}`);
   }
@@ -346,7 +342,6 @@ for (const adapter of ['web', 'csv'] as const) {
     const body: JobSubmission = created.request().postDataJSON();
     expect(body.profile_version_id).toBe(approved.profile_version_id);
     if (body.entry.adapter_type === 'csv') {
-      // Compare fixture rows across browser newline handling. The evidence check uses the exact submitted text.
       const normalizeNewlines = (text: string) => text.replace(/\r\n?/g, '\n');
       expect(normalizeNewlines(body.entry.content)).toBe(normalizeNewlines(csv));
     }
@@ -434,7 +429,6 @@ for (const adapter of ['web', 'csv'] as const) {
         expect(pending.dispatch_attempts).toBeGreaterThanOrEqual(1);
         expect((await get<ExecutionEvent[]>(request, jobs + '/' + pending.job_id + '/events')).map(event => event.kind))
           .toContain('DISPATCH_FAILED');
-        await captureM15(page, 'persisted-dispatch-failure');
       } finally {
         compose('up', '-d', '--no-build', '--no-recreate', '--wait', 'redis');
       }
@@ -486,7 +480,7 @@ for (const adapter of ['web', 'csv'] as const) {
       await expect(page.getByText(evidence.content_hash, { exact: true })).toBeVisible();
       console.log('M4-E restart and real replay', confirmed.job_id, recoveredJob.job_id);
     }
-    await page.goto('/');
+    await page.goto('/operations');
     await expect(page.getByRole('region', { name: 'Recent jobs', exact: true })).toContainText(registered.name);
     const latest = page.getByRole('region', { name: 'Validated records', exact: true });
     await expect(latest).toContainText(web ? 'River Walk' : 'North Trail');

@@ -42,4 +42,5 @@ class DatasetRow(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     claim: Mapped[UUID | None]
+    refresh_error: Mapped[str | None] = mapped_column(String(64))
     index_failures: Mapped[int]

@@ -81,3 +81,55 @@ button.operator-danger:hover { background: var(--error-surface); }
   .operator-ledger td[data-label] { grid-template-columns: minmax(0, 1fr); }
   .operator-sheet button, .operator-sheet .control { min-block-size: 44px; }
 }
+
+
+.operations-tasks { border-top: 1px solid var(--divider); }
+.operations-section-heading, .operations-health, .operator-research-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px 14px; }
+.operations-section-heading { justify-content:space-between; padding-block:12px; }
+.operations-health { color:var(--text-secondary); font-size:.81rem; }
+.operations-health-ok { display:inline-flex; align-items:center; gap:7px; }
+.operations-health-ok::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--success); }
+.operations-health button { font-size:.8rem; min-height:32px; }
+.operations-workflows { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-block:1px solid var(--divider); }
+.operations-workflows > div { padding:18px clamp(12px,2vw,24px); }
+.operations-workflows > div + div { border-inline-start:1px solid var(--divider); }
+.operations-workflows dt { margin-bottom:6px; font-weight:660; }
+.operations-workflows dd { color:var(--text-secondary); font-size:.88rem; }
+.operations-actions { display:grid; margin-top:12px; }
+.operations-actions a { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:38px; color:var(--accent-ink); text-decoration:none; }
+.operations-actions a:hover { text-decoration:underline; }
+.operations-actions span { color:var(--text-secondary); }
+@container (width < 660px) {
+  .operations-workflows { display:block; }
+  .operations-workflows > div { padding:14px 0; }
+  .operations-workflows > div + div { border-inline-start:0; border-block-start:1px solid var(--divider); }
+  .operations-actions a { min-height:44px; }
+}
+.operator-research { max-width:1070px; }
+.operator-research-result { margin-block:12px; padding:12px 0; border-block-start:1px solid var(--divider); }
+.operator-research-result > p { margin-top:6px; }
+.operator-research-form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 12px; padding:12px 0; }
+.operator-research-form label { display:grid; gap:4px; min-width:0; font-size:0.875rem; }
+.operator-research-form input { min-height:36px; max-width:100%; padding:6px 9px; font:inherit; color:var(--text); background:var(--surface);
+  border:1px solid var(--control-border); border-radius:var(--radius-compact); }
+.operator-research-form > div { display:flex; flex-wrap:wrap; gap:5px; }
+.operator-token > p { flex-basis:100%; }
+.operator-research-result summary { cursor:pointer; font-weight:650; }
+.operator-research-result summary ~ button { margin-top:8px; }
+.operator-research-result th { min-width:72px; }
+@media(max-width:650px) {
+  .operator-research-form label { flex-basis:100%; }
+}
+
+.operator-dataset-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:end; gap:12px; max-width:750px; }
+.operator-dataset-form label { display:grid; gap:4px; min-width:0; font-size:.875rem; }
+.operator-dataset-form input:not([type=checkbox]) { min-height:36px; width:100%; padding:5px 8px; font:inherit; color:var(--text);
+  background:var(--surface); border:1px solid var(--control-border); border-radius:var(--radius-compact); }
+.operator-dataset-form .operator-dataset-attest,.operator-dataset-form .operator-research-toolbar { grid-column:1/-1; }
+.operator-dataset-form .operator-dataset-attest { display:flex; gap:7px; align-items:center; }
+@media(max-width:600px) { .operator-dataset-form { grid-template-columns:1fr; } }
+
+.operator-form-block { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:end; gap:12px 20px; padding:14px 0 18px; margin:4px 0; border:none; border-top:1px solid var(--divider); min-width:0; grid-column:1/-1; }
+.operator-form-block legend { padding:0 8px 0 0; font-weight:650; }
+.operator-form-block p { font-size:.875rem; color:var(--text-secondary); grid-column:1/-1; }
+@media(max-width:600px) { .operator-form-block { grid-template-columns:1fr; } }

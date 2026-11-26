@@ -114,7 +114,7 @@ test('real Request page 2 and Job scope agree with Postgres records and Evidence
 });
 
 function revision(number: 1 | 2) {
-  endpoint('/health'); // Validate the container name before changing the controlled fixture.
+  endpoint('/health');
   const result = execFileSync('docker', ['exec', fixture!, 'python', '-c',
     'import sys; from urllib.request import Request, urlopen; print(urlopen(Request("http://127.0.0.1:8001/demo-revision/"+sys.argv[1], method="POST"), timeout=3).status)',
     String(number),

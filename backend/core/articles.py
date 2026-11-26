@@ -38,7 +38,6 @@ def _mapped_url(
     try:
         validated, origin = checked_url(source, value)
         _, detail_origin = checked_url(source, evidence.original_location)
-        # Legacy fixture rules are looser than public HTTPS. Keep article URLs printable.
         if (
             origin == detail_origin
             and validated.isascii()

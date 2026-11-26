@@ -87,7 +87,7 @@ async function mockLineage(page: Page) {
 test('Records navigation opens a keyboard-accessible ledger and optional inspector', async ({ page }) => {
   await mockLineage(page);
   await routeJson(page, '/collection-jobs', []);
-  await page.goto('/');
+  await page.goto('/operations');
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Data Explorer' }).press('Enter');
   await expect(page).toHaveURL(recordsPath);
   await expect(page.getByRole('main')).toBeFocused();

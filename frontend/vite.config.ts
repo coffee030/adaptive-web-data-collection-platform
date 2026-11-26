@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import type { Connect, Plugin } from 'vite';
@@ -63,7 +64,14 @@ export default defineConfig(({ mode, command, isPreview }) => {
 
   return {
     publicDir: false,
-    plugins: [react(), approvalBoundary(localApproval)],
+    plugins: [react(), approvalBoundary(localApproval), {
+      name: 'third-party-notices',
+      generateBundle() {
+        for (const file of ['Geist.txt', 'Tremor.txt']) {
+          this.emitFile({ type: 'asset', fileName: 'licenses/' + file, source: readFileSync('public/licenses/' + file, 'utf8') });
+        }
+      },
+    }],
     define: {
       __LOCAL_PROFILE_APPROVAL__: JSON.stringify(localApproval || containerApproval),
       __PLATFORM_SYNTHETIC_DEMO__: JSON.stringify(syntheticDemo),

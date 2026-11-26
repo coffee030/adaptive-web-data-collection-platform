@@ -97,7 +97,6 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    # The default serves the operator's loopback copy. Compose supplies its internal bind.
     host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
     with ThreadingHTTPServer((host, 8001), FixtureHandler) as server:
         server.serve_forever()

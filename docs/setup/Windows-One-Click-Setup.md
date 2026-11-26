@@ -3,12 +3,14 @@
 ## Get started
 
 1. Clone or extract the repository to a local NTFS folder where you have write access.
-2. Double-click `Start-Platform.bat` in File Explorer. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
-3. The first launch downloads dependencies and builds the backend and frontend images inside Docker. After `[SUCCESS]`, the launcher asks the default browser to open Overview. You can also copy the URL shown. [Overview](http://127.0.0.1:5197/)
+2. Double-click `Start-Harbourline-Demo.bat` for fictional data or `Start-Harbourline-Pilot.bat` for the private workspace. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
+3. The first launch downloads dependencies and builds the backend and frontend images inside Docker. After `[SUCCESS]`, the launcher opens the product in the default browser. You can also copy the URL shown.
 4. Double-click the same file for later launches. The launcher reuses healthy services, dependencies, and the database. Use the printed URL to reopen the Dashboard.
 
 | Entry point | Purpose |
 | --- | --- |
+| `Start-Harbourline-Demo.bat` | Opens creator research and campaigns using fictional data. |
+| `Start-Harbourline-Pilot.bat` | Opens the private company workspace. |
 | `Start-Platform.bat` | Checks the environment, starts services, verifies health, and opens the browser. |
 | `Setup-Platform.bat` | Checks and repairs prerequisites and verifies local settings. |
 | `Stop-Platform.bat` | Stops owned Compose services for this checkout and retains their volumes. |
@@ -39,7 +41,7 @@ Demo uses `.local-demo/launcher.env` with its own protected credentials and iden
 
 Find Demo diagnostics at `logs/launcher/demo/latest.log`. `DEMO-001` identifies missing bundled files. `DEMO-002` identifies incomplete or conflicting presets. Fix the reported cause and Start again. Use `Start-Platform.bat -Demo -DemoRetry` to create a replacement for a terminal failed or partial baseline. Earlier Requests and Evidence remain available.
 
-Keep the Demo settings and its PostgreSQL, Redis, Evidence and `demo_state` volumes together for backup and restore. Use the Normal commands to operate the Normal project. [Demo architecture and expected results](../evaluation/M10-Demo-Presets-and-Launcher.md)
+Keep the Demo settings and its PostgreSQL, Redis, Evidence and `demo_state` volumes together for backup and restore. Use the Normal commands to operate the Normal project. [Demo architecture and expected results](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/evaluation/M10-Demo-Presets-and-Launcher.md)
 
 ## Prerequisites and permissions
 
@@ -64,9 +66,9 @@ After the prerequisites pass, the first Setup or Start generates `.local/launche
 
 Stop first, edit the supported settings in a text editor, save, and start again. Keep the other settings at their original values. The Dashboard, API and PostgreSQL are bound to `127.0.0.1`. Redis stays on the Docker network. Nginx uses the Dashboard authority and requires a matching loopback Origin for browser Profile approval and binding actions. FastAPI retains its own Host and Origin checks. Source authorisation and Profile Version approval still require separate actions. The operator supplies the operator label.
 
-For a fresh controlled HTML or CSV demo, run `Setup-Platform.bat` to create the settings. Before the first Start, set `LAUNCHER_FIXTURE=1`, `LOCAL_PROFILE_APPROVAL=1`, and available ports. The demo guide also includes manual Compose startup. [M5.5 controlled demo](../demo/M5.5-dashboard-demo-runbook.md)
+For a fresh controlled HTML or CSV demo, run `Setup-Platform.bat` to create the settings. Before the first Start, set `LAUNCHER_FIXTURE=1`, `LOCAL_PROFILE_APPROVAL=1`, and available ports. The demo guide also includes manual Compose startup. [M5.5 controlled demo](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/demo/M5.5-dashboard-demo-runbook.md)
 
-Existing manual environments retain their own `.env` and Compose projects. Start them using the M5 runbook. To move a launcher, stop the old checkout, privately save the entire `launcher.env`, verify that the destination Docker Engine has the original volumes for that identity, and restore the file to the ACL-restricted `.local` directory. For a manual database without an ownership label, use the original environment to read and back up the data. Ask the team to check the schema and arrange import. [M5 Demo Runbook](../demo/M5-core-demo-runbook.md)
+Existing manual environments retain their own `.env` and Compose projects. Start them using the M5 runbook. To move a launcher, stop the old checkout, privately save the entire `launcher.env`, verify that the destination Docker Engine has the original volumes for that identity, and restore the file to the ACL-restricted `.local` directory. For a manual database without an ownership label, use the original environment to read and back up the data. Ask the team to check the schema and arrange import. [M5 Demo Runbook](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/demo/M5-core-demo-runbook.md)
 
 ## Stop, restart, update, and remove
 
@@ -89,7 +91,7 @@ Double-click Diagnose and open the report shown, or open `logs/launcher/latest.l
 | `SVC-001`–`SVC-005` | Check network access for builds and container states. The launcher makes up to one restart attempt each for a failed Redis service or Celery worker. |
 | `WEB-003`–`WEB-005` | Check the frontend container, the same-origin proxy, the browser or the configured port. If a verified previous host frontend is still stopping, close its tabs and retry. |
 
-When Windows CIM is available, the report can include physical RAM and virtualisation data. Disk checks cover the checkout drive and the default Docker Desktop installation drive. Check capacity for custom Docker data locations in Docker Desktop. Follow the release procedures for fresh Windows installation and physical 8 GB acceptance. [Acceptance evidence](../evaluation/Final-Core-Readiness.md)
+When Windows CIM is available, the report can include physical RAM and virtualisation data. Disk checks cover the checkout drive and the default Docker Desktop installation drive. Check capacity for custom Docker data locations in Docker Desktop. Follow the release procedures for fresh Windows installation and physical 8 GB acceptance. [Acceptance evidence](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/evaluation/Final-Core-Readiness.md)
 
 ## Optional frontend development
 

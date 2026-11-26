@@ -1,4 +1,0 @@
-interface:
-  display_name: "FYP Frontend Design"
-  short_description: "Build consistent React dashboard views"
-  default_prompt: "Use $fyp-frontend-design to create a React page for monitoring collection jobs."

@@ -73,7 +73,6 @@ class OriginRate:
         )
         token = uuid4().hex
         wait_until = min(deadline, monotonic() + MAX_WAIT_SECONDS)
-        # Short polling lets a contender observe a holder releasing its lease early.
         while monotonic() < wait_until:
             wait_ms = self._eval(
                 ACQUIRE, (lock, cooldown, last), token, LEASE_MS, interval_ms

@@ -147,7 +147,6 @@ test('the launcher dashboard displays the three seeded Demo requests and downloa
 
 test('operator configures two sources, traces collection history and downloads persisted records', async ({ page, request, baseURL, browserName }) => {
   test.setTimeout(180_000);
-  // Keep the interaction and layout checks independent of the axe runtime.
   const checkAxe = browserName === 'chromium';
   await page.setViewportSize({ width: 1440, height: 960 });
   const suffix = randomUUID().slice(0, 8);
@@ -256,7 +255,7 @@ test('operator configures two sources, traces collection history and downloads p
     expect(reply.status()).toBe(201);
     return await reply.json() as CollectionRequest;
   }
-  await page.goto('/');
+  await page.goto('/operations');
   await prepareCollection('quick');
   await checkLayout(page, checkAxe);
   const initial = await submitCollection();

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Run from a clean checkout on a Linux Docker host with the CI test dependencies.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

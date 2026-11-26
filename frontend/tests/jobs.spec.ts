@@ -4,7 +4,6 @@ import type { Page } from '@playwright/test';
 import type { CollectionJob, ExecutionEvent, JobDetailResponse } from '../src/features/collection-jobs/api';
 import type { GenericRecord } from '../src/features/results/api';
 import type { CollectionRequest } from '../src/features/topic-collections/api';
-import { captureM15, captureM15Zoom } from './m15Capture';
 
 const jobId = '1b8e00c2-b2f7-4c80-8368-016b42ac249d';
 const sourceId = '9580e5c0-9f16-4601-81e8-9b6f8d2ee364';
@@ -146,9 +145,9 @@ test('shell, persisted fields, and keyboard navigation', async ({ page }) => {
   await mockDetail(page);
   await page.route(api + '/sources/' + sourceId, route => route.fulfill({ json: { source_name: 'Fixture listings' } }));
   await page.route(api + '/sources/' + sourceId + '/versions/' + profileId, route => route.fulfill({ json: { version: 4 } }));
-  await page.goto('/');
-  await expect(page).toHaveURL('/');
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Data Collection Platform' })).toBeVisible();
+  await page.goto('/operations');
+  await expect(page).toHaveURL('/operations');
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Data Operations', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Data Collection Overview' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Collection Jobs' }).click();
@@ -157,7 +156,6 @@ test('shell, persisted fields, and keyboard navigation', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Collection Jobs' })).toHaveAttribute('aria-current', 'page');
 
-  // Use a direct load so the first Tab exercises the skip link from the browser's initial focus.
   await page.goto(jobsUrl);
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
@@ -451,7 +449,6 @@ test('retry and dispatch fields stay distinct and events keep their persisted se
   await expect(diagnostics.getByText('Earliest scheduled retry (UTC)').locator('..').locator('time')).toHaveAttribute('datetime', retryTime);
   await expect(diagnostics).toContainText('A previous broker publication could not be confirmed.');
   await expect(page.getByText('Awaiting a scheduled retry.')).toBeVisible();
-  await captureM15(page, 'retry-and-dispatch-failure');
   const timeline = page.getByRole('list', { name: 'Execution events in API order' });
   await expect(timeline.locator('.event-label strong')).toHaveText([
     'Historical status update', 'Unrecognized execution event', 'Execution claimed', 'Execution claimed',
@@ -469,7 +466,6 @@ test('retry and dispatch fields stay distinct and events keep their persisted se
   await expect(timeline.locator(':scope > li').last()).toContainText('Failed · Attempt 3');
   await expect(diagnostics.getByText('Earliest scheduled retry (UTC)')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('Rate limiting');
-  await captureM15(page, 'failed-job');
 });
 
 test('hidden pages suspend polling and failed refresh preserves the visible Job until recovery', async ({ page }) => {
@@ -488,7 +484,6 @@ test('hidden pages suspend polling and failed refresh preserves the visible Job 
   });
   await page.goto(jobUrl);
   await expect(page.getByText('Lease deadline passed.', { exact: false })).toBeVisible();
-  await captureM15(page, 'running-lease-deadline');
   await page.clock.runFor(9000);
   expect(reads).toBe(1);
   await page.evaluate(() => {
@@ -532,7 +527,6 @@ test('failed Job preserves page two and return focus through Quarantine and brow
   await quarantine.click();
   await expect(page.getByRole('heading', { name: 'CSV row 2' })).toBeVisible();
   await expect(page.getByText('Use an integer.').first()).toBeVisible();
-  await captureM15(page, 'quarantine', 'section[aria-labelledby="quarantine-list-title"]');
   await page.getByRole('button', { name: 'Next quarantine entries page' }).click();
   await expect(page.getByRole('heading', { name: 'CSV row 13' })).toBeVisible();
   await page.goBack();
@@ -570,12 +564,10 @@ for (const width of [1440, 900, 768, 390, 320]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     const rules = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
     expect((await new AxeBuilder({ page }).withTags(rules).analyze()).violations).toEqual([]);
-    await captureM15(page, `ledger-${width}`);
     if (width === 1440) {
       const filter = page.getByRole('combobox', { name: 'Status' });
       await filter.selectOption('failed');
       await expect(ledger(page).getByRole('listitem')).toHaveCount(1);
-      await captureM15(page, 'ledger-failed-filter');
       await filter.selectOption('');
     }
     await inspect(page).click();
@@ -585,7 +577,6 @@ for (const width of [1440, 900, 768, 390, 320]) {
     await expect(page.getByRole('list', { name: 'Related records preview' })).toContainText('Fixture item');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     expect((await new AxeBuilder({ page }).withTags(rules).analyze()).violations).toEqual([]);
-    if (width === 1440 || width === 390) await captureM15(page, `partial-${width}`);
   });
 }
 
@@ -624,12 +615,10 @@ test('Chrome native 200 percent zoom keeps Jobs and diagnostics usable', async (
     await expect(inspect(page)).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(720);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(720);
-    await captureM15Zoom(page, 'ledger-chrome-200-percent');
     await inspect(page).click();
     await expect(page.getByRole('region', { name: 'Execution and dispatch' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Related records preview' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(720);
     await page.getByRole('region', { name: 'Execution and dispatch' }).scrollIntoViewIfNeeded();
-    await captureM15Zoom(page, 'detail-chrome-200-percent');
   } finally { await context.close(); }
 });

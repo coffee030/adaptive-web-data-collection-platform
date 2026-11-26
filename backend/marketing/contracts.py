@@ -104,6 +104,7 @@ class DiscoveryResult(BaseModel):
 
 
 class Capability(BaseModel):
+    company_accounts: bool = False
     provider: Literal["youtube_data_api"] = "youtube_data_api"
     policy_url: Literal[POLICY_URL] = POLICY_URL
     permission_status: Literal["additional_permission_pending"] = (

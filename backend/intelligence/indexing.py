@@ -6,14 +6,15 @@ from uuid import UUID, uuid4
 
 from kombu.exceptions import OperationalError as BrokerConnectionError
 from redis.exceptions import RedisError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 
 from backend.application.jobs import database_now
+from backend.marketing.company_models import CompanyRow
 
 from .contracts import Content, ImportDataset
 from .models import DatasetRow
 from .semantic import INDEX_VERSION, content_key, embed
-from .store import IntelligenceStore, drop_payload
+from .store import DEMO, IntelligenceStore, drop_payload, valid_workspace
 
 INDEX_CLAIM_WINDOW = timedelta(seconds=120)
 RETRY_DELAY = timedelta(minutes=15)
@@ -31,6 +32,15 @@ def _index_lock(session) -> None:
 
 
 class Indexing(IntelligenceStore):
+    def enabled_scopes(self, session) -> list[tuple[str, str]]:
+        scopes = [(DEMO.mode, DEMO.workspace)] if self.config.demo_enabled else []
+        if valid_workspace(self.config):
+            scopes.append(("partner", self.config.workspace))
+            scopes.extend(
+                ("partner", key) for key in session.scalars(select(CompanyRow.id))
+            )
+        return scopes
+
     def maintain(self, *, purge: bool = True) -> None:
         with self.sessions.begin() as session:
             now = database_now(session)
@@ -66,9 +76,12 @@ class Indexing(IntelligenceStore):
         with self.sessions.begin() as session:
             _index_lock(session)
             now = database_now(session)
+            enabled = tuple_(DatasetRow.mode, DatasetRow.workspace).in_(
+                self.enabled_scopes(session)
+            )
             busy = (
                 select(DatasetRow.id)
-                .where(DatasetRow.expires_at > now)
+                .where(enabled, DatasetRow.expires_at > now)
                 .where(
                     (DatasetRow.state == "running")
                     | (DatasetRow.claim.is_not(None) & (DatasetRow.due_at > now))
@@ -80,6 +93,7 @@ class Indexing(IntelligenceStore):
             row = session.scalar(
                 select(DatasetRow)
                 .where(
+                    enabled,
                     DatasetRow.state.in_(READY_TO_INDEX),
                     DatasetRow.expires_at > now,
                     DatasetRow.due_at <= now,
@@ -108,6 +122,7 @@ class Indexing(IntelligenceStore):
             row = session.get(DatasetRow, dataset_id, with_for_update=True)
             if (
                 row is None
+                or (row.mode, row.workspace) not in self.enabled_scopes(session)
                 or row.claim != token
                 or row.state not in READY_TO_INDEX
                 or row.expires_at <= now

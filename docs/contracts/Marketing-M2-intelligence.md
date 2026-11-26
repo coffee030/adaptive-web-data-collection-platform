@@ -18,11 +18,31 @@ Each row contains `id`, `creator_id`, `evidence_ref`, and `observed_at`. The gra
 
 An identical import is idempotent. Replacing a dataset invalidates its active lease and reuses unchanged normalized text representations. A missing eligible profile or platform account keeps related content and observations outside the customer projection. Expiration immediately removes the dataset from reads. Withdrawal deletes payloads, lexical terms, and vectors, retaining the local dataset identifier to prevent accidental reimport. The dispatcher clears expired payloads on minute-based maintenance. Configure equivalent deletion for backups before an operational pilot.
 
+## Automatic partner refresh
+
+For an authorized partner delivering recurring JSON snapshots, first import the original dataset and verify its written grant in Data Operations. A private pilot may mount the delivery directory on the dispatcher using `compose.marketing-refresh.yaml` and `MARKETING_PARTNER_REFRESH_HOST_DIR`. The directory must be readable by the container user. Limit write access to the operator and the approved delivery process.
+
+The dispatcher checks once per minute while running and resumes after restart. Publish a regular file atomically at `<directory>/<workspace>/<dataset_id>.json`. The following PowerShell example prepares a delivery from an approved import file. Replace the example timestamp with the precise `imported_at` for this dataset, available under **Refresh version** in Data Operations.
+
+```powershell
+$updatedDataset = Get-Content -Raw -Encoding UTF8 -LiteralPath 'updated-partner-data.json' | ConvertFrom-Json
+$delivery = @{
+    expected_imported_at = '2026-11-26T08:20:00.123456Z'
+    dataset = $updatedDataset
+}
+$json = $delivery | ConvertTo-Json -Depth 20
+[IO.File]::WriteAllText('delivery.tmp', $json, [Text.UTF8Encoding]::new($false))
+```
+
+Place the temporary file in the target directory before renaming it to the dataset filename. When updating an existing delivery, use the producer's atomic file-replacement operation on the same volume.
+
+Each accepted update replaces that dataset under its existing grant. Use the new receipt for the next changed snapshot. The service ignores an identical replay and rejects a stale receipt or changed grant while retaining the last accepted dataset. An operator reviews changes to permitted uses or expiry through the normal import. Only active previously onboarded dataset IDs in this partner workspace are read. Withdrawal stops refresh and indexing and clears the stored dataset. The read-only delivery directory remains under the operator’s retention and deletion policy. Inspect the dataset in Data Operations for a rejected delivery reason and the precise refresh version. A successful update clears the error. Files are limited to 1 MiB each.
+
 ## Frontend routes
 
 Discover supported workspaces with `GET /api/v1/marketing/capabilities`. The `permission_status` field describes YouTube. The `customer_intelligence` and `demo_intelligence` fields describe the independent workspaces. The M1 research intake remains separate.
 
-The routes below use `/api/v1/marketing/intelligence/{mode}`, where mode is `demo` or `partner`. The demo requires a deployment opt-in. Partner reads require the deployment's customer token over the existing loopback boundary. The customer token cannot import or withdraw data. Keep it in the application's trusted host or server layer.
+The routes below use `/api/v1/marketing/intelligence/{mode}`. Demo reads require deployment opt-in. Company reads use the current member’s expiring HttpOnly session. Company membership determines the scope on each request. The legacy Basic or bearer credential reads only the configured earlier shared pilot until an operator claims it for a company. Core operations require the operator credential on the pilot. Health and capabilities remain public on loopback.
 
 | Method and path | Contract |
 | --- | --- |
@@ -61,11 +81,11 @@ Amounts are integer minor units. Decimal measures and rates serialize as strings
 
 Granite and lexical retrieval score distinct normalized posts. A creator's weighted top-three evidence supports a relevance component. Ranking also uses comparable performance, consistency, quoted fee, independent market evidence, explicit content languages, and reviewed preferences when present. Weights are returned per result. Similarity and utility are relative ranking signals. A required market share, language, fact, relevant post, and eligible firm quote must pass before optimization. Mixed-language content must explicitly include the required language tag. A real zero quote can enter the plan. Prices are never inferred.
 
-History uses the latest permitted observation per post at the same seven-day window. Interaction rate is total likes plus comments divided by total views over the same rows, requiring positive views and both interaction counts. Consistency uses median absolute deviation over at least five observations with a positive median. Quoted fee per thousand historical views or per historical interaction compares the current fee to an observed median and has no future performance label. Survey shares describe the surveyed respondents. Scenarios label their basis `assumption_based`. Unspecified inputs propagate as unavailable, and ROAS and ROI require positive spend. ROI uses attributed revenue less campaign spend divided by that spend. Trained forecasting and campaign outcome ingestion remain deferred.
+History uses the latest permitted observation per post at the same seven-day window. Interaction rate is total likes plus comments divided by total views over the same rows, requiring positive views and both interaction counts. Consistency uses median absolute deviation over at least five observations with a positive median. Quoted fee per thousand historical views or per historical interaction compares the current fee to an observed median and has no future performance label. Survey shares describe the surveyed respondents. Scenarios label their basis `assumption_based`. Unspecified inputs propagate as unavailable, and ROAS is attributed revenue divided by explicitly supplied positive advertising spend. Contribution-based ROI requires an explicit contribution margin and positive total campaign cost. It subtracts total campaign cost from attributed revenue multiplied by margin, then divides by total campaign cost. The deprecated input `spend_minor` remains a compatibility alias for campaign cost. It supplies neither ad spend nor margin. Attributed revenue alone cannot establish contribution or incremental return. Trained forecasting and campaign outcome ingestion remain deferred.
 
 ## Local setup and verification
 
-Apply migration `0012`. Enable `MARKETING_DEMO_ENABLED=1` for the demo. To serve authorized partner data, configure a private `MARKETING_PARTNER_WORKSPACE` and a `MARKETING_CUSTOMER_TOKEN` of at least 24 characters. Use a separate `MARKETING_OPERATOR_TOKEN` for `PUT`, `GET`, and `DELETE` on `/api/v1/marketing/intelligence/operator/{mode}/datasets/{dataset_id}`. The demo seed command produces the existing fictional research fixture as an operator import. The demo is independent of the Core's regular launcher data.
+Apply all migrations with `alembic upgrade head`. Enable `MARKETING_DEMO_ENABLED=1` for the demo. To serve authorized partner data, configure a private `MARKETING_PARTNER_WORKSPACE` and a `MARKETING_CUSTOMER_TOKEN` of at least 24 characters. Use a separate `MARKETING_OPERATOR_TOKEN` for `PUT`, `GET`, and `DELETE` on `/api/v1/marketing/intelligence/operator/{mode}/datasets/{dataset_id}`. The demo seed command produces the existing fictional research fixture as an operator import. The demo is independent of the Core's regular launcher data.
 
 ```text
 python -m backend.experiments.marketing_m2.demo_dataset
@@ -75,3 +95,11 @@ python -m backend.intelligence.fetch_model .local/marketing-granite
 Granite Embedding 97M Multilingual R2 uses IBM's Apache-2.0 ONNX INT8 CPU artifact at revision `835ad14087e140460703cf0fae09f97d469d65c2`. The download command checks the pinned sizes and SHA-256 digests before publishing the graph and tokenizer. Inference is local and requires no network. In a native deployment install `backend/requirements-marketing-onnx.txt` and set `MARKETING_MODEL_DIR` for the API, worker and dispatcher. For Compose set `MARKETING_ONNX=1` and `MARKETING_MODEL_HOST_DIR`, then include `compose.marketing-onnx.yaml` alongside `compose.yaml`. The model mount is read-only. The regular deployment uses character TF-IDF with no extra dependencies. [Pinned IBM model and license](https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2/tree/835ad14087e140460703cf0fae09f97d469d65c2)
 
 The lexical index is prepared during import. The dispatcher advances pending embeddings with durable lease claims, one active indexing job, bounded batches, and retry backoff. API and worker each load the graph on demand and reuse it within their process. The pilot bounds each dataset to 128 records and each workspace to 64 active datasets and 800 records. The engine uses the fictional multilingual fixture for engineering verification. Recommendation quality on partner data and physical acceptance on an 8 GB machine remain unverified.
+
+## Company accounts and campaign records
+
+Start the private pilot on loopback. In Data Operations, load the company directory or create a company and first administrator using the system operator credential. Each account belongs to one company. Administrators can create and remove members in that company. Removing membership deletes its sessions. Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Random session identifiers are stored as SHA-256 digests and expire after twelve hours. Core and dataset operations retain separate operator permissions.
+
+Under `/api/v1/marketing/companies`, operators use `GET/POST /registry`, account holders use `POST/GET/DELETE /session`, and administrators use `GET/POST /members` and `DELETE /members/{username}`. Company campaigns use `GET /campaigns`, `PUT /campaigns/{id}` with the previously read version (zero for a new campaign), and `GET /campaigns/{id}/export?version=…`. A stale write or stale export returns 409. CSV contains customer-authored campaign data and assumptions. Catalog evidence is fetched again under the current grant.
+
+Select the destination company in Data Operations for private intake. Its identifier is also the inbox subdirectory under `.local-pilot/partner-refresh` for versioned deliveries. Operators create the private subdirectory before arranging delivery. To assign the earlier pilot to one company and disable its shared credentials, select **Assign the earlier shared pilot to this company** when creating that company. Verify the existing grant covers these participants. Existing browser drafts are never automatically copied into a company.

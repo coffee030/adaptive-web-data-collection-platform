@@ -90,7 +90,13 @@ def scenario(assumptions: Scenario) -> ScenarioResult:
     rate = assumptions.click_rate
     conversion_rate = assumptions.conversion_rate
     value = assumptions.value_per_conversion_minor
-    spend = assumptions.spend_minor
+    advertising_spend = assumptions.advertising_spend_minor
+    campaign_cost = (
+        assumptions.campaign_cost_minor
+        if assumptions.campaign_cost_minor is not None
+        else assumptions.spend_minor
+    )
+    margin = assumptions.contribution_margin
     clicks = (
         impressions * rate if impressions is not None and rate is not None else None
     )
@@ -102,13 +108,22 @@ def scenario(assumptions: Scenario) -> ScenarioResult:
     revenue = (
         conversions * value if conversions is not None and value is not None else None
     )
+    contribution = (
+        revenue * margin if revenue is not None and margin is not None else None
+    )
     return ScenarioResult(
         assumptions=assumptions,
         clicks=calculated(clicks),
         conversions=calculated(conversions),
         attributed_revenue_minor=calculated(revenue),
-        roas=calculated(revenue / spend if revenue is not None and spend else None),
+        roas=calculated(
+            revenue / advertising_spend
+            if revenue is not None and advertising_spend
+            else None
+        ),
         roi=calculated(
-            (revenue - spend) / spend if revenue is not None and spend else None
+            (contribution - campaign_cost) / campaign_cost
+            if contribution is not None and campaign_cost
+            else None
         ),
     )

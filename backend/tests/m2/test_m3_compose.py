@@ -1032,7 +1032,6 @@ def test_compose_revocation_after_search_prevents_next_capture(compose):
             search_config(origin, "cards"),
             {"adapter_type": "web", "keyword": "quick"},
         )
-        # Observe the real fixture within Docker to revoke during the origin cooldown.
         watch = """
 import json
 import sys

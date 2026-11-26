@@ -90,6 +90,7 @@ class DatasetStatus(BaseModel):
     record_count: int
     imported_at: datetime
     expires_at: datetime | None
+    refresh_error: str | None
 
 
 def active(scope: Scope, now: datetime):
@@ -117,6 +118,7 @@ def drop_payload(row: DatasetRow, state: str) -> None:
     row.digest = row.payload = row.grams = row.vectors = row.model_version = None
     row.expires_at = row.claim = row.lease_until = row.due_at = None
     row.state = state
+    row.refresh_error = None
 
 
 def dataset_view(row: DatasetRow, now: datetime) -> DatasetStatus:
@@ -127,6 +129,7 @@ def dataset_view(row: DatasetRow, now: datetime) -> DatasetStatus:
         record_count=len(row.payload["records"]) if row.payload and not expired else 0,
         imported_at=row.imported_at,
         expires_at=row.expires_at,
+        refresh_error=None if expired else row.refresh_error,
     )
 
 
@@ -177,7 +180,12 @@ class IntelligenceStore:
         )
 
     def ingest(
-        self, scope: Scope, dataset_id: str, body: ImportDataset
+        self,
+        scope: Scope,
+        dataset_id: str,
+        body: ImportDataset,
+        *,
+        expected_imported_at: datetime | None = None,
     ) -> DatasetStatus:
         if not body.grant.allows(scope.mode):
             raise MarketingError(
@@ -204,7 +212,23 @@ class IntelligenceStore:
                 raise MarketingError(
                     409, "dataset_withdrawn", "Dataset identifier has been withdrawn"
                 )
+            if expected_imported_at is not None:
+                if row is None or row.payload is None or row.expires_at <= now:
+                    raise MarketingError(
+                        409, "refresh_inactive", "Refresh requires an active dataset"
+                    )
+                if row.payload["grant"] != payload["grant"]:
+                    raise MarketingError(
+                        403,
+                        "refresh_grant_changed",
+                        "An operator must review the new grant",
+                    )
+                if row.digest != digest and row.imported_at != expected_imported_at:
+                    raise MarketingError(
+                        409, "refresh_conflict", "Refresh references an older dataset"
+                    )
             if row and row.digest == digest:
+                row.refresh_error = None
                 return dataset_view(row, now)
             others = [
                 ImportDataset.model_validate(other.payload)
@@ -252,8 +276,20 @@ class IntelligenceStore:
                 "ready" if not docs or len(row.vectors) == len(docs) else "lexical"
             )
             row.due_at = now if row.state == "lexical" else None
+            row.refresh_error = None
             row.index_failures = 0
             return dataset_view(row, now)
+
+    def dataset_ids(self, scope: Scope, after: str | None) -> list[str]:
+        query = select(DatasetRow.dataset_id).where(
+            DatasetRow.mode == scope.mode, DatasetRow.workspace == scope.workspace
+        )
+        if after is not None:
+            query = query.where(DatasetRow.dataset_id > after)
+        with self.sessions() as session:
+            return list(
+                session.scalars(query.order_by(DatasetRow.dataset_id).limit(50))
+            )
 
     def status(self, scope: Scope, dataset_id: str) -> DatasetStatus:
         with self.sessions.begin() as session:
@@ -290,6 +326,26 @@ class IntelligenceStore:
                 revisions.append(f"{row.dataset_id}:{row.digest}")
             return Snapshot(
                 now, datasets, sha256("\n".join(revisions).encode()).hexdigest()
+            )
+
+    def processing_status(self, scope: Scope) -> tuple[str, set[str], int, int]:
+        with self.sessions() as session:
+            query = active(scope, database_now(session)).with_only_columns(
+                DatasetRow.dataset_id,
+                DatasetRow.digest,
+                DatasetRow.state,
+                DatasetRow.model_version,
+            )
+            rows = session.execute(query.order_by(DatasetRow.dataset_id)).all()
+            signature = "\n".join(f"{row.dataset_id}:{row.digest}" for row in rows)
+            return (
+                sha256(signature.encode()).hexdigest(),
+                {row.state for row in rows},
+                len(rows),
+                sum(
+                    row.state == "ready" and row.model_version == INDEX_VERSION
+                    for row in rows
+                ),
             )
 
     def assert_current(self, scope: Scope, revision: str) -> None:

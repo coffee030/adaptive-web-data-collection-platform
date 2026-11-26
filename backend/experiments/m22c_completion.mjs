@@ -33,7 +33,6 @@ export function persistStop(directory, record, start, observed, signal, context 
     cutoff_utc: signal === 'timeout' ? new Date(Date.parse(start.utc) + capSeconds * 1000).toISOString() : observed.utc,
     elapsed_seconds: (cutoff - start.mono_ms) / 1000,
   };
-  // Flush the source of truth before writing the standalone copy or doing any readback.
   record('stop', stop, observed);
   writeEvidence(directory, 'stop.json', stop);
   return stop;
@@ -128,7 +127,6 @@ export function adjudicate(events, versions, { evidenceIssue } = {}) {
     || submitted.report_id.replaceAll('-', '') !== version.validation_report_id) {
     return incomplete('Approval request did not identify the persisted hash and report');
   }
-  // The successful approval endpoint binds this report to the approved revision.
   const validations = exchanges('validate').filter(({ request, response, bodies }) => {
     if (events.indexOf(response) >= events.indexOf(approval.request) || bodies.length !== 1
       || !isForVersion(request, 'validate', header, version.profile_version_id)) return false;

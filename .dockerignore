@@ -7,6 +7,7 @@
 !backend/application/**/*.py
 !backend/core/**/*.py
 !backend/intelligence/**/*.py
+!backend/intelligence/wikidata-directory.json
 !backend/marketing/**/*.py
 !backend/migrations/**/*.py
 !backend/migrations/script.py.mako
@@ -14,6 +15,9 @@
 !backend/queue/**/*.py
 !backend/experiments/demo_presets.py
 !backend/experiments/demo_provision.py
+!backend/experiments/marketing_m2/demo_dataset.py
+!backend/experiments/marketing_m2/*.psv
+!backend/experiments/marketing_m2/harbourline_demo.py
 !backend/tests/demo_fixture.py
 !backend/tests/m3_fixture_site.py
 !backend/tests/m6_fixture.py

@@ -9,7 +9,6 @@ export async function prepareRequestIntent<T extends object>(resource: string, i
   let requestKey: string = crypto.randomUUID();
   let storageKey: string | undefined;
   try {
-    // Keep identifiers and a fingerprint in session storage, never the input.
     const bytes = new TextEncoder().encode(JSON.stringify(input));
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     storageKey = resource + ':' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -26,9 +25,7 @@ export function forgetRequestIntent(intent: RequestIntent<object>) {
   if (!intent.storageKey) return;
   try {
     sessionStorage.removeItem(intent.storageKey);
-  } catch {
-    // The retained key is tied to the same request fingerprint.
-  }
+  } catch {}
 }
 
 export function isUncertainWrite(error: unknown) {

@@ -120,7 +120,6 @@ def resource_samples(prefix):
         def collect():
             decoder = json.JSONDecoder()
             for line in process.stdout:
-                # Streaming Docker CLI output can contain ANSI screen controls.
                 offset = line.find("{")
                 while offset >= 0:
                     sample, end = decoder.raw_decode(line, offset)

@@ -4,7 +4,7 @@ Implemented in the release candidate on 21 November 2026. [Merged deployment cha
 
 ## Context
 
-Normal and Demo depended on a Windows Node installation and a launcher-owned Vite process. These prerequisites added a separate installation and recovery path. The milestone calls for local deployment on Windows 11 x64, repeatable Demo startup, and an approximately 8 GB target. [Windows clean-checkout acceptance](../evaluation/Clean-Checkout-Acceptance.md)
+Normal and Demo depended on a Windows Node installation and a launcher-owned Vite process. These prerequisites added a separate installation and recovery path. The milestone calls for local deployment on Windows 11 x64, repeatable Demo startup, and an approximately 8 GB target. [Windows clean-checkout acceptance](https://github.com/coffee030/adaptive-web-data-collection-platform/blob/8f96b1d8ea7a335570e55a754c14f2d2dce37e24/docs/evaluation/Clean-Checkout-Acceptance.md)
 
 ## Decision
 

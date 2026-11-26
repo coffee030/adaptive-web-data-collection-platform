@@ -6,7 +6,10 @@ param(
     [switch]$NoBrowser,
     [switch]$Demo,
     [switch]$DemoRetry,
-    [switch]$OneClickDemo
+    [switch]$OneClickDemo,
+    [switch]$Harbourline,
+    [switch]$Pilot,
+    [switch]$HarbourlineTextOnly
 )
 
 . "$PSScriptRoot/Common.ps1"
@@ -14,7 +17,8 @@ param(
 . "$PSScriptRoot/Backend.ps1"
 . "$PSScriptRoot/Frontend.ps1"
 . "$PSScriptRoot/Demo.ps1"
-Set-LauncherMode -Demo:$Demo
+. "$PSScriptRoot/Harbourline.ps1"
+Set-LauncherMode -Demo:$Demo -Pilot:$Pilot
 
 function Assert-OwnedDocker {
     if (!(Confirm-DockerOwnership)) {
@@ -55,6 +59,8 @@ function Start-Platform {
     if ($DemoMode) { Assert-DemoFixtureFiles }
     Write-Step '[3/7] Loading private local configuration...'
     $script:Config = Get-LauncherConfig -Create -AutoDemoNetwork:$DemoMode
+    if ($Harbourline) { Initialize-HarbourlineSettings }
+    if ($Pilot) { Initialize-HarbourlinePilotSettings }
     $compose = Invoke-Compose @('config', '--quiet')
     if ($compose.Code -ne 0) {
         Stop-WithError 'CFG-004' 'Compose Configuration Failed Validation' 'Docker Compose rejected the local configuration.' `
@@ -69,7 +75,8 @@ function Start-Platform {
     }
     Stop-OwnedFrontend
     Assert-LauncherPorts
-    Update-PlatformImage api
+    if ($Harbourline -or $Pilot) { Initialize-HarbourlineImage }
+    else { Update-PlatformImage api }
     Update-PlatformImage frontend
     Write-Step '[4/7] Starting PostgreSQL and Redis...'
     Start-StorageServices
@@ -77,14 +84,21 @@ function Start-Platform {
     Update-DatabaseSchema
     Start-BackendServices
     Stop-DisabledFixture
-    if ($DemoMode) { Invoke-DemoProvisioning }
+    if ($Harbourline) { Invoke-HarbourlineProvisioning }
+    elseif ($DemoMode) { Invoke-DemoProvisioning }
     Write-Step '[6/7] Starting the React frontend...'
     Start-ContainerFrontend
     Write-Step '[7/7] Preparing the browser...'
     $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)/"
+    if ($Harbourline) { $url += "demo/connected" }
     Write-Step "URL: $url"
     if (!$NoBrowser) { Open-PlatformBrowser $url }
-    if ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
+    if ($Harbourline) { Write-Step '[SUCCESS] Harbourline Fictional Demo is ready!' }
+    elseif ($Pilot) {
+        Write-Step "[SUCCESS] Harbourline is ready. Sign in with your company account. For initial setup, open Data Operations and create a company and administrator."
+        Write-Step "[INFO] Data Operations uses the separate credential in $Local/harbourline-operator.token."
+    }
+    elseif ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
     else { Write-Step '[SUCCESS] Platform is ready!' }
 }
 
@@ -161,16 +175,24 @@ $lock = $null
 $exitCode = 1
 $logDirectory = Join-Path $Root 'logs/launcher'
 if ($DemoMode) { $logDirectory = Join-Path $logDirectory 'demo' }
+elseif ($Pilot) { $logDirectory = Join-Path $logDirectory 'pilot' }
 try {
     $null = New-Item -ItemType Directory -Path $logDirectory -Force
     $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
     $script:LogFile = Join-Path $logDirectory "$stamp-$PID.log"
     Write-Step 'Adaptive Web Data Collection Platform | Windows Launcher 1.0'
-    $modeLabel = if ($DemoMode) { 'Synthetic Demo' } else { 'Normal' }
+    $modeLabel = if ($DemoMode) { 'Synthetic Demo' } elseif ($Pilot) { 'Private partner pilot' } else { 'Normal' }
     Write-Step "[INFO] $modeLabel mode. Action: $Action."
     if ($DemoRetry -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid Demo Retry Option' 'The -DemoRetry option requires Start with -Demo.' `
             'A different launcher action or mode was selected.' @('Use Start-Platform.bat -Demo -DemoRetry.')
+    }
+    if ($Pilot -and $Demo) {
+        Stop-WithError 'HL-003' 'Invalid Pilot Mode' 'Pilot and Synthetic Demo use separate workspaces.' 'Both modes were selected.' @('Run Start-Harbourline-Pilot.bat.')
+    }
+    if (($Harbourline -and (!$DemoMode -or $Action -ne 'Start')) -or ($HarbourlineTextOnly -and !$Harbourline -and !$Pilot)) {
+        Stop-WithError 'HL-003' 'Invalid Harbourline Demo Option' 'This option is available during an isolated Harbourline Demo start.' `
+            'The selected launcher mode does not support it.' @('Use Start-Harbourline-Demo.bat.')
     }
     if ($OneClickDemo -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid One-Click Demo Option' 'One-click startup requires Start with -Demo.' `
@@ -210,7 +232,7 @@ catch {
             Stop-WithError 'RUN-002' 'Launcher Could Not Complete' 'Windows reported an unexpected launcher error.' `
                 'The log identifies the failed script location. Check writable project folders and supported prerequisites.' `
                 @('Run Diagnose-Platform.bat and share the launcher report with your teammate.')
-        } catch { }
+        } catch {}
     }
 }
 finally {

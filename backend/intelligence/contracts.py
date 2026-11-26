@@ -240,4 +240,21 @@ class Scenario(StrictModel):
     click_rate: Share | None = None
     conversion_rate: Share | None = None
     value_per_conversion_minor: Money | None = None
-    spend_minor: Money | None = None
+    advertising_spend_minor: Money | None = None
+    campaign_cost_minor: Money | None = None
+    contribution_margin: Share | None = None
+    spend_minor: Money | None = Field(
+        default=None, json_schema_extra={"deprecated": True}
+    )
+
+    @model_validator(mode="after")
+    def consistent_cost(self):
+        if (
+            self.spend_minor is not None
+            and self.campaign_cost_minor is not None
+            and self.spend_minor != self.campaign_cost_minor
+        ):
+            raise ValueError(
+                "Legacy spend must match campaign cost when both are supplied"
+            )
+        return self

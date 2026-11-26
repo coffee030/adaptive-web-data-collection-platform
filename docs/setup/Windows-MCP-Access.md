@@ -12,6 +12,8 @@ $env:FYP_MCP_API_BASE = 'http://127.0.0.1:<DEMO_API_PORT>/api/v1'
 Invoke-RestMethod "$env:FYP_MCP_API_BASE/health"
 ```
 
+For a private Harbourline pilot, configure the trusted MCP host with the pilot loopback API address and the operator credential in `FYP_MCP_OPERATOR_TOKEN`. Keep this credential in the operator process environment.
+
 ## Connect Codex or another local MCP client
 
 Add the example's `fyp` tables to this checkout's local `.codex/config.toml`. Fill in the absolute checkout path and the current Demo API port. In a fresh Codex CLI session that trusts the checkout, ask it to call `fyp.list_categories` and report the first Category name and ID. Other local clients can use the same Python executable, arguments `-m mcp_access.server`, checkout root, and environment variable, with stdio transport. [Project configuration example](../../mcp_access/codex.config.example.toml) [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)

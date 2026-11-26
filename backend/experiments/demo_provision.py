@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-import fcntl
 import io
 import json
 import os
@@ -43,20 +42,23 @@ def require(condition, message):
         raise DemoError(message)
 
 
-def fetch(url, *, method="GET", body=None):
+def fetch(url, *, method="GET", body=None, token=None):
     request = Request(
         url,
         method=method,
         data=None if body is None else json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            **({"Authorization": f"Bearer {token}"} if token else {}),
+        },
     )
     with OPENER.open(request, timeout=50 if method == "POST" else 5) as response:
         return response.read(), response.headers
 
 
-def api(path, *, method="GET", body=None):
+def api(path, *, method="GET", body=None, token=None):
     try:
-        return json.loads(fetch(API + path, method=method, body=body)[0])
+        return json.loads(fetch(API + path, method=method, body=body, token=token)[0])
     except HTTPError as error:
         code = None
         try:
@@ -489,6 +491,8 @@ def run(*, check, retry):
 
 
 def main():
+    import fcntl
+
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true")

@@ -41,7 +41,6 @@ PREPARE = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=False, openWorldHint=False
 )
 START = ToolAnnotations(
-    # The dispatched jobs may contact approved external sources.
     readOnlyHint=False,
     destructiveHint=False,
     idempotentHint=True,
@@ -171,9 +170,12 @@ def api_base(value: str) -> str:
 
 
 def rest_client() -> httpx2.AsyncClient:
-    # Ignore proxy configuration and fail on redirects, including local redirects.
+    pilot_token = os.environ.get("FYP_MCP_OPERATOR_TOKEN")
     return httpx2.AsyncClient(
-        trust_env=False, follow_redirects=False, timeout=TIMEOUT_SECONDS
+        trust_env=False,
+        follow_redirects=False,
+        timeout=TIMEOUT_SECONDS,
+        headers={"Authorization": f"Bearer {pilot_token}"} if pilot_token else None,
     )
 
 
@@ -483,7 +485,6 @@ def create_server(base: str) -> MCPServer:
         request_id: UUID, limit: Limit = 10, offset: Offset = 0
     ) -> RecordPage:
         """Page through accepted records for one request, with bounded collected source data."""
-        # This REST route already returns 404 when the requested parent does not exist.
         result = await page(
             "/records",
             limit,

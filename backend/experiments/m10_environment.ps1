@@ -1,4 +1,3 @@
-# Dot-source from the repository root. Use a dedicated project with unused ports and subnets.
 param(
     [ValidatePattern('^collection-m3-test-m10-[a-z0-9-]+$')]
     [string]$Project = 'collection-m3-test-m10-evaluation',
