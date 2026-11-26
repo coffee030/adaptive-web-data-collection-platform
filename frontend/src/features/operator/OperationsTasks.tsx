@@ -8,6 +8,7 @@ import { sourcesPath } from '../sources/api';
 import { topicsPath } from '../topic-collections/api';
 
 export const operationsPath = '/operations';
+export const worldwideTrendsPath = operationsPath + '/worldwide-trends';
 export const datasetsPath = operationsPath + '/intelligence-datasets';
 export const researchPath = operationsPath + '/creator-research';
 export const directoryPath = operationsPath + '/public-directory';
@@ -20,7 +21,7 @@ const workflows: { label: string; description: string; actions: [string, string]
   { label: 'Source setup', description: 'Approve a source and its extraction rules before collecting.',
     actions: [[sourcesPath, 'Manage sources'], [topicsPath, 'Review topic bindings']] },
   { label: 'Collection & quality', description: 'Start a collection or trace a result back to its evidence.',
-    actions: [[newJobPath, 'Single-source collection and CSV'], [jobsPath, 'Collection Jobs'], [recordsPath, 'Browse validated records']] },
+    actions: [[worldwideTrendsPath, 'Worldwide trends'], [newJobPath, 'Single-source collection and CSV'], [jobsPath, 'Collection Jobs'], [recordsPath, 'Browse validated records']] },
 ];
 
 export function OperationsTasks() {

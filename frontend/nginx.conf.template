@@ -12,6 +12,7 @@ map "$request_method:$uri" $approval_route {
     default 0;
     "~^POST:/api/v1/sources/[^/]+/versions/[^/]+/approve/?$" 1;
     "~^POST:/api/v1/topics/[^/]+/bindings(?:/[^/]+/(?:approve|disable))?/?$" 1;
+    "~^POST:/api/v1/trends/wikimedia/provider/?$" 1;
 }
 
 map "$approval_route:${LOCAL_PROFILE_APPROVAL}:$same_origin" $deny_approval {

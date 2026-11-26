@@ -5,7 +5,7 @@ import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../featu
 import { evidencePath, recordsPath } from '../features/results/api';
 import { sourcesPath } from '../features/sources/api';
 
-import { datasetsPath, directoryPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
+import { datasetsPath, directoryPath, operationsPath, researchPath, worldwideTrendsPath } from '../features/operator/OperationsTasks';
 
 export function WorkspaceNavigation() {
   const { pathname, key } = useLocation();
@@ -25,6 +25,7 @@ export function WorkspaceNavigation() {
         <NavLink to={pathname === "/" && __PLATFORM_SYNTHETIC_DEMO__ ? "/" : operationsPath} end>Overview</NavLink>
         <NavLink to={newRequestPath} end>New Collection</NavLink>
         <NavLink to={requestsPath} end={pathname === newRequestPath}>Collection requests</NavLink>
+        <NavLink to={worldwideTrendsPath}>Worldwide trends</NavLink>
         {resultsContext
           ? <Link to={recordsPath} aria-current="location">Data Explorer</Link>
           : <NavLink to={recordsPath}>Data Explorer</NavLink>}
