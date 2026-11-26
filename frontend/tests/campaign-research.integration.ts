@@ -84,3 +84,35 @@ test('saved campaign research preserves reviewed requirements and editable finan
   await page.getByRole('button', { name: 'Start a new brief' }).click();
   await expect(page.getByLabel('What are you trying to find?')).toHaveValue('');
 });
+
+test('the campaign entry describes related dining coverage only when the search returns it', async ({ page }) => {
+  test.skip(process.env.HARBOURLINE_RESEARCH_TEST_PILOT !== '1', 'Requires a company pilot.');
+  const registered = await page.request.post('/api/v1/marketing/companies/register', {
+    data: { name: 'QA dining entry', username: 'dining-' + randomUUID().slice(0, 12), password: randomUUID() },
+  });
+  expect(registered.status()).toBe(201);
+  const market = '**/api/v1/marketing/intelligence/partner/market/';
+  await page.route(market + 'overview', async (route) => {
+    const response = await route.fetch();
+    const overview = await response.json();
+    await route.fulfill({ response, json: { ...overview, topics: [{ value: 'Dining', count: 3 }] } });
+  });
+  const search = market + 'creators?**';
+  let exact = false;
+  await page.route(search, (route) => route.fulfill({
+    json: {
+      items: [], total: exact ? 1 : 0,
+      related: exact ? undefined : {
+        basis: 'dining_coverage_without_price_evidence', query: 'food', topic: 'Dining', total: 3, items: [],
+      },
+    },
+  }));
+  await page.goto('/');
+  const link = page.getByRole('link', { name: 'Affordable dining', exact: true });
+  await expect(link).toHaveAccessibleDescription(/3 related matches without verified prices/);
+  await expect(link).toHaveAttribute('href', '/creators?q=affordable+dining');
+  exact = true;
+  await Promise.all([page.waitForResponse(search), page.reload()]);
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAccessibleDescription('');
+});

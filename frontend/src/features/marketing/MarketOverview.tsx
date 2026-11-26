@@ -12,7 +12,9 @@ import {
   SourceLink,
   useBusinessResource,
   type CampaignSummary,
+  type CreatorRecord,
   type MarketSummary,
+  type Results,
 } from './marketLibrary';
 
 function PublicationTrend({ summary }: { summary: MarketSummary }) {
@@ -162,6 +164,27 @@ export function PlatformAnalysis() {
   );
 }
 
+function DiningSearchLink() {
+  const query = new URLSearchParams({ q: 'affordable dining' });
+  const { result } = useBusinessResource<Results<CreatorRecord>>(
+    marketBase + '/creators?' + query + '&page_size=1'
+  );
+  const related = result.state === 'ready' ? result.data.related : undefined;
+  const hasRelatedCoverage = related?.basis === 'dining_coverage_without_price_evidence';
+  return (
+    <span>
+      <Link to={'/creators?' + query} aria-describedby={hasRelatedCoverage ? 'dining-search-coverage' : undefined}>
+        Affordable dining
+      </Link>
+      {hasRelatedCoverage && (
+        <span id="dining-search-coverage">
+          {' · '}{formatCount(related.total)} related {related.total === 1 ? 'match' : 'matches'} without verified prices
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function MarketOverview() {
   const navigate = useNavigate();
   const market = useBusinessResource<MarketSummary>(marketBase + '/overview');
@@ -210,16 +233,11 @@ export function MarketOverview() {
           {entryTopics.length > 0 && (
             <p className="suggested-topics">
               Try a search{' '}
-              {entryTopics.map((topic) => (
-                <Link
-                  key={topic}
-                  to={
-                    topic === 'Dining'
-                      ? '/creators?q=affordable+dining'
-                      : '/creators?topic=' + encodeURIComponent(topic)
-                  }
-                >
-                  {topic === 'Dining' ? 'Affordable dining' : topic}
+              {entryTopics.map((topic) => topic === 'Dining' ? (
+                <DiningSearchLink key={topic} />
+              ) : (
+                <Link key={topic} to={'/creators?topic=' + encodeURIComponent(topic)}>
+                  {topic}
                 </Link>
               ))}
             </p>
