@@ -32,6 +32,7 @@ from backend.intelligence.store import Config as IntelligenceConfig
 from backend.intelligence.store import IntelligenceStore
 from backend.marketing.api import router as marketing_router
 from backend.marketing.company_api import router as company_router
+from backend.marketing.campaign_tracking import router as campaign_tracking_router
 from backend.marketing.pilot_access import require_core_operator
 from backend.marketing.store import MarketingError, ResearchSettings, ResearchStore
 from backend.persistence.database import (
@@ -201,6 +202,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
         app.include_router(router, prefix="/api/v1", dependencies=core_access)
     app.include_router(marketing_router, prefix="/api/v1")
     app.include_router(company_router, prefix="/api/v1")
+    app.include_router(campaign_tracking_router, prefix="/api/v1")
     app.include_router(intelligence_router, prefix="/api/v1")
     app.include_router(directory_router, prefix="/api/v1")
     app.include_router(historical_works_router, prefix="/api/v1")

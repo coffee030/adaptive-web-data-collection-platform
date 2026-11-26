@@ -64,6 +64,10 @@ export function apiPostWithStatus<T>(path: string, body: object, signal: AbortSi
     async response => ({ status: response.status, data: await response.json() }));
 }
 
+export function apiDelete<T>(path: string, signal: AbortSignal) {
+  return request<T>(path, signal, {method:'DELETE'});
+}
+
 export function apiPut<T>(path: string, body: object, signal: AbortSignal) {
   return sendJson<T>('PUT', path, body, signal);
 }

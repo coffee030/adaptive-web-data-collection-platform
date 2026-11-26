@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode, type SetStateAction } from 'react';
 import { ApiError, apiGet, apiPut } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
-import { blankBrief } from './contracts';
+import { blankBrief, type Brief } from './contracts';
 import { type Company } from './CompanyAccess';
 import { DraftContext, type Draft, useDraftActions } from './workspace';
 
@@ -59,12 +59,14 @@ function Editor({saved,company,children,reload}:{saved:Saved[];company:Company;c
       return next===current.draft ? previous : previous.map(row=>row===current ? {...row,draft:next} : row);
     });
   },[active]);
-  function openDraft(id?:string) {
+  function openDraft(id?:string, initial?:Brief) {
     const next=id ? entries.find(row=>row.id===id) : empty();
     if(!next) return;
+    if(initial && !id) next.draft = {...next.draft, brief:initial, saved:true};
     if(!id) setEntries(previous=>[next,...previous]);
     setActive(next.id);
     try { sessionStorage.setItem(pointer,next.id); } catch {}
+    return next.id;
   }
   const actions=useDraftActions('partner',entry.draft,setDraft,false);
   return <DraftContext.Provider value={{...actions,company,campaignReceipt:{id:entry.id,version:entry.version,pending:entry.draft!==entry.acknowledged},openDraft,otherDrafts:()=>entries.filter(row=>row.id!==active && (row.draft.saved||row.draft.shortlist.length>0||Boolean(row.draft.research))).map(row=>({key:row.id,name:row.draft.brief.name||row.draft.research?.title||'Untitled campaign'}))}}>

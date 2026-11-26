@@ -21,6 +21,7 @@ export interface Draft {
   brief: Brief;
   saved: boolean;
   shortlist: string[];
+  market_leads?: string[];
   lines: PlanLine[];
   explorer: string;
   assumption?: string;
@@ -85,7 +86,7 @@ interface CampaignNavigation {
   company?: Company;
   campaignReceipt?: { id:string; version:number; pending:boolean };
   otherDrafts: () => { key: string; name: string }[];
-  openDraft: (key?: string) => void;
+  openDraft: (key?: string, initial?: Brief) => string | void;
 }
 
 export const DraftContext = createContext<(ReturnType<typeof useDraftActions> & CampaignNavigation) | null>(null);

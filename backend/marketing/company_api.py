@@ -48,8 +48,11 @@ class NewMember(Credentials):
     role: Role = "member"
 
 
-class NewCompany(Credentials):
+class Registration(Credentials):
     name: Name
+
+
+class NewCompany(Registration):
     claim_existing_pilot: bool = False
 
 
@@ -107,6 +110,7 @@ class CampaignDraft(StrictModel):
     brief: CampaignBrief
     saved: bool
     shortlist: list[Ref] = Field(max_length=120)
+    market_leads: list[Annotated[str, StringConstraints(min_length=1, max_length=160)]] = Field(default_factory=list, max_length=120)
     lines: list[None] = Field(max_length=0)
     explorer: str = Field(max_length=2000)
     evaluation: Campaign | None = None
@@ -182,6 +186,10 @@ def create_company(
             raise MarketingError(
                 409, "pilot_claimed", "The earlier pilot has already been assigned"
             )
+    return initialize_company(session, key, body)
+
+
+def initialize_company(session: Session, key: str, body: Registration) -> CompanyInfo:
     row = CompanyRow(id=key, name=body.name)
     session.add(row)
     try:
@@ -267,6 +275,13 @@ def sign_in(
         )
     member.failed_attempts = 0
     member.locked_until = None
+    return open_session(request, response, session, member)
+
+
+def open_session(
+    request: Request, response: Response, session: Session, member: MemberRow
+) -> Identity:
+    now = database_now(session)
     session.execute(
         delete(CompanySessionRow).where(
             (CompanySessionRow.expires_at <= now)
@@ -296,6 +311,32 @@ def sign_in(
         username=member.username,
         role=member.role,
     )
+
+
+@router.get("/register")
+def registration_available() -> dict[str, bool]:
+    config = settings()
+    return {
+        "enabled": bool(config.get("MARKETING_PILOT_PASSWORD"))
+        and config.get("HARBOURLINE_SELF_REGISTRATION") == "1"
+    }
+
+
+@router.post("/register", status_code=201)
+def register_company(
+    body: Registration, request: Request, response: Response, session: Database
+) -> Identity:
+    if not registration_available()["enabled"]:
+        raise MarketingError(
+            403, "registration_disabled", "Ask your company administrator for access"
+        )
+    company = initialize_company(session, "company-" + uuid4().hex, body)
+    member = session.get(MemberRow, body.username)
+    if member is None or member.company_id != company.id:
+        raise RuntimeError(
+            "Company registration did not create its initial administrator"
+        )
+    return open_session(request, response, session, member)
 
 
 @router.delete("/session", status_code=204)
@@ -362,6 +403,7 @@ class CampaignSummary(BaseModel):
     name: str
     version: int
     updated_at: datetime
+    status: str
 
 
 @router.get("/campaigns/summaries")
@@ -381,6 +423,7 @@ def campaign_summaries(
             ).label("name"),
             CompanyCampaignRow.version,
             CompanyCampaignRow.updated_at,
+            CompanyCampaignRow.status,
         )
         .where(CompanyCampaignRow.company_id == user.id)
         .order_by(CompanyCampaignRow.updated_at.desc(), CompanyCampaignRow.id)

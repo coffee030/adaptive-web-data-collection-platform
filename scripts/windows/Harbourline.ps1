@@ -33,6 +33,7 @@ function Set-HarbourlineDestination([ValidateSet('pilot','demo')][string]$Mode) 
 
 function Initialize-HarbourlinePilotSettings {
     Set-HarbourlineDestination pilot
+    $Config['HARBOURLINE_SELF_REGISTRATION'] = '1'
     $Config['MARKETING_PARTNER_WORKSPACE'] = $Config.COMPOSE_PROJECT_NAME
     $refreshRoot = Join-Path $Local 'partner-refresh'
     foreach ($folder in @($refreshRoot, (Join-Path $refreshRoot $Config.COMPOSE_PROJECT_NAME))) {

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
-import { WorkspaceDestination } from './WorkspaceDestination';
+import { Link, useLocation } from 'react-router';
+import { useResource } from '../../lib/useResource';
 import { ApiError, apiGet, apiPost, setCompanyScope } from '../../lib/api';
 import { Brand, Overlay } from './components';
 import './company.css';
+import './business.css';
 import { useMarketing } from './workspace';
 
 export interface Company {
@@ -14,6 +15,7 @@ export interface Company {
 }
 
 const base = '/marketing/companies';
+const registration = (signal: AbortSignal) => apiGet<{enabled:boolean}>(base+'/register',signal);
 function broadcastSession() {
   const updates = new BroadcastChannel('harbourline-signin');
   updates.postMessage('changed'); updates.close();
@@ -38,6 +40,9 @@ export function AccountFields({ newPassword = false }: { newPassword?: boolean }
 
 export function CompanyGate({ children }: { children: (company: Company) => ReactNode }) {
   const [account, setAccount] = useState<Company | null>();
+  const [creating, setCreating] = useState(false);
+  const {pathname} = useLocation();
+  const setup = useResource(registration, 0, false, account === null);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -68,35 +73,43 @@ export function CompanyGate({ children }: { children: (company: Company) => Reac
     return () => { current = false; updates.close(); controller.abort(); window.clearInterval(timer); window.removeEventListener('focus',check); window.removeEventListener('company-session',check); setCompanyScope(undefined); };
   }, [attempt]);
 
-  useEffect(() => { if (!account) document.title = 'Company pilot | Harbourline'; }, [account]);
+  useEffect(() => { if (!account) document.title = 'Company access | Harbourline'; }, [account]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setPending(true); setError('');
     try {
-      const user = await apiPost<Company>(base+'/session',{username:form.get('username'),password:form.get('password')},new AbortController().signal);
+      const user = await apiPost<Company>(base+(creating ? '/register' : '/session'),Object.fromEntries(form),new AbortController().signal);
       ++sessionCheck.current; signedIn.current = true; setExpired(false);
       setCompanyScope(user.id); setAccount(user);
       broadcastSession();
     } catch (cause) { setError(accountProblem(cause)); } finally { setPending(false); }
   }
   if (account) return <>{children(account)}</>;
-  return <main className="harbour dark hl-company-access hl-pilot-entry"><section className="hl-page hl-entry"><div className="hl-entry-intro"><Brand/><h1>Company pilot</h1>
-    <p>Research Hong Kong creators and plan campaigns with your team.</p>
-    {(account === null || error) && <WorkspaceDestination destination="demo"/>}</div>
-    <div className="hl-signin-column"><h2>Company sign in</h2><p>Use the account provided by your company administrator.</p>
-    {expired && <p role="status">Your company session ended. Sign in again to reopen your saved campaigns.</p>}
-    {account === null ? <form className="hl-form-grid" onSubmit={login}><AccountFields />
-      <div><button className="hl-primary" disabled={pending}>Sign in</button></div></form> : !error && <p role="status">Opening your company workspace…</p>}
-    {error && <p role="alert">{error} {account === undefined && <button onClick={()=>setAttempt(value=>value+1)}>Retry</button>}</p>}
-    {(account === null || error) && <>
-      <details className="hl-account-help"><summary>How do I get an account?</summary>
-        <p>Ask your company administrator to open the company menu, choose Add a team member and send you your account details privately. For a new company, ask the person running this workstation to create the first administrator.</p>
-      </details>
-      <p className="hl-entry-operator"><Link to="/operations/companies">Operator setup</Link> · Create a company or its first administrator.</p>
-    </>}
-  </div></section></main>;
+  const destination: Record<string,string> = {creators:'creator discovery',research:'Campaign Advisor',campaigns:'your campaigns',reports:'campaign reports',plan:'the campaign plan'};
+  const pageName = destination[pathname.split('/')[1] ?? ''];
+  const canRegister = setup.result.state === 'ready' && setup.result.data.enabled;
+  return <main className="harbour dark hl-company-access business-entry studio" data-workspace="marketing">
+    <header className="entry-mast"><Brand/><Link to="/operations">Scraping Operations ↗</Link></header>
+    <div className="entry-layout"><section className="entry-purpose">
+      <h1>Marketing<br/>intelligence<span>.</span></h1>
+      <p>Find creators covering Hong Kong, inspect their published work and plan campaigns with your team.</p>
+      <div className="entry-workflow"><span>Creator discovery</span><span>Campaign Advisor</span><span>Performance reports</span></div>
+    </section><section className="entry-form">
+      <h2>{creating ? 'Create a company workspace' : 'Open your workspace'}</h2>
+      <p>{creating ? 'You’ll be the first administrator. Invite your team after you sign in.' : pageName ? 'Sign in to continue to '+pageName+'.' : 'Sign in with your company account.'}</p>
+      {expired && <p role="status">Your session ended. Sign in to return to your work.</p>}
+      {account === null ? <form className="hl-form-grid" key={creating ? 'create' : 'login'} onSubmit={login}>
+        {creating && <label>Company name<input name="name" required maxLength={120} autoComplete="organization"/></label>}
+        <AccountFields newPassword={creating}/>{creating && <small>Use a lowercase account name and a password of at least 12 characters.</small>}
+        <button className="studio-primary" disabled={pending}>{pending ? 'Opening workspace…' : creating ? 'Create workspace' : 'Sign in'}</button>
+      </form> : !error && <p role="status">Opening your company workspace…</p>}
+      {error && <p role="alert">{error} {account === undefined && <button onClick={()=>setAttempt(value=>value+1)}>Retry</button>}</p>}
+      {canRegister && <button className="entry-switch" disabled={pending} onClick={()=>{setCreating(!creating);setError('');}}>{creating ? 'Use an existing account' : 'Create a new company workspace'} <span aria-hidden="true">→</span></button>}
+      {setup.result.state === 'error' && <button className="entry-switch" onClick={setup.retry}>Check workspace registration</button>}
+      {account === null && !creating && <details className="entry-help"><summary>Joining an existing company?</summary><p>Ask a company administrator to add your account from the company menu.</p></details>}
+    </section></div></main>;
 }
 
 export function CompanyControls() {

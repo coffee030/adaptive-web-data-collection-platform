@@ -20,6 +20,7 @@ import { LayoutGridIcon, GlobeIcon, FolderOpenIcon, SearchIcon, ShootingStarIcon
 import { ResearchProvider, useResearch } from './ResearchBrief';
 import { PublishedWorks } from './PublishedWorks';
 import { ResearchPlan } from './ResearchPlan';
+import { BusinessWorkspace } from './BusinessWorkspace';
 import { PublicCreatorDirectory } from './PublicCreatorDirectory';
 import './marketing.css';
 import './analytics.css';
@@ -144,5 +145,5 @@ export function MarketingWorkspace({ mode }: { mode: WorkspaceMode }) {
   const capabilityRequest = useResource(getMarketingCapability, 0, false, mode !== 'sample');
   const { result } = capabilityRequest;
   if (mode === 'partner' && __HARBOURLINE_INSTALLATION__ !== 'pilot' && result.state === 'loading') return <Loading>Opening workspace…</Loading>;
-  return <MarketingDraft mode={mode} key={mode} companyEnabled={__HARBOURLINE_INSTALLATION__ === 'pilot' || (result.state === 'ready' && result.data.company_accounts)}><ResearchProvider><MarketingShell capabilityRequest={capabilityRequest} /></ResearchProvider></MarketingDraft>;
+  return <MarketingDraft mode={mode} key={mode} companyEnabled={__HARBOURLINE_INSTALLATION__ === 'pilot' || (result.state === 'ready' && result.data.company_accounts)}><ResearchProvider>{mode==='partner' && (__HARBOURLINE_INSTALLATION__==='pilot' || (result.state==='ready' && result.data.company_accounts)) ? <BusinessWorkspace/> : <MarketingShell capabilityRequest={capabilityRequest} />}</ResearchProvider></MarketingDraft>;
 }
