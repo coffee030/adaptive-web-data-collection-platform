@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Loading, RequestProblem } from '../../components/feedback';
 import { PageHeader, Panel } from '../../components/studio/Workspace';
 import { ApiError, apiLocal, getOperatorCredential } from '../../lib/api';
@@ -109,14 +109,16 @@ function SourceDetail({ source, credential, changed }: { source: Source; credent
 export function MarketSources() {
   const [credential,setCredential] = useState(getOperatorCredential);
   const [revision,setRevision] = useState(0);
-  const [choice,setChoice] = useState<string>();
+  const [search,setSearch] = useSearchParams();
+  const choice = search.get('source');
   const details = useRef<HTMLDivElement>(null);
   const selectedTrigger = useRef<HTMLButtonElement>(null);
   const trusted = location.protocol === 'http:' && location.hostname === '127.0.0.1';
   const load = useCallback((signal: AbortSignal) => apiLocal<{items: Source[]}>(endpoint,credential,signal),[credential]);
   const { result,retry,refreshing } = useResource(load,revision,true,Boolean(credential) && trusted);
   const refresh = () => setRevision(value => value + 1);
-  const selected = result.state === 'ready' && (result.data.items.find(source => source.key === choice) ?? result.data.items[0]);
+  const sources = result.state === 'ready' ? result.data.items : [];
+  const selected = choice === null ? sources[0] : sources.find(source => source.key === choice);
   return <div className="ops-market">
     <PageHeader title="Market sources" description="Inspect publication rights, collection receipts and the records available to company research."
       actions={<Link className="studio-secondary" to={operationsPath}>Operations overview</Link>}/>
@@ -131,11 +133,15 @@ export function MarketSources() {
             <tbody>{result.data.items.map(source => <tr key={source.key} data-selected={Boolean(selected && selected.key === source.key)}><th scope="row"><button className="ops-source-choice"
               ref={selected && selected.key === source.key ? selectedTrigger : undefined} aria-controls="market-source-detail"
               aria-pressed={selected && selected.key === source.key} onClick={() => {
-                setChoice(source.key); requestAnimationFrame(() => details.current?.focus());
+                const next = new URLSearchParams(search);
+                next.set('source', source.key);
+                setSearch(next, { replace: true, preventScrollReset: true });
+                requestAnimationFrame(() => details.current?.focus());
               }}>{source.name}</button><small className="ops-source-counts">{publicationCount(source)}</small></th>
               <td>{displayState(source.publication)}</td><td>{source.creator_count}</td><td>{source.visible_count}</td></tr>)}</tbody></table></div>
             : <p className="studio-panel-body">No market feeds are configured. <Link to="/operations/public-directory">Manage public directory sources</Link>.</p>}
-        </Panel>{selected && <div className="ops-selected-source" id="market-source-detail" role="group" aria-label="Source details" tabIndex={-1} ref={details}>
+        </Panel>{choice !== null && !selected && sources.length > 0 && <p role="status">This source is unavailable. Choose another source from the register.</p>}
+        {selected && <div className="ops-selected-source" id="market-source-detail" role="group" aria-label="Source details" tabIndex={-1} ref={details}>
           <SourceDetail key={selected.key} source={selected} credential={credential} changed={refresh}/>
           <button className="studio-secondary" onClick={() => selectedTrigger.current?.focus()}>Back to source register</button>
         </div>}</>}

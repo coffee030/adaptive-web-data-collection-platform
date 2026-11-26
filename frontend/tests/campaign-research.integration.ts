@@ -13,7 +13,7 @@ test('saved campaign research preserves reviewed requirements and editable finan
   const campaignId = randomUUID();
   const registered = await page.request.post(company + '/register', {
     data: {
-      name: 'QA saved research',
+      name: 'QA saved research ' + campaignId.slice(0, 12),
       username: 'research-' + randomUUID().slice(0, 12),
       password: randomUUID(),
     },
@@ -88,7 +88,7 @@ test('saved campaign research preserves reviewed requirements and editable finan
 test('the campaign entry describes related dining coverage only when the search returns it', async ({ page }) => {
   test.skip(process.env.HARBOURLINE_RESEARCH_TEST_PILOT !== '1', 'Requires a company pilot.');
   const registered = await page.request.post('/api/v1/marketing/companies/register', {
-    data: { name: 'QA dining entry', username: 'dining-' + randomUUID().slice(0, 12), password: randomUUID() },
+    data: { name: 'QA dining entry ' + randomUUID().slice(0, 12), username: 'dining-' + randomUUID().slice(0, 12), password: randomUUID() },
   });
   expect(registered.status()).toBe(201);
   const market = '**/api/v1/marketing/intelligence/partner/market/';
