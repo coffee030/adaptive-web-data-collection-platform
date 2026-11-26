@@ -101,13 +101,20 @@ export function CompanyGate({ children }: { children: (company: Company) => Reac
       <h2>{creating ? 'Create a company workspace' : 'Open your workspace'}</h2>
       <p>{creating ? 'You’ll be the first administrator. Invite your team after you sign in.' : pageName ? 'Sign in to continue to '+pageName+'.' : 'Sign in with your company account.'}</p>
       {expired && <p role="status">Your session ended. Sign in to return to your work.</p>}
+      {canRegister && (
+        <button className="entry-switch" disabled={pending} onClick={() => {
+          setCreating(!creating);
+          setError('');
+        }}>
+          {creating ? 'Use an existing account' : 'Create a new company workspace'} <span aria-hidden="true">→</span>
+        </button>
+      )}
       {account === null ? <form className="hl-form-grid" key={creating ? 'create' : 'login'} onSubmit={login}>
         {creating && <label>Company name<input name="name" required maxLength={120} autoComplete="organization"/></label>}
         <AccountFields newPassword={creating}/>{creating && <small>Use a lowercase account name and a password of at least 12 characters.</small>}
         <button className="studio-primary" disabled={pending}>{pending ? 'Opening workspace…' : creating ? 'Create workspace' : 'Sign in'}</button>
       </form> : !error && <p role="status">Opening your company workspace…</p>}
       {error && <p role="alert">{error} {account === undefined && <button onClick={()=>setAttempt(value=>value+1)}>Retry</button>}</p>}
-      {canRegister && <button className="entry-switch" disabled={pending} onClick={()=>{setCreating(!creating);setError('');}}>{creating ? 'Use an existing account' : 'Create a new company workspace'} <span aria-hidden="true">→</span></button>}
       {setup.result.state === 'error' && <button className="entry-switch" onClick={setup.retry}>Check workspace registration</button>}
       {account === null && !creating && <details className="entry-help"><summary>Joining an existing company?</summary><p>Ask a company administrator to add your account from the company menu.</p></details>}
     </section></div></main>;

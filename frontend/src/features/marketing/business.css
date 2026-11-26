@@ -805,9 +805,12 @@
   min-height: 44px;
   color: var(--studio-accent);
   padding: 0;
+  margin-bottom: 0.45rem;
   border: 0;
   background: none;
   text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 .entry-form .entry-help {
   margin-top: 1rem;
@@ -884,10 +887,11 @@
   .entry-layout {
     grid-template-columns: 1fr;
     width: min(92%, 520px);
-    margin: 2rem auto;
+    margin: 1.25rem auto 2rem;
+    gap: 1.15rem;
   }
   .entry-purpose h1 {
-    font-size: 2.8rem;
+    font-size: clamp(1.875rem, 6vw, 2.8rem);
   }
   .entry-purpose h1 br {
     display: none;
@@ -897,6 +901,8 @@
   }
   .entry-purpose p {
     font-size: 1rem;
+    line-height: 1.45;
+    margin: 0.65rem 0 0;
   }
   .entry-workflow {
     display: none;
@@ -912,6 +918,13 @@
   }
   .entry-mast a {
     font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .entry-help summary {
+    min-height: 44px;
+    align-content: center;
   }
 }
 @media (max-width: 430px) {

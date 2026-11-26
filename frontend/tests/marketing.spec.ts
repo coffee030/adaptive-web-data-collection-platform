@@ -163,6 +163,7 @@ test('a configured partner workspace respects server authorization without loadi
 });
 
 test('signed-out company deep links explain the destination and allow independent company registration', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
   await page.route(capabilityPath, route => route.fulfill({ json: { ...capability, company_accounts: true } }));
   await page.route('**/api/v1/marketing/companies/session', route => route.fulfill({
     status: 401, json: { error: { code: 'company_login_required' } },
@@ -170,11 +171,16 @@ test('signed-out company deep links explain the destination and allow independen
   await page.route('**/api/v1/marketing/companies/register', route => route.fulfill({ json: { enabled: true } }));
   await page.goto('/plan');
   await expect(page.getByText('Sign in to continue to the campaign plan.')).toBeVisible();
+  const create = page.getByRole('button', { name: /Create a new company workspace/ });
+  await expect(create).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeInViewport({ ratio: 1 });
   await page.getByText('Joining an existing company?').click();
   await expect(page.getByText(/Ask a company administrator/)).toBeVisible();
   await expect(page.getByRole('link', { name: /Scraping Operations/ })).toHaveAttribute('href', '/operations');
-  await page.getByRole('button', { name: /Create a new company workspace/ }).click();
-  await expect(page.getByLabel('Company name')).toBeVisible();
+  await create.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Company name')).toBeFocused();
   await expect(page.getByRole('link', { name: /demo/i })).toHaveCount(0);
 });
 
