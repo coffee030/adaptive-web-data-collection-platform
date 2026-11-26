@@ -73,7 +73,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
       name: 'third-party-notices',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'harbourline-installation.json',
-          source: JSON.stringify({ application: 'Harbourline', workspace }) });
+          source: JSON.stringify({ application: 'Harbourline', workspace, build: env.HARBOURLINE_BUILD_ID || 'development' }) });
         for (const file of ['Geist.txt', 'Tremor.txt', 'TailAdmin.txt', 'Tabler.txt']) {
           this.emitFile({ type: 'asset', fileName: 'licenses/' + file, source: readFileSync('public/licenses/' + file, 'utf8') });
         }

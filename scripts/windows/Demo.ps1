@@ -4,7 +4,7 @@ function Find-DemoPort([int]$Preferred) {
         try {
             $listener.Server.ExclusiveAddressUse = $true
             $listener.Start()
-            if ($port -ne $Preferred) { Write-Step "[INFO] Demo port $Preferred is unavailable. Selected loopback port $port." }
+            if ($port -ne $Preferred) { Write-Step "[INFO] Port $Preferred is unavailable. Selected loopback port $port." }
             return $port
         } catch [Net.Sockets.SocketException] {
             continue

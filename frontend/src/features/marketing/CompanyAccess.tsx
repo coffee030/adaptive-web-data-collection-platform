@@ -15,7 +15,7 @@ export interface Company {
 }
 
 const base = '/marketing/companies';
-const registration = (signal: AbortSignal) => apiGet<{enabled:boolean}>(base+'/register',signal);
+const registration = (signal: AbortSignal) => apiGet<{enabled:boolean;first_company?:boolean}>(base+'/register',signal);
 function broadcastSession() {
   const updates = new BroadcastChannel('harbourline-signin');
   updates.postMessage('changed'); updates.close();
@@ -40,9 +40,10 @@ export function AccountFields({ newPassword = false }: { newPassword?: boolean }
 
 export function CompanyGate({ children }: { children: (company: Company) => ReactNode }) {
   const [account, setAccount] = useState<Company | null>();
-  const [creating, setCreating] = useState(false);
+  const [createChoice, setCreating] = useState<boolean|null>(null);
   const {pathname} = useLocation();
   const setup = useResource(registration, 0, false, account === null);
+  const creating = createChoice ?? (setup.result.state === 'ready' && setup.result.data.first_company === true);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -90,10 +91,10 @@ export function CompanyGate({ children }: { children: (company: Company) => Reac
   const destination: Record<string,string> = {creators:'creator discovery',research:'Campaign Advisor',campaigns:'your campaigns',reports:'campaign reports',plan:'the campaign plan'};
   const pageName = destination[pathname.split('/')[1] ?? ''];
   const canRegister = setup.result.state === 'ready' && setup.result.data.enabled;
-  return <main className="harbour dark hl-company-access business-entry studio" data-workspace="marketing">
+  return <main className="business-entry studio" data-workspace="marketing">
     <header className="entry-mast"><Brand/><Link to="/operations">Scraping Operations ↗</Link></header>
     <div className="entry-layout"><section className="entry-purpose">
-      <h1>Marketing<br/>intelligence<span>.</span></h1>
+      <h1>Marketing <br/>intelligence<span>.</span></h1>
       <p>Find creators covering Hong Kong, inspect their published work and plan campaigns with your team.</p>
       <div className="entry-workflow"><span>Creator discovery</span><span>Campaign Advisor</span><span>Performance reports</span></div>
     </section><section className="entry-form">

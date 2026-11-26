@@ -198,10 +198,12 @@ function Get-LauncherConfig([switch]$Create, [switch]$Probe, [switch]$AutoDemoNe
         $apiPort = 58097 + $offset
         $frontendPort = 5197 + $offset
         $networkSettings = ''
-        if ($AutoDemoNetwork) {
+        if ($AutoDemoNetwork -or $PilotMode) {
             $postgresPort = Find-DemoPort $postgresPort
             $apiPort = Find-DemoPort $apiPort
             $frontendPort = Find-DemoPort $frontendPort
+        }
+        if ($AutoDemoNetwork) {
             $subnets = Find-DemoSubnets
             $networkSettings = "`nLAUNCHER_SUBNET=$($subnets[0])`nLAUNCHER_FIXTURE_SUBNET=$($subnets[1])"
         }

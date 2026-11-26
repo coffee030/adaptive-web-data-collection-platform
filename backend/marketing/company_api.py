@@ -110,7 +110,9 @@ class CampaignDraft(StrictModel):
     brief: CampaignBrief
     saved: bool
     shortlist: list[Ref] = Field(max_length=120)
-    market_leads: list[Annotated[str, StringConstraints(min_length=1, max_length=160)]] = Field(default_factory=list, max_length=120)
+    market_leads: list[
+        Annotated[str, StringConstraints(min_length=1, max_length=160)]
+    ] = Field(default_factory=list, max_length=120)
     lines: list[None] = Field(max_length=0)
     explorer: str = Field(max_length=2000)
     evaluation: Campaign | None = None
@@ -313,12 +315,21 @@ def open_session(
     )
 
 
-@router.get("/register")
-def registration_available() -> dict[str, bool]:
+def registration_enabled() -> bool:
     config = settings()
-    return {
-        "enabled": bool(config.get("MARKETING_PILOT_PASSWORD"))
+    return (
+        bool(config.get("MARKETING_PILOT_PASSWORD"))
         and config.get("HARBOURLINE_SELF_REGISTRATION") == "1"
+    )
+
+
+@router.get("/register")
+def registration_available(session: Database) -> dict[str, bool]:
+    enabled = registration_enabled()
+    return {
+        "enabled": enabled,
+        "first_company": enabled
+        and session.scalar(select(CompanyRow.id).limit(1)) is None,
     }
 
 
@@ -326,7 +337,7 @@ def registration_available() -> dict[str, bool]:
 def register_company(
     body: Registration, request: Request, response: Response, session: Database
 ) -> Identity:
-    if not registration_available()["enabled"]:
+    if not registration_enabled():
         raise MarketingError(
             403, "registration_disabled", "Ask your company administrator for access"
         )

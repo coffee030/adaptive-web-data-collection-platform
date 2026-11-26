@@ -154,7 +154,7 @@ Test-Case 'Failed frontend build leaves no success stamp and can resume' {
     Assert (!(Test-Path -LiteralPath $stamp)) 'A failed build was marked complete.'
     Update-PlatformImage frontend
     Update-PlatformImage frontend
-    Assert ($state.Built -eq 2 -and [IO.File]::ReadAllText($stamp) -ceq 'fingerprint image-id') 'Successful build was not reused.'
+    Assert ($state.Built -eq 2 -and [IO.File]::ReadAllText($stamp) -ceq ($Config.HARBOURLINE_BUILD_ID + ' image-id')) 'Successful build was not reused.'
     [IO.File]::Delete($stamp)
 }
 

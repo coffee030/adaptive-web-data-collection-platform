@@ -204,10 +204,20 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
     $kind = if ($Service -eq 'api') { 'backend' } else { 'frontend' }
     $stamp = Join-Path $Local "$kind-image.txt"
     $fingerprint = Get-ImageFingerprint $Service
+    $revision = 'source'
+    if ((Test-Path -LiteralPath (Join-Path $Root '.git')) -and (Get-Command git.exe -ErrorAction SilentlyContinue)) {
+        $head = & git.exe -C $Root rev-parse --verify HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $head -match '^[a-f0-9]{40}$') {
+            $revision = $head
+            $changes = & git.exe -C $Root status --porcelain --untracked-files=normal 2>$null
+            if ($LASTEXITCODE -ne 0 -or $changes) { $revision += '.working' }
+        }
+    }
+    $Config['HARBOURLINE_BUILD_ID'] = $revision + '.' + $fingerprint.Replace('-', '').ToLowerInvariant()
     $imageName = "$($Config.COMPOSE_PROJECT_NAME)-${kind}:local"
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
     if (!$NoCache -and $image.Code -eq 0 -and (Test-Path -LiteralPath $stamp) -and
-        [IO.File]::ReadAllText($stamp) -ceq "$fingerprint $($image.Out)") {
+        [IO.File]::ReadAllText($stamp) -ceq "$($Config.HARBOURLINE_BUILD_ID) $($image.Out)") {
         Write-Step "[PASS] Reusing the verified $kind image."
         if ($AllowFailure) { return $true }
         return
@@ -222,7 +232,7 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
             @('Check internet access to Docker Hub and the package registries.', 'Check free disk space and Docker Desktop.', "Run $DiagnoseCommand, then try again.")
     }
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
-    if ($image.Code -eq 0) { Write-AtomicFile $stamp "$fingerprint $($image.Out)" }
+    if ($image.Code -eq 0) { Write-AtomicFile $stamp "$($Config.HARBOURLINE_BUILD_ID) $($image.Out)" }
     if ($AllowFailure) { return ($image.Code -eq 0) }
 }
 

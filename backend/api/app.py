@@ -1,6 +1,7 @@
 """Local FastAPI composition root."""
 
 import logging
+import os
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -206,6 +207,13 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     app.include_router(intelligence_router, prefix="/api/v1")
     app.include_router(directory_router, prefix="/api/v1")
     app.include_router(historical_works_router, prefix="/api/v1")
+
+    @app.get("/api/v1/version", response_model=dict[str, str], tags=["health"])
+    def version():
+        return {
+            "application": "Harbourline",
+            "build": os.getenv("HARBOURLINE_BUILD_ID", "development"),
+        }
 
     @app.get("/api/v1/health", response_model=dict[str, str], tags=["health"])
     def health(request: Request):
