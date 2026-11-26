@@ -59,7 +59,9 @@ export interface ContentEvidence {
   content: Observed<Post>;
   performance: Observed<{ views: number | null; likes: number | null; comments: number | null; window_end: string }> | null;
 }
+export type MatchBasis = 'name' | 'description' | 'post_text' | 'reviewed_topic' | 'related_content';
 export interface CreatorSummary {
+  match_basis?: MatchBasis | null;
   profile: Observed<{ creator_id: string; name: string; description: string; accounts: { platform: Platform; account_id: string }[] }>;
   post_count: number;
   pricing: 'available' | 'unknown';
@@ -105,6 +107,9 @@ export interface Recommendation {
   limitations: string[];
 }
 export interface CampaignResult {
+  allocation_export_receipt?: string | null;
+  reviewed_count?: number;
+  exclusions?: Record<string,number>;
   revision: string;
   state: 'available' | 'empty' | 'incomplete';
   mode: DataMode;
@@ -118,7 +123,7 @@ export interface CampaignResult {
   campaign: CampaignRequest;
 }
 interface ScopeResult { mode: DataMode }
-interface CatalogResult extends ScopeResult { activity?: { start: string; posts: number }[]; state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
+interface CatalogResult extends ScopeResult { retrieval?: 'browse'|'granite_int8'|'character_tfidf'; activity?: { start: string; posts: number }[]; state: 'available' | 'empty'; creators: (CreatorSummary & { preview?: Observed<Post> | null })[] }
 export interface ComparisonResult extends ScopeResult { state: 'available' | 'empty' | 'incomplete'; creators: CreatorDetail[]; unavailable_ids: string[] }
 interface ProcessingResult extends ScopeResult { revision: string; state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
 export interface ScenarioRequest {
@@ -139,11 +144,12 @@ function scoped<T extends ScopeResult>(result: T, mode: DataMode) {
 export const catalog = async (mode: DataMode, search: URLSearchParams, signal: AbortSignal) =>
   scoped(await apiGet<CatalogResult>(prefix(mode) + '/creators?' + search, signal), mode);
 interface BriefOptions extends ScopeResult {
+  platforms?: Partial<Record<Platform, {creators:number; posts:number; firm_quotes:number; measured_posts:number}>>;
   reviewed_facts: string[];
   quoted_deliverables: Deliverable[];
 }
 export const briefOptions = async (mode: DataMode, platform: Platform, signal: AbortSignal) =>
-  scoped(await apiGet<BriefOptions>(prefix(mode) + '/brief-options?platform=' + encodeURIComponent(platform), signal), mode);
+  scoped(await apiGet<BriefOptions>(prefix(mode) + '/brief-options' + (platform ? '?platform='+encodeURIComponent(platform) : ''), signal), mode);
 export const creatorDetail = (mode: DataMode, id: string, signal: AbortSignal) =>
   apiGet<CreatorDetail>(prefix(mode) + '/creators/' + encodeURIComponent(id), signal);
 export const compareCreators = async (mode: DataMode, ids: string[], signal: AbortSignal) =>
@@ -189,7 +195,7 @@ export function campaignInput(brief: Brief): CampaignRequest {
   }
   return {
     description: brief.description, objective: brief.objective === 'Engagement' ? 'engagement' : 'awareness',
-    budget_minor: brief.budget * 100, currency: 'HKD', platform, deliverable,
+    budget_minor: Math.round(brief.budget * 100), currency: 'HKD', platform, deliverable,
     market: market || undefined, minimum_market_share: brief.minAudience > 0 ? String(brief.minAudience / 100) : undefined,
     language: language || undefined, require_language: brief.requireCantonese, required_facts, preferred_facts,
     minimum_creators: brief.creatorCount, maximum_creators: brief.creatorCount,
@@ -212,5 +218,11 @@ export function campaignExpiry(report: CampaignResult) {
     ...Object.values(candidate.requirement_evidence).map(evidence => evidence.expires_at),
     candidate.market_evidence?.evidence.expires_at, candidate.quote?.evidence.expires_at, candidate.quote?.data.valid_until,
   ]).map(value => Date.parse(value ?? '')).filter(Number.isFinite);
+  for (const candidate of report.recommendations) {
+    if (candidate.market_evidence) {
+      const ends = Date.parse(candidate.market_evidence.data.period_end);
+      if (Number.isFinite(ends)) times.push(ends + 90 * 86_400_000);
+    }
+  }
   return times.length ? Math.min(...times) : undefined;
 }

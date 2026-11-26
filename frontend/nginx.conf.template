@@ -52,7 +52,13 @@ server {
         proxy_redirect off;
     }
 
+    location = /harbourline-installation.json {
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "no-store" always;
+        try_files $uri =404;
+    }
     location /api/ { return 404; }
     location /assets/ { try_files $uri =404; }
+    location /licenses/ { try_files $uri =404; }
     location / { try_files $uri $uri/ /index.html; }
 }

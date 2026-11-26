@@ -16,7 +16,7 @@ const checkHealth = (signal: AbortSignal) => apiGet<{ status: string }>('/health
 
 const workflows: { label: string; description: string; actions: [string, string][] }[] = [
   { label: 'Creator data', description: 'Maintain the records available for creator research.',
-    actions: [[datasetsPath, 'Intelligence datasets'], [directoryPath, 'Public creator directory'], [researchPath, 'Creator research and refresh']] },
+    actions: [[datasetsPath, 'Intelligence datasets'], [directoryPath, 'Public research sources'], [researchPath, 'Creator research and refresh']] },
   { label: 'Source setup', description: 'Approve a source and its extraction rules before collecting.',
     actions: [[sourcesPath, 'Manage sources'], [topicsPath, 'Review topic bindings']] },
   { label: 'Collection & quality', description: 'Start a collection or trace a result back to its evidence.',

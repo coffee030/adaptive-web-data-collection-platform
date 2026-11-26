@@ -41,8 +41,9 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   expect(partner.status()).toBe(403);
   await page.goto('/workspace');
   await page.getByRole('link', { name: 'Open backend demo' }).click();
+  await expect(page).toHaveURL(/\/demo\/connected$/);
+  await page.getByRole('navigation', { name: 'Marketing workspace' }).getByRole('link', { name: 'Campaign Advisor' }).click();
   await expect(page.getByText('Fictional backend demo', { exact: true })).toBeVisible();
-  await page.goto('/demo/connected/advisor');
   await expect(page.getByRole('combobox', { name: 'Campaign platform' })).toHaveValue('other');
   await expect(page.getByLabel('Your category labels')).toHaveValue('');
   await page.getByRole('button', { name: 'Save brief' }).click();
@@ -51,7 +52,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByRole('textbox', { name: 'Creator name or content topic' }).fill('荃灣');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: 'Fixture Street Bowl', exact: true }).click();
-  await expect(page.getByText(/荃灣收工醫肚/)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Creator profile' }).getByText(/荃灣收工醫肚/)).toBeVisible();
   await page.getByRole('button', { name: 'Metrics and quotes' }).click();
   await expect(page.getByText('Current firm quotes', { exact: true })).toBeVisible();
   await expect(page.getByText(/HK\$2,300/)).toBeVisible();
@@ -60,7 +61,7 @@ test('the M2 backend demo runs discovery, evidence, exact selection and scenario
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: 'Shortlist Fixture Street Bowl', exact: true }).click();
   await page.getByRole('button', { name: 'Shortlist Fixture Tasting Table', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Shortlist Fixture Tasting Table', exact: true })).toHaveText('Shortlisted');
+  await expect(page.getByRole('button', { name: 'Shortlisted Fixture Tasting Table', exact: true })).toHaveAttribute('aria-pressed','true');
   await expect(page.getByRole('button', { name: 'Compare shortlist' })).toBeInViewport();
   await page.getByRole('button', { name: 'Compare shortlist' }).click();
   await expect(page.getByRole('dialog')).toContainText('Fixture Tasting Table');

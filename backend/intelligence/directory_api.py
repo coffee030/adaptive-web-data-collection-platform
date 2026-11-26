@@ -6,8 +6,8 @@ from pydantic import BaseModel
 
 from backend.marketing.api import NonCacheableRoute, operator_store
 from backend.marketing.store import MarketingError
-from backend.persistence.models import JobRow, SourceRow
 from .api import CustomerScope, Store
+from .operator_receipt import publication_status
 from .public_directory import (
     DirectoryResults,
     DirectoryRow,
@@ -41,6 +41,20 @@ def directory(
             "workspace_restricted",
             "Use the operational workspace for public profiles",
         )
+    return directory_results(store, q)
+
+
+@router.get("/public-research/directory")
+def local_research_directory(
+    store: Store, q: Annotated[str, Query(max_length=120)] = ""
+) -> DirectoryResults:
+    config = store.config
+    if not config.public_demo_directory or not config.demo_enabled or config.workspace:
+        raise MarketingError(403, "workspace_restricted", "Use the isolated demo")
+    return directory_results(store, q)
+
+
+def directory_results(store, q):
     result = snapshot(store.sessions)
     if q.strip():
         result = search(result, q.strip(), store.config.model_dir)
@@ -52,18 +66,7 @@ def directory(
 
 @router.get("/operator/public-directory/status", dependencies=operator)
 def status(request: Request):
-    with request.app.state.sessions() as session:
-        feed = session.get(DirectoryRow, 1)
-        if not feed:
-            return {"state": "unconfigured"}
-        source = session.get(SourceRow, feed.source_id)
-        job = session.get(JobRow, feed.pending) if feed.pending else None
-        return {
-            "state": source.approval_status,
-            "next_check": feed.next_attempt,
-            "error": feed.error,
-            "collection": job.status if job else None,
-        }
+    return publication_status(request, 1, snapshot)
 
 
 @router.post("/operator/public-directory/prepare", dependencies=operator)

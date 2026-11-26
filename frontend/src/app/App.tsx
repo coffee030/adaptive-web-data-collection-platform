@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { Link, Route, Routes, ScrollRestoration, useLocation } from 'react-router';
 import { jobsPath, newJobPath } from '../features/collection-jobs/api';
 import { Overview } from '../features/dashboard/Overview';
+import { lockOperator } from '../lib/api';
 import { ThemeSelect } from './ThemeSelect';
 import { WorkspaceNavigation } from './WorkspaceNavigation';
 import { JobCreate } from '../features/collection-jobs/JobCreate';
@@ -24,9 +25,11 @@ import { articlesPath, newRequestPath, requestsPath, topicsPath } from '../featu
 
 import { datasetsPath, directoryPath, operationsPath, researchPath } from '../features/operator/OperationsTasks';
 
+const OperatorGate = lazy(async () => ({ default: (await import('../features/operator/OperatorGate')).OperatorGate }));
+const CompanySetup = lazy(async () => ({ default: (await import('../features/operator/CompanyRegistry')).CompanySetup }));
 const MarketingWorkspace = lazy(async () => ({ default: (await import('../features/marketing/MarketingWorkspace')).MarketingWorkspace }));
 const IntelligenceDatasets = lazy(async () => ({ default: (await import('../features/operator/IntelligenceDatasets')).IntelligenceDatasets }));
-const PublicDirectoryOperations = lazy(async () => ({ default: (await import('../features/marketing/PublicCreatorDirectory')).PublicDirectoryOperations }));
+const PublicDirectoryOperations = lazy(async () => ({ default: (await import('../features/operator/PublicResearchSources')).PublicDirectoryOperations }));
 const CreatorResearch = lazy(async () => ({ default: (await import('../features/operator/CreatorResearch')).CreatorResearch }));
 const operatorPrefixes = [operationsPath, jobsPath, requestsPath, topicsPath, articlesPath, recordsPath, evidencePath, sourcesPath];
 const ProfilePage = lazy(async () => ({ default: (await import('../features/profiles/ProfilePage')).ProfilePage }));
@@ -45,7 +48,8 @@ export function App() {
   if (demo || (!operations && !(path === '/' && __PLATFORM_SYNTHETIC_DEMO__))) {
     return <Suspense fallback={<Loading>Loading campaign workspace…</Loading>}><MarketingWorkspace mode={path === '/demo/connected' || path.startsWith('/demo/connected/') ? 'server-demo' : demo ? 'sample' : 'partner'} /></Suspense>;
   }
-  return <OperationsApp />;
+  return __HARBOURLINE_INSTALLATION__ === 'pilot'
+    ? operatorRoute(<OperatorGate><OperationsApp /></OperatorGate>) : <OperationsApp />;
 }
 
 function OperationsApp() {
@@ -55,7 +59,8 @@ function OperationsApp() {
 
   useEffect(() => {
     const title = pathname === '/' || pathname === operationsPath ? 'Data Operations'
-      : pathname === directoryPath ? 'Public creator directory'
+      : pathname === '/operations/companies' ? 'Company setup'
+      : pathname === directoryPath ? 'Public research sources'
       : pathname === researchPath ? 'Creator research and refresh'
       : pathname === datasetsPath ? 'Intelligence datasets'
       : pathname === jobsPath ? 'Collection Jobs'
@@ -90,7 +95,9 @@ function OperationsApp() {
       <ScrollRestoration />
       <header className="topbar">
         <Link className="wordmark" to={__PLATFORM_SYNTHETIC_DEMO__ ? "/" : operationsPath}>Data Operations</Link>
-        <ThemeSelect />
+        <div className="operator-exits"><Link to={__PLATFORM_SYNTHETIC_DEMO__ ? '/demo/connected' : '/'}>Return to Harbourline</Link>
+          {__HARBOURLINE_INSTALLATION__ === 'pilot' && <button type="button" onClick={lockOperator}>Lock Data Operations</button>}
+          <ThemeSelect /></div>
       </header>
       <WorkspaceNavigation />
       <main className="workspace" id="main-content" tabIndex={-1} ref={main}>
@@ -104,6 +111,7 @@ function OperationsApp() {
           <Routes>
             {__PLATFORM_SYNTHETIC_DEMO__ && <Route path="/" element={<Overview />} />}
             <Route path={operationsPath} element={<Overview />} />
+            <Route path="/operations/companies" element={operatorRoute(<CompanySetup />)} />
             <Route path={datasetsPath} element={operatorRoute(<IntelligenceDatasets />)} />
             <Route path={directoryPath} element={operatorRoute(<PublicDirectoryOperations />)} />
             <Route path={researchPath} element={operatorRoute(<CreatorResearch />)} />

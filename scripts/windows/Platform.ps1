@@ -18,13 +18,13 @@ param(
 . "$PSScriptRoot/Frontend.ps1"
 . "$PSScriptRoot/Demo.ps1"
 . "$PSScriptRoot/Harbourline.ps1"
-Set-LauncherMode -Demo:$Demo -Pilot:$Pilot
+Set-LauncherMode -Demo:$Demo -Pilot:$Pilot -Harbourline:$Harbourline
 
 function Assert-OwnedDocker {
     if (!(Confirm-DockerOwnership)) {
         Stop-WithError 'CFG-003' 'Docker Project Ownership Could Not Be Verified' 'The launcher could not verify all Docker resources for its project.' `
             'A resource may already use the project name or the Engine may have lost access.' `
-            @('Keep the existing containers and volumes.', 'Run Diagnose-Platform.bat and ask a teammate to check the saved launcher identity.')
+            @('Keep the existing containers and volumes.', "Run $DiagnoseCommand and check the saved launcher identity.")
     }
 }
 
@@ -69,8 +69,7 @@ function Start-Platform {
     Assert-OwnedDocker
     if ($Action -eq 'Setup') {
         Write-Step '[PASS] Compose configuration and resource ownership verified.'
-        $command = if ($DemoMode) { 'Start-FYP-Demo.bat' } else { 'Start-Platform.bat' }
-        Write-Step "[SUCCESS] Setup checks passed. Run $command to launch the application."
+        Write-Step "[SUCCESS] Setup checks passed. Run $StartCommand to launch the application."
         return
     }
     Stop-OwnedFrontend
@@ -86,6 +85,7 @@ function Start-Platform {
     Stop-DisabledFixture
     if ($Harbourline) { Invoke-HarbourlineProvisioning }
     elseif ($DemoMode) { Invoke-DemoProvisioning }
+    if ($Harbourline -or $Pilot) { Invoke-PublicResearchProvisioning }
     Write-Step '[6/7] Starting the React frontend...'
     Start-ContainerFrontend
     Write-Step '[7/7] Preparing the browser...'
@@ -93,9 +93,9 @@ function Start-Platform {
     if ($Harbourline) { $url += "demo/connected" }
     Write-Step "URL: $url"
     if (!$NoBrowser) { Open-PlatformBrowser $url }
-    if ($Harbourline) { Write-Step '[SUCCESS] Harbourline Fictional Demo is ready!' }
+    if ($Harbourline) { Write-Step '[SUCCESS] Harbourline is ready. Search the public directory or practice with fictional campaigns. No password is needed. Company users can open the pilot from the demo when it is running.' }
     elseif ($Pilot) {
-        Write-Step "[SUCCESS] Harbourline is ready. Sign in with your company account. For initial setup, open Data Operations and create a company and administrator."
+        Write-Step "[SUCCESS] Company pilot is ready. Sign in with your company account, or choose Try the demo without an account. For a new company choose Operator setup."
         Write-Step "[INFO] Data Operations uses the separate credential in $Local/harbourline-operator.token."
     }
     elseif ($DemoMode) { Write-Step '[SUCCESS] Synthetic Demo is ready!' }
@@ -118,7 +118,7 @@ function Stop-Platform {
     $engine = Get-LinuxEngine $Docker
     if (!(Test-LinuxEngine $engine)) {
         Stop-WithError 'STOP-001' 'Docker Stop Could Not Be Verified' 'The launcher could not reach the Linux Engine to stop its services.' `
-            $engine.Reason @('Open Docker Desktop, then run Stop-Platform.bat again.')
+            $engine.Reason @("Open Docker Desktop, then run $StopCommand again.")
     }
     Assert-OwnedDocker
     # Include the optional fixture even if its setting was changed while it was running.
@@ -127,11 +127,11 @@ function Stop-Platform {
     $running = Invoke-Docker @('container', 'ls', '--filter', "label=com.docker.compose.project=$($Config.COMPOSE_PROJECT_NAME)", '--format', '{{.ID}}')
     if ($result.Code -ne 0 -or $running.Code -ne 0 -or $running.Out) {
         Stop-WithError 'STOP-002' 'Docker Services Did Not Fully Stop' 'The launcher could not verify shutdown of its Docker project.' `
-            $result.Reason @('Run Diagnose-Platform.bat to inspect the remaining services.', 'Retry Stop-Platform.bat.') 'Graceful shutdown attempted.'
+            $result.Reason @("Run $DiagnoseCommand to inspect the remaining services.", "Retry $StopCommand.") 'Graceful shutdown attempted.'
     }
     if (!$frontendStopped) {
         Stop-WithError 'STOP-003' 'Backend Stopped but Frontend Is Still Running' 'Docker services have stopped and the frontend shutdown could not be verified.' `
-            'See the frontend shutdown error above.' @('Close the platform tab and retry Stop-Platform.bat.') 'Graceful shutdown attempted.'
+            'See the frontend shutdown error above.' @("Close the platform tab and retry $StopCommand.") 'Graceful shutdown attempted.'
     }
     Write-Step '[SUCCESS] Launcher services stopped. All data volumes were kept.'
 }
@@ -152,7 +152,6 @@ function Invoke-Diagnosis {
     catch { if (!$_.Exception.Data['LauncherError']) { throw } }
     if ($Config) {
         Write-Step "[INFO] Launcher settings valid. API port $($Config.API_PORT), frontend port $($Config.FRONTEND_PORT), PostgreSQL port $($Config.POSTGRES_PORT)."
-        if ($DemoMode) { Write-Step "URL: http://127.0.0.1:$($Config.FRONTEND_PORT)/" }
         $state = Get-FrontendState
         Write-Step "[INFO] Previous host frontend detected: $(Test-FrontendProcess $state)."
         if (Test-LinuxEngine $engine) {
@@ -160,9 +159,18 @@ function Invoke-Diagnosis {
                 $services = @('postgres', 'redis', 'api', 'dispatcher', 'worker', 'frontend')
                 if ($Config.LAUNCHER_FIXTURE -eq '1') { $services += 'collection-fixture' }
                 foreach ($service in $services) { $null = Write-ServiceDiagnosis $service }
-                Write-Step "[INFO] API health: $(Test-ApiHealth "http://127.0.0.1:$($Config.API_PORT)/api/v1/health")."
-                Write-Step "[INFO] Frontend proxy health: $(Test-ApiHealth "http://127.0.0.1:$($Config.FRONTEND_PORT)/api/v1/health")."
-                if ($DemoMode) { Write-DemoDiagnosis }
+                $apiOwned = Test-BackendPort api 8000 $Config.API_PORT
+                $webOwned = Test-BackendPort frontend 8080 $Config.FRONTEND_PORT
+                $url = "http://127.0.0.1:$($Config.FRONTEND_PORT)/"
+                $apiHealthy = $apiOwned -and (Test-ApiHealth "http://127.0.0.1:$($Config.API_PORT)/api/v1/health")
+                $webHealthy = $webOwned -and (Test-ApiHealth "${url}api/v1/health")
+                Write-Step "[INFO] API health: $apiHealthy."
+                Write-Step "[INFO] Frontend proxy health: $webHealthy."
+                if (!$webHealthy -and $DemoMode) { Write-Step '[INFO] Run Start-Harbourline-Demo.bat for creator research or Start-FYP-Demo.bat for the Core teaching workspace.' }
+                elseif (!$webHealthy) { Write-Step "[INFO] To open this workspace after recovery, run $StartCommand." }
+                elseif ($PilotMode) { Write-Step "[INFO] Company sign-in: $url" }
+                elseif ($DemoMode) { Write-Step "[INFO] Core teaching workspace: $url" }
+                if ($DemoMode -and $apiHealthy) { Write-DemoDiagnosis -FrontendReady:$webHealthy }
             } else { Write-Step '[WARN] Docker project ownership could not be verified.' }
         }
     } else { Write-Step '[INFO] Valid launcher settings are unavailable.' }
@@ -181,7 +189,7 @@ try {
     $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
     $script:LogFile = Join-Path $logDirectory "$stamp-$PID.log"
     Write-Step 'Adaptive Web Data Collection Platform | Windows Launcher 1.0'
-    $modeLabel = if ($DemoMode) { 'Synthetic Demo' } elseif ($Pilot) { 'Private partner pilot' } else { 'Normal' }
+    $modeLabel = if ($Harbourline) { 'Harbourline Demo' } elseif ($DemoMode) { 'Demo' } elseif ($Pilot) { 'Company pilot' } else { 'Core' }
     Write-Step "[INFO] $modeLabel mode. Action: $Action."
     if ($DemoRetry -and (!$DemoMode -or $Action -ne 'Start')) {
         Stop-WithError 'DEMO-003' 'Invalid Demo Retry Option' 'The -DemoRetry option requires Start with -Demo.' `
@@ -231,7 +239,7 @@ catch {
         try {
             Stop-WithError 'RUN-002' 'Launcher Could Not Complete' 'Windows reported an unexpected launcher error.' `
                 'The log identifies the failed script location. Check writable project folders and supported prerequisites.' `
-                @('Run Diagnose-Platform.bat and share the launcher report with your teammate.')
+                @("Run $DiagnoseCommand and check the launcher report.")
         } catch {}
     }
 }

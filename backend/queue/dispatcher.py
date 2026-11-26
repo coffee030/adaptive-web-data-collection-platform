@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.application.jobs import Jobs, database_now
 from backend.core.contracts import CollectionError
 from backend.intelligence.indexing import INDEX_CLAIM_WINDOW, Indexing
-from backend.intelligence.public_directory import refresh as refresh_public_directory
+from backend.intelligence import commons_works, public_directory, public_feed
 from backend.intelligence.refresh import refresh_partner_files
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.marketing.pipeline import CLAIM_WINDOW as MARKETING_CLAIM_WINDOW
@@ -158,8 +158,12 @@ def main() -> None:
             marketing.dispatch(publish_marketing)
             if partner_directory:
                 refresh_partner_files(intelligence, Path(partner_directory))
-            if intelligence.config.workspace:
-                refresh_public_directory(sessions)
+            if (
+                intelligence.config.workspace
+                or intelligence.config.public_demo_directory
+            ):
+                public_directory.refresh(sessions)
+                public_feed.refresh(sessions, commons_works.feed())
             intelligence.maintain()
             intelligence.dispatch(publish_intelligence)
             return
@@ -204,8 +208,12 @@ def main() -> None:
                     purge = monotonic() >= indexing_cleanup_due
                     intelligence.maintain(purge=purge)
                     if purge:
-                        if intelligence.config.workspace:
-                            refresh_public_directory(sessions)
+                        if (
+                            intelligence.config.workspace
+                            or intelligence.config.public_demo_directory
+                        ):
+                            public_directory.refresh(sessions)
+                            public_feed.refresh(sessions, commons_works.feed())
                         if partner_directory:
                             refresh_partner_files(intelligence, Path(partner_directory))
                         indexing_cleanup_due = monotonic() + MARKETING_CLEANUP_SECONDS

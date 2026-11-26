@@ -37,6 +37,7 @@ class Config:
     model_dir: Path | None = None
     demo_enabled: bool = False
     workspace: str = ""
+    public_demo_directory: bool = False
 
     @classmethod
     def load(cls):
@@ -46,6 +47,7 @@ class Config:
             model_dir=Path(path) if path else None,
             demo_enabled=config.get("MARKETING_DEMO_ENABLED") == "1",
             workspace=config.get("MARKETING_PARTNER_WORKSPACE") or "",
+            public_demo_directory=config.get("MARKETING_PUBLIC_DEMO_DIRECTORY") == "1",
         )
 
 
@@ -194,6 +196,8 @@ class IntelligenceStore:
                 "Dataset grant does not permit this workspace use",
             )
         payload = body.model_dump(mode="json")
+        if not body.grant.company_plan_export:
+            payload["grant"].pop("company_plan_export", None)
         payload["records"].sort(key=lambda item: item["id"])
         digest = sha256(
             json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()

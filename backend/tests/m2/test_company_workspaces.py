@@ -1,8 +1,11 @@
+import csv
+import io
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from test_intelligence import (
+    BRIEF,
     CUSTOMER_TOKEN,
     OP,
     OPERATOR_TOKEN,
@@ -81,7 +84,12 @@ def test_membership_scopes_campaigns_datasets_exports_and_indexing(
             client.put(campaign, json={"version": 0, "draft": DRAFT}).json()["version"]
             == 1
         )
-        changed = {**DRAFT, "shortlist": []}
+        changed = {
+            **DRAFT,
+            "shortlist": [],
+            "evaluation": dict(BRIEF, description="=budget", budget_minor=319999),
+            "scenario": {"currency": "HKD", "advertising_spend_minor": 123083},
+        }
         assert (
             client.put(campaign, json={"version": 0, "draft": changed}).status_code
             == 409
@@ -93,7 +101,14 @@ def test_membership_scopes_campaigns_datasets_exports_and_indexing(
             == 2
         )
         assert client.get(campaign + "/export?version=1").status_code == 409
-        assert "Tea launch" in client.get(campaign + "/export?version=2").text
+        downloaded = client.get(campaign + "/export?version=2")
+        values = dict(csv.reader(io.StringIO(downloaded.text.lstrip("\ufeff"))))
+        assert values["Campaign"] == "Tea launch"
+        assert values["Minimum creators"] == "2"
+        assert values["Budget cap (HKD)"] == "3199.99"
+        assert values["Brief"] == "'=budget"
+        assert values["Advertising spend (HKD)"] == "1230.83"
+        assert values["Scenario basis"] == "Customer supplied assumptions"
 
         assert sign("beta-lunch").status_code == 200
         assert client.get(BASE + "/campaigns").json() == []

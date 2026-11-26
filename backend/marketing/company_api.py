@@ -6,14 +6,15 @@ from secrets import compare_digest, token_bytes, token_urlsafe
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, SecretStr, StringConstraints
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.application.jobs import database_now
 from backend.intelligence.contracts import Campaign, Ref, Scenario, StrictModel
+from backend.intelligence.plan_export import allocation_rows
 from backend.persistence.database import settings
 from .api import NonCacheableRoute, operator_store
 from .company_models import CompanyCampaignRow, CompanyRow, CompanySessionRow, MemberRow
@@ -85,6 +86,23 @@ class CampaignBrief(StrictModel):
     categoryLabels: str = ""
 
 
+ResearchLead = Annotated[
+    str, Field(pattern=r"^(wikidata:Q[0-9]{1,15}|commons:[0-9a-f]{32})$")
+]
+WorkId = Annotated[str, Field(pattern=r"^[0-9]{1,20}$")]
+
+
+class ResearchBrief(StrictModel):
+    title: str = Field(max_length=160)
+    objective: str = Field(max_length=1000)
+    deliverable: str = Field(max_length=160)
+    budget: int | None = Field(default=None, ge=0, le=10000000)
+    leads: list[ResearchLead] = Field(max_length=40)
+    works: dict[ResearchLead, Annotated[list[WorkId], Field(max_length=128)]] = Field(
+        default_factory=dict, max_length=40
+    )
+
+
 class CampaignDraft(StrictModel):
     brief: CampaignBrief
     saved: bool
@@ -93,6 +111,7 @@ class CampaignDraft(StrictModel):
     explorer: str = Field(max_length=2000)
     evaluation: Campaign | None = None
     scenario: Scenario | None = None
+    research: ResearchBrief | None = None
 
 
 class Revision(StrictModel):
@@ -338,6 +357,50 @@ def campaigns(user: User, session: Database) -> list[Saved]:
     return [Saved.model_validate(row, from_attributes=True) for row in rows]
 
 
+class CampaignSummary(BaseModel):
+    id: UUID
+    name: str
+    version: int
+    updated_at: datetime
+
+
+@router.get("/campaigns/summaries")
+def campaign_summaries(
+    user: User,
+    session: Database,
+    limit: Annotated[int, Query(ge=1, le=26)] = 10,
+    offset: Annotated[int, Query(ge=0, le=2147483647)] = 0,
+) -> list[CampaignSummary]:
+    campaigns = (
+        select(
+            CompanyCampaignRow.id,
+            func.coalesce(
+                func.nullif(CompanyCampaignRow.draft["brief"]["name"].astext, ""),
+                func.nullif(CompanyCampaignRow.draft["research"]["title"].astext, ""),
+                "Untitled campaign",
+            ).label("name"),
+            CompanyCampaignRow.version,
+            CompanyCampaignRow.updated_at,
+        )
+        .where(CompanyCampaignRow.company_id == user.id)
+        .order_by(CompanyCampaignRow.updated_at.desc(), CompanyCampaignRow.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return [
+        CampaignSummary.model_validate(row)
+        for row in session.execute(campaigns).mappings()
+    ]
+
+
+@router.get("/campaigns/{campaign_id}", response_model_exclude_none=True)
+def read_campaign(campaign_id: UUID, user: User, session: Database) -> Saved:
+    row = session.get(CompanyCampaignRow, (user.id, campaign_id))
+    if row is None:
+        raise MarketingError(404, "campaign_unavailable", "Campaign unavailable")
+    return Saved.model_validate(row, from_attributes=True)
+
+
 @router.put("/campaigns/{campaign_id}", response_model_exclude_none=True)
 def save_campaign(
     campaign_id: UUID, body: Revision, user: User, session: Database
@@ -366,9 +429,14 @@ def save_campaign(
 
 @router.get("/campaigns/{campaign_id}/export")
 def export_campaign(
-    campaign_id: UUID, version: int, user: User, session: Database
+    campaign_id: UUID,
+    version: int,
+    request: Request,
+    user: User,
+    session: Database,
+    allocation: Annotated[str | None, Query(pattern=r"^[a-f0-9]{64}$")] = None,
 ) -> Response:
-    row = session.get(CompanyCampaignRow, (user.id, campaign_id))
+    row = session.get(CompanyCampaignRow, (user.id, campaign_id), with_for_update=True)
     if row is None:
         raise MarketingError(404, "campaign_unavailable", "Campaign unavailable")
     if row.version != version:
@@ -376,26 +444,88 @@ def export_campaign(
             409, "campaign_changed", "Reload the latest saved campaign"
         )
     brief = row.draft["brief"]
+    evaluation = row.draft.get("evaluation")
+    budget = evaluation["budget_minor"] / 100 if evaluation else brief["budget"]
+    currency = evaluation["currency"] if evaluation else "HKD"
     rows = [
         ("Company", user.name),
         ("Campaign", brief["name"]),
-        ("Brief", brief["description"]),
-        ("Budget cap (HKD)", brief["budget"]),
-        ("Required creators", brief["creatorCount"]),
-        ("Platform", brief["platform"]),
-        ("Deliverable", brief["deliverable"]),
-        ("Mandatory notes", brief["required"]),
+        (
+            "Export scope",
+            "Company brief and authorized allocation"
+            if allocation
+            else "Company brief, saved planning inputs and scenario assumptions",
+        ),
+        ("Brief", evaluation["description"] if evaluation else brief["description"]),
+        (f"Budget cap ({currency})", budget),
+        (
+            "Minimum creators",
+            evaluation["minimum_creators"] if evaluation else brief["creatorCount"],
+        ),
+        (
+            "Maximum creators",
+            evaluation["maximum_creators"] if evaluation else brief["creatorCount"],
+        ),
+        ("Platform", evaluation["platform"] if evaluation else brief["platform"]),
+        (
+            "Deliverable",
+            evaluation["deliverable"] if evaluation else brief["deliverable"],
+        ),
+        ("Mandatory notes for manual review", brief["required"]),
         ("Optional notes", brief["preferred"]),
-        ("Required content evidence", brief["requiredFacts"]),
-        ("Preferred evidence", brief["preferredFacts"]),
+        (
+            "Required content evidence",
+            ", ".join(evaluation["required_facts"])
+            if evaluation
+            else brief.get("requiredFacts", ""),
+        ),
+        (
+            "Preferred evidence",
+            ", ".join(evaluation["preferred_facts"])
+            if evaluation
+            else brief.get("preferredFacts", ""),
+        ),
     ]
-    if row.draft.get("scenario"):
-        rows.append(("Scenario basis", "Customer supplied assumptions"))
+    if allocation:
+        if not evaluation:
+            raise MarketingError(409, "evaluation_required", "Evaluate the saved brief")
         rows.extend(
-            (k.replace("_", " "), v)
-            for k, v in row.draft["scenario"].items()
-            if v is not None
+            allocation_rows(
+                request.app.state.intelligence, user.id, evaluation, allocation
+            )
         )
+        rows.append(
+            (
+                "Manual requirements review",
+                "Pending" if brief["required"].strip() else "None specified",
+            )
+        )
+    if assumption := row.draft.get("scenario"):
+        rows.extend(
+            [
+                ("Scenario basis", "Customer supplied assumptions"),
+                ("Scenario currency", assumption["currency"]),
+            ]
+        )
+        fields = {
+            "impressions": "Impressions",
+            "click_rate": "Click rate (fraction)",
+            "conversion_rate": "Conversion rate (fraction)",
+            "contribution_margin": "Contribution margin (fraction)",
+            "value_per_conversion_minor": "Value per conversion",
+            "advertising_spend_minor": "Advertising spend",
+            "campaign_cost_minor": "Campaign cost",
+        }
+        for key, label in fields.items():
+            value = assumption.get(key)
+            if key == "campaign_cost_minor" and value is None:
+                value = assumption.get("spend_minor")
+            if value is not None:
+                rows.append(
+                    (f"{label} ({assumption['currency']})", value / 100)
+                    if key.endswith("_minor")
+                    else (label, value)
+                )
     output = io.StringIO()
     writer = csv.writer(output, quoting=csv.QUOTE_ALL)
     for name, value in rows:

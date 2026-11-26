@@ -8,6 +8,7 @@
 !backend/core/**/*.py
 !backend/intelligence/**/*.py
 !backend/intelligence/wikidata-directory.json
+!backend/intelligence/commons-works.json
 !backend/marketing/**/*.py
 !backend/migrations/**/*.py
 !backend/migrations/script.py.mako

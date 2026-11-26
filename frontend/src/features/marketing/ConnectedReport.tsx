@@ -1,40 +1,21 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useResource } from '../../lib/useResource';
+import { useCatalogRevision } from './CatalogUpdates';
 import { Link } from 'react-router';
+import { EvaluationScope, readable } from './EvaluationScope';
 import { useEvaluation } from './useEvaluation';
 import { Overlay } from './components';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, SourcePost, SourceRef, SurveyEvidence } from './IntelligenceEvidence';
-import { amount, campaignInput, date, languageOptions, type DataMode, type Recommendation } from './intelligence';
+import { amount, briefOptions, campaignInput, date, platformOptions, type DataMode, type Platform, type Recommendation } from './intelligence';
 import { useMarketing } from './workspace';
-
-const readable = (value: string) => {
-  if (value.startsWith('required_fact_unverified:')) {
-    return 'Required fact unverified (' + value.slice('required_fact_unverified:'.length).replaceAll('_', ' ') + ')';
-  }
-  if (value.startsWith('language:')) {
-    const language = value.slice('language:'.length) as keyof typeof languageOptions;
-    return 'Language evidence (' + (languageOptions[language] ?? language) + ')';
-  }
-  return ({
-    confirmed_quote_unavailable: 'Current firm quote unavailable',
-    target_market_evidence_unavailable: 'Audience evidence unavailable',
-    insufficient_relevant_content: 'Insufficient supporting content',
-    quote_exceeds_budget: 'Quote exceeds budget',
-    required_language_unverified: 'Required language unverified',
-    required_market_share_unverified: 'Required audience share unverified',
-    required_market_share_below_minimum: 'Audience share below minimum',
-    relevance: 'Content relevance',
-    performance: 'Historical performance',
-    consistency: 'Historical consistency',
-    cost: 'Quote fit',
-    market: 'Audience fit',
-    language: 'Language evidence',
-    preferences: 'Reviewed preferences',
-  }[value] ?? value.replaceAll('_', ' '));
-};
 
 export function ConnectedReport({ mode }: { mode: DataMode }) {
   const { draft, path, toggleShortlist } = useMarketing();
   const { current, evaluate, running, error, retry } = useEvaluation(mode);
+  const platform = draft.brief.platform.toLowerCase() as Platform;
+  const coverageLoad = useCallback((signal:AbortSignal) => briefOptions(mode, platform, signal), [mode, platform]);
+  const coverage = useResource(coverageLoad, useCatalogRevision(), false, mode==='partner' && !current && !running && Boolean(platform));
+  const inventory = coverage.result.state==='ready' ? coverage.result.data.platforms?.[platform] : undefined;
   const [invalid, setInvalid] = useState('');
   const [selectedId, setSelectedId] = useState<string>();
 
@@ -77,11 +58,19 @@ export function ConnectedReport({ mode }: { mode: DataMode }) {
         {draft.shortlist.length > 0 && <button type="button" disabled={running} onClick={() => submit(true)}>Evaluate shortlist</button>}
         {current && <Link className="hl-button" to={path('plan')}>Inspect plan</Link>}</div>
     </div>
+    {mode==='partner' && !current && !running && <div className="hl-evidence-notice">
+      {inventory && (inventory.creators===0 || inventory.firm_quotes===0) ? <>
+        <strong>{inventory.creators===0 ? 'No company creator records on '+platformOptions[platform] : 'No current firm quotes on '+platformOptions[platform]}</strong>
+        <p>Use the public directory to find supporting work, then request an authorized profile, relevant content and a dated quote for the deliverable.</p>
+        <Link to={path('directory')}>Research public works →</Link>
+      </> : <p>The Advisor checks company content and firm quotes against the selected platform, deliverable, budget and team size.</p>}
+    </div>}
     {(draft.brief.required || draft.brief.preferred) && <p className="hl-note">The Advisor checks your selected content criteria. Review any additional notes manually.</p>}
     {invalid && <p role="alert" className="hl-decision hl-warning">{invalid}</p>}
     {running && <Pending>Reviewing eligible campaign evidence…</Pending>}
     {error && <IntelligenceError error={error} retry={retry} />}
     {current && <>
+      <EvaluationScope result={current}/>
       {current.categories.labels.length > 0 && <p className="hl-category"><strong>{current.categories.source === 'suggested' ? 'Suggested categories' : 'Your category labels'}</strong> · {current.categories.labels.join(', ')}</p>}
       {current.unavailable_shortlist_ids.length > 0 && <p className="hl-note">{current.unavailable_shortlist_ids.length} shortlisted creators are unavailable.</p>}
       {current.plan.total_minor !== null && <div className="hl-decision"><strong>{amount(current.plan.total_minor)}</strong> · {current.plan.selected.length} {current.plan.selected.length === 1 ? 'quoted allocation' : 'quoted allocations'}

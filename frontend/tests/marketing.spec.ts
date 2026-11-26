@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { blankBrief } from '../src/features/marketing/contracts';
 
 const capabilityPath = '**/api/v1/marketing/capabilities';
 const capability = { provider: 'youtube_data_api', policy_url: 'https://developers.google.com/youtube/terms/developer-policies',
@@ -24,13 +25,13 @@ test('live workspace saves a brief and keeps restricted data and the demo out of
   await expect(page.getByRole('heading', { name: 'Harbour launch' })).toBeVisible();
   await expect(page.getByText('Live creator intelligence unavailable', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Creator Explorer' }).click();
-  await page.getByRole('textbox', { name: 'Creator name, handle or topic' }).fill('café');
+  await page.getByRole('search', { name: 'Search creators' }).getByRole('textbox').fill('café');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByText(/Eligible creator search is currently unavailable/)).toBeVisible();
   await expect(page.getByText('Mira Lau')).toHaveCount(0);
   await page.goto('/demo');
   await expect(page.getByRole('link', { name: 'Sheung Wan coffee launch', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Live workspace' }).click();
+  await page.getByRole('link', { name: 'Local campaign workspace' }).click();
   await expect(page.getByText('Harbour launch')).toBeVisible();
   expect(protectedRequests).toEqual([]);
 });
@@ -159,4 +160,81 @@ test('a configured partner workspace respects server authorization without loadi
   expect(requested.some(path => path.endsWith('/partner/creators'))).toBe(true);
   expect(requested.every(path => path.includes('/partner/'))).toBe(true);
   await expect(page.getByText('Mira Lau')).toHaveCount(0);
+});
+
+test('a signed-out company visitor can try a sample or find the correct provisioning role', async ({ page }) => {
+  await page.route(capabilityPath, route => route.fulfill({ json: { ...capability, company_accounts: true } }));
+  await page.route('**/api/v1/marketing/companies/session', route => route.fulfill({
+    status: 401, json: { error: { code: 'company_login_required' } },
+  }));
+  await page.goto('/plan');
+  await expect(page.getByRole('heading', { name: 'Company pilot' })).toBeVisible();
+  await page.getByText('How do I get an account?').click();
+  await expect(page.getByText(/Ask your company administrator/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Operator setup' })).toHaveAttribute('href', '/operations/companies');
+  await page.getByRole('link', { name: 'Try the demo without an account' }).click();
+  await expect(page.getByText('Fictional demo', { exact: true })).toBeVisible();
+});
+
+test('research shortlist pins matched works and checks current evidence before export', async ({page})=>{
+  const id='a'.repeat(32);
+  const work={id:'17',title:'Controlled lunch menu',date:'2020-01-14',excerpt:'A menu description from the test collection.',
+    excerpt_language:'en',platform:'Controlled archive',revision_url:'https://example.org/revision/17',
+    archive_url:'https://example.org/archive/17',license:'Controlled license',license_url:'https://example.org/license',text_license_url:'https://example.org/license'};
+  let withdrawn=false;
+  await page.route(capabilityPath,r=>r.fulfill({json:{...capability,customer_intelligence:'available'}}));
+  await page.route('**/partner/processing',r=>r.fulfill({json:{mode:'partner',revision:'one',state:'ready'}}));
+  await page.route('**/partner/public-directory?**',r=>r.fulfill({json:{state:'available',profiles:[]}}));
+  await page.route('**/partner/public-works?**',r=>{
+    const query=new URL(r.request().url()).searchParams.get('q');
+    const matches=query ? [work] : [work,{...work,id:'99',title:'Unrelated archive work'}];
+    return r.fulfill({json:{state:withdrawn?'unavailable':'available',contributors:withdrawn?[]:[
+      {id,name:'Controlled photographer',match_basis:'historical_topic',matched_works:matches},
+    ]}});
+  });
+  await page.goto('/directory?q=lunch');
+  await page.getByRole('button',{name:'Save to shortlist · Controlled photographer'}).click();
+  await page.getByRole('link',{name:'Research shortlist',exact:true}).click();
+  await expect(page.getByText('Controlled lunch menu',{exact:true})).toBeVisible();
+  await expect(page.getByText('Unrelated archive work')).toHaveCount(0);
+  await page.getByLabel('Campaign name',{exact:true}).fill('Research request');
+  await page.getByLabel('Planning budget (HK$)').fill('12000');
+  const exportButton=page.getByRole('button',{name:'Export research brief CSV'});
+  await expect(exportButton).toBeDisabled();
+  await page.getByRole('button',{name:'Save research brief'}).click();
+  await page.reload();
+  await expect(page.getByLabel('Campaign name')).toHaveValue('Research request');
+  withdrawn=true;
+  const downloaded=page.waitForEvent('download');
+  await exportButton.click();
+  const csv=await readFile((await (await downloaded).path())!, 'utf8');
+  expect(csv).toContain('Current public evidence unavailable');
+  expect(csv).toContain('12000');
+  expect(csv).not.toContain(work.title);
+});
+
+test('company export refreshes changed source permissions and keeps the saved brief available', async ({ page }) => {
+  const id = '91c047ea-7111-4ba5-a1f6-d766ff1474b0';
+  const evaluation = {description:'Local lunch',objective:'awareness',platform:'instagram',deliverable:'short_video',
+    currency:'HKD',budget_minor:35000,minimum_creators:1,maximum_creators:1,required_facts:[],preferred_facts:[]};
+  const draft = {brief:{...blankBrief,name:'Lunch research'},saved:true,shortlist:[],explorer:'',lines:[],evaluation};
+  let permitted = true;
+  await page.route(capabilityPath, r => r.fulfill({json:{...capability,company_accounts:true,customer_intelligence:'available'}}));
+  await page.route('**/companies/session', r => r.fulfill({json:{id:'example-company',username:'example-member',name:'Test company',role:'member'}}));
+  await page.route('**/companies/campaigns', r => r.fulfill({json:[{id,version:1,draft}]}));
+  await page.route('**/partner/processing', r => r.fulfill({json:{mode:'partner',revision:'one',state:'ready'}}));
+  await page.route('**/partner/campaign-briefs', r => r.fulfill({json:{
+    mode:'partner',state:'incomplete',as_of:'2026-11-01T12:00:00Z',revision:'one',retrieval:'character_tfidf',
+    campaign:evaluation,reviewed_count:1,exclusions:{missing_quote:1},recommendations:[],unavailable_shortlist_ids:[],
+    plan:{status:'infeasible',selected:[],total_minor:null},allocation_export_receipt:permitted?'a'.repeat(64):null,
+  }}));
+  await page.route('**/export?**', r => {
+    expect(new URL(r.request().url()).searchParams.get('allocation')).toBe('a'.repeat(64));
+    permitted=false;
+    return r.fulfill({status:403,json:{error:{code:'plan_export_restricted'}}});
+  });
+  await page.goto('/plan');
+  await page.getByRole('button',{name:'Export infeasible assessment CSV'}).click();
+  await expect(page.getByRole('alert')).toContainText('export permission changed');
+  await expect(page.getByRole('button',{name:'Export draft CSV'})).toBeEnabled();
 });

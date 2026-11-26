@@ -1,8 +1,9 @@
 import { useCallback, useState, useRef, useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { apiAttachment } from '../../lib/api';
+import { ApiError, apiAttachment } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
 import { HistoricMetrics, IntelligenceError, Pending, QuoteEvidence, measureText } from './IntelligenceEvidence';
+import { EvaluationScope } from './EvaluationScope';
 import { useEvaluation } from './useEvaluation';
 import { amount, calculateScenario, runCampaign, type DataMode, type ScenarioRequest } from './intelligence';
 import { useMarketing } from './workspace';
@@ -103,12 +104,26 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       exportRequest.current = controller;
       setCheckingExport(true);
       try {
-        const blob = await apiAttachment('/marketing/companies/campaigns/'+campaignReceipt.id+'/export?version='+campaignReceipt.version,controller.signal,'text/csv');
+        const params = new URLSearchParams({ version:String(campaignReceipt.version) });
+        if (current?.allocation_export_receipt) params.set('allocation', current.allocation_export_receipt);
+        const blob = await apiAttachment('/marketing/companies/campaigns/'+campaignReceipt.id+'/export?'+params,controller.signal,'text/csv');
         const href = URL.createObjectURL(blob);
         const link = document.createElement('a'); link.href=href; link.download='harbourline-campaign.csv'; link.click();
         window.setTimeout(()=>URL.revokeObjectURL(href),1000);
         setExported(true);
-      } catch { if (!controller.signal.aborted) setExportError('Could not export this campaign. Check your sign-in and reopen its latest saved version.'); }
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        if (cause instanceof ApiError && (cause.code==='plan_export_restricted' || cause.code==='catalog_changed')) {
+          retry();
+          setExportError('The available evidence or its export permission changed. Review the refreshed plan and its export options.');
+        } else if (cause instanceof ApiError && cause.status===409) {
+          setExportError('A newer company draft is available. Reopen the campaign before exporting.');
+        } else if (cause instanceof ApiError && cause.status===401) {
+          setExportError('Sign in to the company again to export this campaign.');
+        } else {
+          setExportError('The export could not be completed. Check the connection and try again.');
+        }
+      }
       finally { exportRequest.current=undefined; if (!controller.signal.aborted) setCheckingExport(false); }
       return;
     }
@@ -136,10 +151,10 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     const rows: (string|number)[][] = [['Classification', mode === 'demo' ? 'Fictional backend demo' : 'Local campaign draft'],
       ['Campaign',draft.brief.name],['Budget cap (HKD)',(current?.campaign.budget_minor ?? draft.brief.budget * 100)/100],
       ['Brief',draft.brief.description],['Platform',draft.brief.platform],['Deliverable',draft.brief.deliverable],
-      ['Required creators',draft.brief.creatorCount],['Required content evidence',draft.brief.requiredFacts ?? ''],
+      ['Required creators',current?.campaign.minimum_creators ?? draft.brief.creatorCount],['Required content evidence',draft.brief.requiredFacts ?? ''],
       ['Mandatory notes',draft.brief.required],['Optional notes',draft.brief.preferred]];
     if (mode === 'demo') {
-      rows.push(['Plan status',status],['Confirmed spend (HKD)',confirmed === undefined ? 'Unavailable' : confirmed / 100], [],
+      rows.push(['Plan status',status],['Evidence reviewed at',current!.as_of],['Confirmed spend (HKD)',confirmed === undefined ? 'Unavailable' : confirmed / 100], [],
         ['Selected fictional creator','Firm quote (HKD)','Quote evidence','Supporting post evidence']);
       for (const item of selected) rows.push([item.name,item.quote?.data.amount_minor == null ? 'Unavailable' : item.quote.data.amount_minor / 100,
         item.quote?.evidence.reference ?? 'Unavailable',item.evidence.map(post => post.content.evidence.reference).join(', ')]);
@@ -160,7 +175,8 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     <p className="hl-crumb">{draft.brief.name || 'Campaign workspace'}</p>
     <div className="hl-page-heading"><div><h1>Campaign plan</h1><p>Review quoted allocations and test a different budget or candidate selection.</p></div>
       {draft.saved && <button type="button" className="hl-primary" disabled={campaignReceipt?.pending || checkingExport || running || Boolean(error) || (mode === 'demo' && !current)}
-        onClick={exportPlan}>{mode === 'demo' ? 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
+        onClick={exportPlan}>{mode === 'demo' || current?.allocation_export_receipt ? active?.status === 'infeasible' ? 'Export infeasible assessment CSV' : 'Export plan CSV' : 'Export draft CSV'}</button>}</div>
+    {mode === 'partner' && draft.saved && <p className="hl-note">{current?.allocation_export_receipt ? 'Plan export includes the current allocation, fees and source references approved for your company.' : 'Export your campaign brief and scenario assumptions. Exporting creator allocations requires permission from the source owners.'}</p>}
     {exportError && <p role="alert">{exportError}</p>}
     {exported && <p role="status">CSV exported.</p>}
     {error && <IntelligenceError error={error} retry={retry} />}
@@ -173,6 +189,11 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       </form>
       {!running && !error && <section className={`hl-decision ${confirmed === undefined || manual ? 'hl-warning' : ''}`} aria-label="Confirmed selection">
         <strong>{status}</strong><p>{confirmed === undefined ? 'Confirmed spend unavailable.' : amount(confirmed) + ' confirmed for ' + selected.length + (selected.length === 1 ? ' creator allocation.' : ' creator allocations.')}</p>
+        <EvaluationScope result={current}/>
+        {active?.status === 'infeasible' && <div className="hl-actions">
+          {current.campaign.shortlist && <button type="button" onClick={() => { setPool(undefined); evaluate({ ...current.campaign, shortlist: undefined }); }}>Evaluate all creators</button>}
+          <Link className="hl-button" to={path('advisor')+'#edit-requirements'}>Edit campaign requirements</Link>
+        </div>}
         {confirmed !== undefined && <div className="hl-budget-usage">
           {current.campaign.budget_minor > 0 && <meter aria-label="Confirmed creator spend against the budget" min={0} max={current.campaign.budget_minor} value={confirmed}/>}
           {amount(current.campaign.budget_minor - confirmed)} remaining of {amount(current.campaign.budget_minor)}

@@ -19,7 +19,20 @@ function Get-HarbourlineSecret([string]$FileName) {
     return $token
 }
 
+function Set-HarbourlineDestination([ValidateSet('pilot','demo')][string]$Mode) {
+    $Config['HARBOURLINE_INSTALLATION'] = $Mode
+    $peer = if ($Mode -eq 'pilot') { 'demo' } else { 'pilot' }
+    $port = if ($Mode -eq 'pilot') { 5198 } else { 5199 }
+    $file = Join-Path $Root ".local-$peer/launcher.env"
+    if (Test-Path -LiteralPath $file -PathType Leaf) {
+        $line = [IO.File]::ReadLines($file) | Where-Object { $_ -cmatch '^FRONTEND_PORT=[0-9]{4,5}$' } | Select-Object -First 1
+        if ($line) { $port = [int]($line -split '=')[1] }
+    }
+    $Config['HARBOURLINE_PEER_PORT'] = $port
+}
+
 function Initialize-HarbourlinePilotSettings {
+    Set-HarbourlineDestination pilot
     $Config['MARKETING_PARTNER_WORKSPACE'] = $Config.COMPOSE_PROJECT_NAME
     $refreshRoot = Join-Path $Local 'partner-refresh'
     foreach ($folder in @($refreshRoot, (Join-Path $refreshRoot $Config.COMPOSE_PROJECT_NAME))) {
@@ -40,9 +53,11 @@ function Initialize-HarbourlinePilotSettings {
 }
 
 function Initialize-HarbourlineSettings {
+    Set-HarbourlineDestination demo
     $Config['MARKETING_PILOT_PASSWORD'] = ''
     $Config['MARKETING_OPERATOR_TOKEN'] = Get-HarbourlineSecret 'harbourline-operator.token'
     $Config['MARKETING_DEMO_ENABLED'] = '1'
+    $Config['MARKETING_PUBLIC_DEMO_DIRECTORY'] = '1'
     $Config['MARKETING_PARTNER_WORKSPACE'] = ''
     $Config['MARKETING_CUSTOMER_TOKEN'] = ''
     $Config['MARKETING_YOUTUBE_RESEARCH'] = '0'
@@ -90,6 +105,14 @@ function Initialize-HarbourlineImage {
     }
     $Config['MARKETING_MODEL_HOST_DIR'] = $directory
     Write-Step '[PASS] Granite files passed pinned digest verification.'
+}
+
+function Invoke-PublicResearchProvisioning {
+    $public = Invoke-Compose @('exec', '-T', 'api', 'python', '-m', 'backend.intelligence.install_public_research') 145
+    if ($public.Code -ne 0) { Write-Step '[WARN] Public research setup needs attention in Data Operations.' }
+    foreach ($line in ($public.Out -split '\r?\n')) {
+        if ($line -match '^Public research:') { Write-Step $line }
+    }
 }
 
 function Invoke-HarbourlineProvisioning {

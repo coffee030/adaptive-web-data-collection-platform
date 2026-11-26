@@ -7,7 +7,17 @@ import { demoBrief, demoCreators } from './demo/fixture';
 
 export type WorkspaceMode = 'partner' | 'sample' | 'server-demo';
 
+export interface ResearchBrief {
+  title: string;
+  objective: string;
+  deliverable: string;
+  budget: number | null;
+  leads: string[];
+  works?: Record<string,string[]>;
+}
+
 export interface Draft {
+  research?: ResearchBrief | null;
   brief: Brief;
   saved: boolean;
   shortlist: string[];

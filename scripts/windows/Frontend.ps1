@@ -27,7 +27,7 @@ function Stop-OwnedFrontend {
         Write-AtomicFile $stopFile 'stop'
         if (!(Wait-Until { !(Test-FrontendProcess $state) } 12 1)) {
             Stop-WithError 'WEB-004' 'Frontend Did Not Stop' 'The verified frontend did not exit after its shutdown request.' `
-                'The development server may still be serving an active connection.' @('Close the platform tab and retry Stop-Platform.bat.') 'Graceful shutdown attempted.'
+                'The development server may still be serving an active connection.' @("Close the platform tab and retry $StopCommand.") 'Graceful shutdown attempted.'
         }
         Write-Step '[PASS] The launcher frontend stopped.'
     }
@@ -42,7 +42,7 @@ function Start-ContainerFrontend {
     if ($result.Code -ne 0 -or !(Test-ApiHealth "$url/api/v1/health")) {
         $details = Write-ServiceDiagnosis frontend
         Stop-WithError 'WEB-003' 'Frontend Startup Failed' 'The container or its API proxy did not become ready.' `
-            "$($result.Reason); $details." @('Run Diagnose-Platform.bat and check Docker Desktop and the configured frontend port.')
+            "$($result.Reason); $details." @("Run $DiagnoseCommand and check Docker Desktop and the configured frontend port.")
     }
     Write-Step '[PASS] The containerized frontend and its API proxy are ready.'
 }

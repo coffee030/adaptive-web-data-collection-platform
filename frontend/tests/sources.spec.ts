@@ -35,9 +35,9 @@ test('Sources navigation, full array, client-side pagination, and revoked access
   });
   await page.goto('/collection-jobs');
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  await nav.getByRole('link', { name: 'Sources' }).click();
+  await nav.getByRole('link', { name: 'Sources', exact:true }).click();
   await expect(page).toHaveURL('/sources');
-  await expect(nav.getByRole('link', { name: 'Sources' })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'Sources', exact:true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('link', { name: csv.source_name })).toHaveAttribute('href', '/sources/' + id);
   await expect(page.getByRole('table').getByText('Revoked').first()).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Pending fixture' })).toContainText('Review access policy');
@@ -212,7 +212,7 @@ test('Sources browser link returns to the original array page', async ({ page })
   await page.route(url => url.pathname === api, route => route.fulfill({ json: rows }));
   await page.goto('/sources?offset=20');
   await page.getByRole('link', { name: csv.source_name }).click();
-  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sources' }).click();
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sources', exact:true }).click();
   await expect(page).toHaveURL('/sources?offset=20');
   await expect(page.getByRole('link', { name: csv.source_name })).toBeVisible();
   await expect(page.getByRole('link', { name: csv.source_name })).toBeFocused();

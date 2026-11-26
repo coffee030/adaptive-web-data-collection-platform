@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { apiLocal } from '../../lib/api';
+import { apiLocal, getOperatorCredential } from '../../lib/api';
 import { getMarketingCapability } from '../marketing/api';
 import { useResource } from '../../lib/useResource';
 import { AccountFields, accountProblem } from '../marketing/CompanyAccess';
 
 interface CompanyEntry { id:string; name:string }
 const path='/marketing/companies/registry';
-export function CompanyRegistry({selected,onSelect}:{selected:string;onSelect:(id:string)=>void}) {
+export function CompanySetup() {
+  return <section className="operator-page"><header className="page-heading"><h1>Company setup</h1>
+    <p>Create a workspace and its first administrator. That administrator can add the rest of the team.</p></header>
+    <CompanyRegistry/></section>;
+}
+export function CompanyRegistry({selected,onSelect}:{selected?:string;onSelect?:(id:string)=>void}) {
   const {result}=useResource(getMarketingCapability);
   const [companies,setCompanies]=useState<CompanyEntry[]>([]);
   const [error,setError]=useState('');
@@ -20,7 +25,7 @@ export function CompanyRegistry({selected,onSelect}:{selected:string;onSelect:(i
     if(request.current) return;
     const element=event.currentTarget;
     const form=new FormData(element);
-    const token=String(form.get('operator')??'');
+    const token=getOperatorCredential() || String(form.get('operator')??'');
     const create=(event.nativeEvent as SubmitEvent).submitter?.getAttribute('value')==='create';
     const controller=new AbortController(); request.current=controller;
     setError('');setNotice('');setPending(true);
@@ -30,7 +35,7 @@ export function CompanyRegistry({selected,onSelect}:{selected:string;onSelect:(i
           claim_existing_pilot:form.has('claim'),name:form.get('companyName'),username:form.get('username'),password:form.get('password')});
         const password=element.elements.namedItem('password') as HTMLInputElement;
         password.value='';
-        setCompanies(prev=>[...prev,record]);onSelect(record.id);
+        setCompanies(prev=>[...prev,record]);onSelect?.(record.id);
         setNotice(record.name+' is ready. Give the administrator their sign-in details privately.');
       } else {
         setCompanies(await apiLocal<CompanyEntry[]>(path,token,controller.signal));
@@ -41,16 +46,17 @@ export function CompanyRegistry({selected,onSelect}:{selected:string;onSelect:(i
   }
   return <section className="operator-research-result" aria-label="Company workspaces"><h2>Company workspaces</h2>
     <form onSubmit={submit} className="operator-dataset-form">
-      <label>Workspace operator credential<input type="password" name="operator" minLength={24} required autoComplete="off" /></label>
+      {!getOperatorCredential() && <label>Workspace operator credential<input type="password" name="operator" minLength={24} required autoComplete="off" /></label>}
       <div><button type="submit" value="list" formNoValidate disabled={pending}>Load companies</button></div>
-      <details><summary>Create a company and administrator</summary>
+      <details open={!onSelect || undefined}><summary>Create a company and administrator</summary>
         <label>Company name<input name="companyName" required maxLength={120}/></label><AccountFields newPassword/>
         <label><input type="checkbox" name="claim" />Assign the earlier shared pilot to this company. I verified its dataset grants cover these members. This ends shared customer access.</label>
         <button value="create" disabled={pending}>Create company</button>
       </details>
     </form>
-    <label>Dataset destination<select value={selected} disabled={pending} onChange={e=>onSelect(e.target.value)}>
-      <option value="">Existing pilot workspace</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+    {onSelect && <label>Dataset destination<select value={selected} disabled={pending} onChange={e=>onSelect(e.target.value)}>
+      <option value="">Existing pilot workspace</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+    {!onSelect && companies.length > 0 && <ul>{companies.map(company=><li key={company.id}>{company.name}</li>)}</ul>}
     {selected && <p>Partner imports and withdrawals below apply to {companies.find(c=>c.id===selected)?.name}.</p>}
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
   </section>;

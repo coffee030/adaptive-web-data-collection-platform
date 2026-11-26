@@ -8,7 +8,9 @@ Extract the release into a writable local folder and run the launcher for your w
 
 ### Harbourline Marketing Intelligence Demo
 
-Double-click **`Start-Harbourline-Demo.bat`** to open the connected Creator Explorer, Campaign Advisor and Plan Builder with fictional data. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use `-HarbourlineTextOnly` to rehearse that mode deliberately.
+Double-click **`Start-Harbourline-Demo.bat`** for password-free research. Choose **Search public directory** to find historical Hong Kong dining coverage. Open a contributor to inspect a published work, its date, source revision and license. Save contributors to **Research shortlist** to compare works, set a planning budget and export a brief requesting current evidence and rates. Wikidata supplies a separate identity directory. The research shortlist stays in this browser on the password-free installation. In the pilot it belongs to the active company campaign. The launcher provisions both reviewed public sources and the Core collects them in the background. Previously withdrawn sources require a new operator decision. [Public research sources](docs/operations/Public-Research-Sources.md)
+
+**Fictional campaign practice** lets you evaluate the Advisor and Plan Builder with labeled sample quotes. The launcher provisions the isolated Docker demo, applies migrations, and starts the API, dispatcher and worker. Host Python and Node.js are optional. First use needs network access for uncached Docker dependencies and the pinned Granite model. The launcher verifies both model files before mounting them read-only. If the model is unavailable, the Advisor labels its text retrieval mode. Use `-HarbourlineTextOnly` to rehearse that mode deliberately.
 
 The demo includes a bundled fictional marketing library and one controlled CSV collected by the Core. The latter enters the fictional marketing dataset after separate Source authorization and Profile approval, validated Records, and a verified raw Evidence match. The demo grants cover academic demonstration. Partner data requires its own authorization and dataset onboarding.
 
@@ -16,7 +18,7 @@ Open the printed connected workspace URL. Run `Stop-Platform.bat -Demo` to stop 
 
 ### Private partner pilot on Windows
 
-Double-click **Start-Harbourline-Pilot.bat** on a trusted Windows workstation. Open the printed URL, normally [127.0.0.1:5199](http://127.0.0.1:5199/). From the sign-in screen, open **Operator setup**. Use the credential in `.local-pilot/harbourline-operator.token` to create a company and its first administrator. Give that person their credentials privately. Administrators use their company menu to add or revoke individual team accounts.
+Double-click **Start-Harbourline-Pilot.bat** on a trusted Windows workstation. Open the printed URL, normally [127.0.0.1:5199](http://127.0.0.1:5199/). Choose **Try the demo without an account** to start without credentials. When the connected demo is running, this opens public research and fictional campaign practice. Otherwise the pilot includes a fictional sample. To join a company, ask its administrator for an account. Workstation operators choose **Operator setup**, unlock Data Operations with the credential in `.local-pilot/harbourline-operator.token`, then create the company and its first administrator. Reloading or leaving Data Operations locks the tab. Give that person their credentials privately. Administrators use their company menu to add or revoke individual team accounts.
 
 In **Data Operations → Intelligence datasets**, load companies and select the **Dataset destination** before importing independently authorized partner records. Customers sign in with individual accounts. Saved campaigns, shortlists and scenario assumptions belong to their company. Use separate browser profiles on shared machines. On upgrade, operators may explicitly assign the prior pilot to a company after verifying grants. That step ends the shared customer login for those datasets. Run `Diagnose-Platform.bat -Pilot` for diagnostics and `Stop-Platform.bat -Pilot` to stop services. [Partner data and company contracts](docs/contracts/Marketing-M2-intelligence.md)
 
@@ -77,4 +79,5 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 - [Topic collection and article history](docs/contracts/M8-data-identity-collection-management.md)
 - [Windows setup and troubleshooting](docs/setup/Windows-One-Click-Setup.md)
 - [FYP presentation runbook](docs/evaluation/M16-FYP-Presentation-Runbook.md)
+- [Harbourline campaign research through MCP](docs/setup/Windows-MCP-Access.md#harbourline-campaign-research)
 - [Local Codex MCP setup and presenter walkthrough](docs/setup/Windows-MCP-Access.md#four-minute-presenter-walkthrough)

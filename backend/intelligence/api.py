@@ -29,6 +29,7 @@ from .contracts import (
     Scenario,
 )
 from .recommend import CampaignResult, recommend
+from .discovery import MatchBasis, discover
 from .store import (
     DEMO,
     Config,
@@ -99,6 +100,7 @@ Store = Annotated[IntelligenceStore, Depends(intelligence)]
 
 class DiscoveryItem(CreatorSummary):
     preview: Observed[Content] | None
+    match_basis: MatchBasis | None
 
 
 class ActivityWeek(BaseModel):
@@ -107,6 +109,7 @@ class ActivityWeek(BaseModel):
 
 
 class DiscoveryResponse(BaseModel):
+    retrieval: Literal["browse", "granite_int8", "character_tfidf"]
     mode: Mode
     state: Literal["available", "empty"]
     creators: list[DiscoveryItem]
@@ -142,24 +145,22 @@ def discover_creators(
         ActivityWeek(start=first_monday + timedelta(weeks=index), posts=0)
         for index in range(12)
     ]
-    for creator in Catalog(snapshot).creators.values():
-        preview = creator.preview(filters)
-        if creator.matches(filters, preview):
-            for post in creator.posts:
-                week = (post.record.data.published_at.date() - first_monday).days // 7
-                if 0 <= week < len(activity):
-                    activity[week].posts += 1
-            creators.append(
-                DiscoveryItem(**summary(creator).model_dump(), preview=preview)
+    method, matches = discover(Catalog(snapshot), filters, store.config.model_dir)
+    for match in matches:
+        for post in match.creator.posts:
+            week = (post.record.data.published_at.date() - first_monday).days // 7
+            if 0 <= week < len(activity):
+                activity[week].posts += 1
+        creators.append(
+            DiscoveryItem(
+                **summary(match.creator).model_dump(),
+                preview=match.preview,
+                match_basis=match.basis,
             )
-    creators.sort(
-        key=lambda item: (
-            item.profile.data.name.casefold(),
-            item.profile.data.creator_id,
         )
-    )
     store.assert_current(scope, snapshot.revision)
     return DiscoveryResponse(
+        retrieval=method,
         mode=scope.mode,
         state="available" if creators else "empty",
         creators=creators,
@@ -167,7 +168,15 @@ def discover_creators(
     )
 
 
+class PlatformCoverage(BaseModel):
+    creators: int = 0
+    posts: int = 0
+    firm_quotes: int = 0
+    measured_posts: int = 0
+
+
 class BriefOptions(BaseModel):
+    platforms: dict[Platform, PlatformCoverage]
     mode: Mode
     reviewed_facts: list[str]
     quoted_deliverables: list[Deliverable]
@@ -175,10 +184,29 @@ class BriefOptions(BaseModel):
 
 @router.get("/{mode}/brief-options")
 def brief_options(
-    platform: Platform, scope: CustomerScope, store: Store
+    scope: CustomerScope, store: Store, platform: Platform | None = None
 ) -> BriefOptions:
     snapshot = store.snapshot(scope)
     creators = Catalog(snapshot).creators.values()
+    coverage: dict[Platform, PlatformCoverage] = {}
+    for creator in creators:
+        for key in {account.platform for account in creator.record.data.accounts}:
+            scope_coverage = coverage.setdefault(key, PlatformCoverage())
+            scope_coverage.creators += 1
+            samples = [
+                post for post in creator.posts if post.record.data.platform == key
+            ]
+            scope_coverage.posts += len(samples)
+            scope_coverage.measured_posts += sum(
+                1
+                for post in samples
+                if post.performance and post.performance.data.views is not None
+            )
+            scope_coverage.firm_quotes += sum(
+                1
+                for quote in creator.active_quotes()
+                if quote.data.platform == key and quote.data.currency == "HKD"
+            )
     facts = {
         fact
         for creator in creators
@@ -194,6 +222,7 @@ def brief_options(
     }
     store.assert_current(scope, snapshot.revision)
     return BriefOptions(
+        platforms=coverage,
         mode=scope.mode,
         reviewed_facts=sorted(facts),
         quoted_deliverables=sorted(quoted),

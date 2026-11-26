@@ -3,18 +3,18 @@
 ## Get started
 
 1. Clone or extract the repository to a local NTFS folder where you have write access.
-2. Double-click `Start-Harbourline-Demo.bat` for fictional data or `Start-Harbourline-Pilot.bat` for the private workspace. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
+2. Double-click `Start-Harbourline-Demo.bat` for password-free public directory research and fictional campaign practice, or `Start-Harbourline-Pilot.bat` for the private workspace. If installation is requested, review the version, source, and required permissions, then enter `YES` and confirm the system prompt.
 3. The first launch downloads dependencies and builds the backend and frontend images inside Docker. After `[SUCCESS]`, the launcher opens the product in the default browser. You can also copy the URL shown.
 4. Double-click the same file for later launches. The launcher reuses healthy services, dependencies, and the database. Use the printed URL to reopen the Dashboard.
 
 | Entry point | Purpose |
 | --- | --- |
-| `Start-Harbourline-Demo.bat` | Opens creator research and campaigns using fictional data. |
+| `Start-Harbourline-Demo.bat` | Opens password-free public directory research and fictional campaign practice. |
 | `Start-Harbourline-Pilot.bat` | Opens the private company workspace. |
 | `Start-Platform.bat` | Checks the environment, starts services, verifies health, and opens the browser. |
 | `Setup-Platform.bat` | Checks and repairs prerequisites and verifies local settings. |
 | `Stop-Platform.bat` | Stops owned Compose services for this checkout and retains their volumes. |
-| `Diagnose-Platform.bat` | Produces an English diagnostics report, including when Docker is unreachable. |
+| `Diagnose-Platform.bat -Pilot` or `-Demo` | Reports the selected installation’s service state and its workspace link when healthy. Omit the switch for Core. |
 
 For automation, use `-NonInteractive` to disable the launcher's installation consent prompt, `-NoBrowser` to prevent Start from opening a tab, and `PLATFORM_NO_PAUSE=1` to return the error exit code. In interactive runs, the batch file pauses on errors so you can read them.
 
@@ -72,14 +72,14 @@ Existing manual environments retain their own `.env` and Compose projects. Start
 
 ## Stop, restart, update, and remove
 
-- Double-click `Stop-Platform.bat`. Docker Compose stops services after checking ownership labels. On upgrades, the launcher can send a shutdown signal to a verified older host frontend. Double-click Start to resume.
+- Run `Stop-Platform.bat -Pilot` for the company pilot or `Stop-Platform.bat -Demo` for the demo. Use `Stop-Platform.bat` for Core. Docker Compose checks ownership before stopping services. Reopen the original launcher to resume that workspace.
 - Before updating, stop the launcher and back up the settings, PostgreSQL, and Evidence. Update the repository and run Setup and Start. The launcher rebuilds images when their source or build settings change and checks the Alembic migration head. If migration fails, keep the volumes and check diagnostics.
 - Before backing up, write down the project name from the private settings. Take a logical backup of PostgreSQL on the same Docker Desktop Engine and back up `<project>_evidence_data` separately. Save the Redis volume as well if you need to restore queue state. Use a restricted folder and verify the restore in an isolated test environment.
 - To remove the launcher, stop it, check your backups, and delete the checkout. You can retain the Docker named volumes and reconnect them later with the original settings. Ask the computer administrator to consider the effect on other projects and backups before clearing Docker CLI or Docker Desktop data.
 
 ## Troubleshooting
 
-Double-click Diagnose and open the report shown, or open `logs/launcher/latest.log`. The launcher also saves a timestamped report for each run. It records command exit statuses, container states, and error categories identified in recent service output. Use the error code to find the relevant recovery step.
+Run `Diagnose-Platform.bat -Pilot` or `Diagnose-Platform.bat -Demo` and open the report shown. Each workspace keeps its latest report under `logs/launcher/pilot` or `logs/launcher/demo`. For Core, run `Diagnose-Platform.bat` and open `logs/launcher/latest.log`. The reports include service states, health checks and recovery steps.
 
 | Error | Recovery |
 | --- | --- |

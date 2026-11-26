@@ -1,5 +1,45 @@
 # Local MCP Access on Windows
 
+Harbourline exposes customer research through `python -m mcp_access.harbourline`. Use the separate Core collection server for operator tasks. Both use local stdio and the same optional Python environment.
+
+## Harbourline campaign research
+
+Install the client dependencies once from the checkout. Use Python 3.12 or 3.13.
+
+```powershell
+python -m venv mcp_access/.venv
+& .\mcp_access\.venv\Scripts\python.exe -m pip install -r mcp_access/requirements.txt
+```
+
+Set the MCP host's executable to that Python interpreter, arguments to `-m mcp_access.harbourline`, and working directory to the checkout. Configure its child process to inherit the environment named below. Use the loopback address for the deployment you launched, including `/api/v1`. The default is public read access.
+
+| Workspace | Host configuration | Customer tasks |
+| --- | --- | --- |
+| Public research | `FYP_MCP_API_BASE` for the isolated public demo, `HARBOURLINE_MCP_WORKSPACE=public` | Search identity metadata and historical works. Results include the observed source date, citations, provenance, and known gaps. |
+| Fictional advisor | Demo API address, `HARBOURLINE_MCP_WORKSPACE=demo` | Search and inspect demo creators, compare cited evidence, examine supported requirements, evaluate a brief and calculate scenarios. Every catalog result identifies its fictional basis. |
+| Company research | Private pilot API address and a company member session | All public research tools, scoped creator and campaign analysis, a paginated saved campaign list, and individual company briefs with shortlists and stored research. |
+
+For the company workspace, run this in the same PowerShell window where you will start the trusted host. Replace the port with the pilot port shown by `Diagnose-Platform.bat -Pilot`. Sign in with your own company account at the prompt.
+
+```powershell
+.\mcp_access\Connect-HarbourlineMcp.ps1 -ApiBase http://127.0.0.1:<PILOT_API_PORT>/api/v1
+```
+
+The helper holds the session in the current process environment. Forward only `FYP_MCP_API_BASE`, `HARBOURLINE_MCP_WORKSPACE`, `HARBOURLINE_MCP_COMPANY_ID`, `HARBOURLINE_MCP_SESSION` and `HARBOURLINE_MCP_ALLOW_BUDGET_EDITS` to the research server. Start the host from this terminal. A session expires after twelve hours and stops working immediately if membership is revoked. Store credentials outside tracked files, chat messages and host configuration. [Local host configuration example](../../mcp_access/harbourline.config.example.toml)
+
+To enable edits, sign in with the same helper using `-AllowBudgetEdits` and restart the host. The additional `change_campaign_budget` tool accepts the saved campaign ID, current version and revised HKD cap in cents. Both members and administrators can edit their company campaigns. Configure the host to request approval on this tool. A conflicting version returns an error. Read the campaign again before submitting another edit. The public research budget is independent of the allocation cap.
+
+Try these requests in the host:
+
+- “Which dated published works support affordable Hong Kong dining? Give me each contributor, excerpt, historical date, source revision and reuse license.” Use `search_public_works`. Use `search_public_creators` for name or identity research.
+- “Open my saved campaign, compare the shortlist and show the post or grant supporting each mandatory requirement. Which candidates still need a current quote or audience evidence?” Use `list_saved_campaigns`, `get_saved_campaign`, `compare_creators` and `inspect_creator`.
+- “Using this brief's mandatory requirements and optional preferences, find a feasible allocation for HK$12,000 and then for HK$8,000. Show differences and missing evidence.” Use `campaign_criteria` and `evaluate_campaign`, with `budget_minor` in HKD cents. The result includes retrieval method, category suggestion basis, ranked evidence, exact allocation status and exclusions. Relevance and utility express relative fit. Fee and reach estimates require separately evidenced inputs.
+- “Calculate a scenario using my assumptions for impressions, click rate, conversion rate, margin, ad spend and campaign cost.” Use `calculate_campaign_scenario`. Missing inputs can leave ROI unavailable.
+
+A read can time out after thirty seconds or fail if the API response exceeds 2 MiB. Narrow the criteria or select fewer creators. A missing or expired public feed returns its availability state. Host and operator API permissions are separated.
+
+## Core collection access
+
 Optional MCP clients on Windows use a separate Python 3.12 or 3.13 environment for the stdio server. Start `Start-FYP-Demo.bat` and wait for `Synthetic Demo is ready!`. Run `Diagnose-Platform.bat -Demo` to find the current **API port** and **Dashboard URL**. Use the direct API port in the MCP configuration. The ordinary Dashboard runs entirely in Docker. [Windows one-click setup](Windows-One-Click-Setup.md)
 
 Open PowerShell in the checkout root. Replace `<DEMO_API_PORT>` with the API port from diagnostics. The example uses `python` for the installed interpreter. You can use its full path.
