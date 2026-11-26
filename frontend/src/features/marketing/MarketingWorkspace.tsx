@@ -64,7 +64,6 @@ function MarketingShell({ capabilityRequest }: { capabilityRequest: ReturnType<t
   useEffect(()=>{
     if(pathname===path('directory')) directoryMemory.current={owner,search};
   },[owner,pathname,search,path]);
-  const research=useResearch();
   const lastPath = useRef(pathname);
   const main = useRef<HTMLElement>(null);
   const { result, retry } = capabilityRequest;
@@ -105,7 +104,7 @@ function MarketingShell({ capabilityRequest }: { capabilityRequest: ReturnType<t
       {to:path(),name:'Workspace',compact:'Workspace',icon:LayoutGridIcon},
       ...(hasDirectory ? [
         {to:path('directory')+(directoryMemory.current.owner===owner ? directoryMemory.current.search : ''),name:'Public directory',compact:'Directory',icon:GlobeIcon},
-        {to:path('research-plan'),name:'Research shortlist',compact:'Shortlist',icon:FolderOpenIcon,count:research.brief.leads.length},
+        {to:path('research-plan'),name:'Research shortlist',compact:'Shortlist',icon:FolderOpenIcon},
       ]:[]),
     ]},
     {label:hasDirectory && mode==='server-demo'?'Fictional campaign practice':'Campaign planning',items:[

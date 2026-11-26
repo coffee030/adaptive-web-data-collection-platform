@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from backend.persistence.models import JobRow, SourceRow
 
-from .public_directory import DirectoryRow
+from .public_feed import DirectoryRow
 
 
 def receipt(job):

@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from backend.marketing.api import NonCacheableRoute, operator_store
 from backend.marketing.store import MarketingError
-from backend.persistence.models import JobRow, SourceRow
 from . import commons_works, public_feed, work_search
 from .api import CustomerScope, Store
 from .directory_api import ApproveDirectory
+from .operator_receipt import publication_status
 
 router = APIRouter(
     prefix="/marketing/intelligence",
@@ -41,19 +41,7 @@ def company_works(
 
 @router.get("/operator/public-works/status", dependencies=operator)
 def status(request: Request):
-    spec = commons_works.feed()
-    with request.app.state.sessions() as session:
-        feed = session.get(public_feed.DirectoryRow, spec.row_id)
-        if not feed:
-            return {"state": "unconfigured"}
-        source = session.get(SourceRow, feed.source_id)
-        job = session.get(JobRow, feed.pending) if feed.pending else None
-        return {
-            "state": source.approval_status,
-            "next_check": feed.next_attempt,
-            "error": feed.error,
-            "collection": job.status if job else None,
-        }
+    return publication_status(request, commons_works.feed().row_id, work_search.snapshot)
 
 
 @router.post("/operator/public-works/prepare", dependencies=operator)

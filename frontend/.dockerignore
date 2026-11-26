@@ -8,6 +8,7 @@
 !tailwind.config.cjs
 !public/licenses/Geist.txt
 !public/licenses/Tremor.txt
+!public/licenses/TailAdmin.txt
 !src/
 !src/**
 !Dockerfile

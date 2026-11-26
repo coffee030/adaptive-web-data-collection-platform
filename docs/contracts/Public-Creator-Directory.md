@@ -10,7 +10,9 @@ Wikidata publishes its main-namespace structured data under CC0. The feed reques
 
 The request uses an identified client, a fixed HTTPS destination, a bounded list of item IDs, one batched response, a size limit, and Wikimedia's maxlag control. Handles, images, videos, viewer counts, channel statistics, private contact information, demographic characteristics and quotes are outside the field mapping. The release includes a dated CC0 snapshot of the same fields. Its observation time is the actual acquisition time.
 
-## Operation
+## Operator review and recovery
+
+The Harbourline launchers install the reviewed release mappings and submit their first collections. Customer results appear after the workers publish them. Operators use these steps to inspect a mapping or restore it after an explicit decision. Historical works have a separate mapping and publication receipt. [Public research sources](../operations/Public-Research-Sources.md)
 
 1. On the private pilot or the isolated local demo, open **Data Operations → Public creator directory**. Enter the system operator credential, review the source license and select **Authorize source and preview fields**.
 2. Verify the sample name, local name, description, revision and date. Select **Approve mapping and enable refresh**. When still current, the bundled dated capture supplies the first collection. When it has expired, validation requires a current response from Wikidata.
