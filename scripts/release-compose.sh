@@ -196,7 +196,10 @@ company_check() (
     MARKETING_CUSTOMER_TOKEN="$(openssl rand -hex 32)"
     MARKETING_OPERATOR_TOKEN="$(openssl rand -hex 32)"
     export MARKETING_PILOT_PASSWORD MARKETING_CUSTOMER_TOKEN MARKETING_OPERATOR_TOKEN
-    normal up -d --no-build --wait --wait-timeout 90 api dispatcher worker || return 1
+    normal build --build-arg HARBOURLINE_INSTALLATION=pilot frontend || return 1
+    normal up -d --no-build --wait --wait-timeout 90 api dispatcher worker frontend || return 1
+    curl --fail --silent --max-time 10 "$normal_url/harbourline-installation.json" | grep -q '"workspace":"pilot"' || return 1
+    normal exec -T frontend sh -ec 'test -z "$(find /usr/share/nginx/html/assets -name "*-portrait-*.webp" -o -name "*-post-*.webp")"' || return 1
     M4_FRONTEND_PORT="$normal_web" HARBOURLINE_RESEARCH_TEST_PILOT=1 \
         npm --prefix frontend test -- campaign-research.integration.ts --workers=1
 )
