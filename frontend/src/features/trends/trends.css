@@ -15,6 +15,7 @@
 .trend-controls { align-items: end; }
 .trend-controls, .trend-body, .trend-note, .trend-feedback:not(:empty) { padding: var(--md); }
 .trend-note { margin: 0; }
+#trend-values { scroll-margin-block-start: var(--md); }
 .trend-workspace label:not(.trend-choice) { display: grid; gap: var(--xs); font-weight: 600; min-width: 0; }
 .trend-workspace input:not([type=checkbox]) { max-width: 100%; min-block-size: 40px; }
 .trend-fields { display: grid; gap: var(--sm); justify-items: start; margin-block-start: var(--md); }

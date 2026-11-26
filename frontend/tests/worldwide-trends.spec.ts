@@ -125,9 +125,10 @@ test('compare exact dates including observed zero and missing; browser Back rest
   await page.getByRole('button',{name:'Compare selected (2)'}).click();
   await expect(page.getByRole('heading',{name:'Daily article pageviews'})).toBeFocused();
   const region = page.getByRole('region',{name:'Daily pageviews aligned by UTC date'});
-  await region.getByRole('rowheader',{name:from}).scrollIntoViewIfNeeded();
+  const firstDate = region.getByRole('rowheader',{name:from});
+  await expect(firstDate).toBeInViewport({ratio:0.95});
   await region.evaluate(element => { element.scrollLeft = element.scrollWidth; });
-  await expect(region.getByRole('rowheader',{name:from})).toBeInViewport();
+  await expect(firstDate).toBeInViewport({ratio:0.95});
   const count = page.getByRole('button',{name:'0 pageviews, First topic, en.wikipedia.org, ' + from + ' UTC',exact:true});
   await expect(page.getByRole('cell',{name:'Missing',exact:true})).toBeVisible();
   await expect(page.getByText('1 / 2 days observed')).toBeVisible();
@@ -146,4 +147,5 @@ test('compare exact dates including observed zero and missing; browser Back rest
   await expect(count).toBeFocused();
   await page.getByRole('button',{name:'Compare selected (2)'}).click();
   await expect(page.getByRole('heading',{name:'Daily article pageviews'})).toBeFocused();
+  await expect(firstDate).toBeInViewport({ratio:0.95});
 });

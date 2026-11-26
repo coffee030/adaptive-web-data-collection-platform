@@ -19,7 +19,10 @@ export function TrendComparison({ result, submittedHere }: { result: Comparison;
   const focusSummary = submittedHere || navigation === 'PUSH';
   useResultReturn(!focusSummary);
   useEffect(() => {
-    if (focusSummary) summary.current?.focus();
+    if (focusSummary && summary.current) {
+      summary.current.focus({ preventScroll: true });
+      summary.current.scrollIntoView({ block: 'start' });
+    }
   }, [focusSummary]);
   const download = useAction(actionProblem, selected?.point.record_id);
   function show(value: Selection) {
