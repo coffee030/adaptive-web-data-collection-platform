@@ -2,16 +2,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 
-async function render(input) {
+function launchBrowser() {
   const { chromium } = createRequire(path.resolve(__dirname, '../../frontend/package.json'))('playwright-core');
-  const { config, html, url, limit } = input;
-  const pins = config.script_sha256.map(hash => "'sha256-" + Buffer.from(hash, 'hex').toString('base64') + "'");
-  const browser = await chromium.launch({
+  return chromium.launch({
     chromiumSandbox: true,
     executablePath: process.env.CORE_RENDER_BROWSER || undefined,
-    timeout: 4000,
+    timeout: 10_000,
     args: ['--disable-background-networking', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'],
   });
+}
+
+async function render(input) {
+  const { config, html, url, limit } = input;
+  const pins = config.script_sha256.map(hash => "'sha256-" + Buffer.from(hash, 'hex').toString('base64') + "'");
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({ offline: true, serviceWorkers: 'block', acceptDownloads: false });
     const page = await context.newPage();
@@ -77,6 +81,10 @@ async function render(input) {
   }
 }
 
-render(JSON.parse(fs.readFileSync(0, 'utf8')))
-  .then(result => process.stdout.write(JSON.stringify(result)))
-  .catch(() => { process.stdout.write(JSON.stringify({ error: 'render_unavailable' })); process.exitCode = 1; });
+module.exports = { launchBrowser };
+
+if (require.main === module) {
+  render(JSON.parse(fs.readFileSync(0, 'utf8')))
+    .then(result => process.stdout.write(JSON.stringify(result)))
+    .catch(() => { process.stdout.write(JSON.stringify({ error: 'render_unavailable' })); process.exitCode = 1; });
+}

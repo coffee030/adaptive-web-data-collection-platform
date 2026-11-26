@@ -14,6 +14,8 @@ from .contracts import ControlledRendering, RenderedEvidence, Source, controlled
 from .inputs import CapturedInput, InputError
 from .web_adapter import MAX_BODY_BYTES, _decode_html, checked_url
 
+BROWSER_PROCESS_OVERHEAD_SECONDS = 15
+
 ERRORS = {
     "render_script_denied": "The document uses an external or unapproved script.",
     "render_resource_denied": "The offline document requested a blocked resource or navigation.",
@@ -162,7 +164,8 @@ def render_document(
     if modules := os.environ.get("CORE_RENDER_NODE_MODULES"):
         env["NODE_PATH"] = modules
     try:
-        reply = json.loads(_run_browser(node, body, env, 12 + config.timeout_ms / 1000))
+        process_timeout = BROWSER_PROCESS_OVERHEAD_SECONDS + config.timeout_ms / 1000
+        reply = json.loads(_run_browser(node, body, env, process_timeout))
         if "error" in reply:
             code = reply.get("error", "render_unavailable")
             raise InputError(

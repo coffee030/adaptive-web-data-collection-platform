@@ -1,20 +1,19 @@
 const path = require('node:path');
-const { createRequire } = require('node:module');
-const { chromium } = createRequire(path.resolve('frontend/package.json'))('playwright-core');
+const { launchBrowser } = require(path.resolve('backend/core/render_document.cjs'));
 
 async function check() {
-  const browser = await chromium.launch({
-    executablePath: process.env.CORE_RENDER_BROWSER,
-    chromiumSandbox: true,
-    timeout: 4000,
-    args: ['--disable-background-networking', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'],
-  });
+  const start = performance.now();
+  const browser = await launchBrowser();
+  const launched = performance.now();
   try {
     const context = await browser.newContext({ offline: true, serviceWorkers: 'block', acceptDownloads: false });
     const page = await context.newPage();
     await page.setContent('<title>Core renderer check</title>');
     if (await page.title() !== 'Core renderer check') throw new Error('The offline document did not open.');
-    process.stdout.write('Sandboxed offline Chromium ' + browser.version() + ' opened the local document.\n');
+    const launchMs = Math.round(launched - start);
+    const documentMs = Math.round(performance.now() - launched);
+    process.stdout.write('Sandboxed Chromium ' + browser.version() + ' started in ' + launchMs +
+      ' ms and opened the offline document in ' + documentMs + ' ms.\n');
   } finally {
     await browser.close();
   }
