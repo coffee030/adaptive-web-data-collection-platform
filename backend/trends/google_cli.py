@@ -86,11 +86,7 @@ def configure(args):
                 "allowed_datasets": [google_rss.DATASET],
                 "permission_reference": google_rss.POLICY,
                 "approval_status": "approved",
-                "request_key": str(
-                    uuid5(
-                        NAMESPACE_URL, "https://trends.google.com/trending/rss#core-csv"
-                    )
-                ),
+                "request_key": str(google_rss.SOURCE_KEY),
             },
             expected=(200, 201),
         ).json()

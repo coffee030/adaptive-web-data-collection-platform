@@ -26,6 +26,7 @@ from backend.marketing.pipeline import Pipeline
 from backend.marketing.store import ResearchSettings
 from backend.persistence.database import database_url, make_engine, session_factory
 from backend.persistence.models import JobRow
+from backend.trends.rss_schedule import poll as poll_google_rss
 from backend.trends.service import poll as poll_wikimedia
 
 from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, TASK, app
@@ -153,12 +154,14 @@ def main() -> None:
     marketing = Pipeline(sessions, ResearchSettings.load())
     intelligence = Indexing(sessions, IntelligenceConfig.load())
     partner_directory = os.getenv("MARKETING_PARTNER_REFRESH_DIR")
-    trend_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="trends")
+    trend_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="trends")
     trend_due = 0.0
-    trend = None
+    trend_polls = {"Wikimedia": poll_wikimedia, "Google RSS": poll_google_rss}
+    trend_runs = {}
     try:
         if args.once:
-            poll_wikimedia(sessions)
+            for poll in trend_polls.values():
+                poll(sessions)
             dispatcher.poll()
             marketing.maintain()
             marketing.dispatch(publish_marketing)
@@ -179,13 +182,18 @@ def main() -> None:
         indexing_due = 0.0
         indexing_cleanup_due = 0.0
         while True:
-            if monotonic() >= trend_due and (trend is None or trend.done()):
-                if trend is not None and trend.exception() is not None:
-                    LOGGER.error(
-                        "Wikimedia trend poll failed (%s)",
-                        type(trend.exception()).__name__,
-                    )
-                trend = trend_pool.submit(poll_wikimedia, sessions)
+            if monotonic() >= trend_due:
+                for name, poll in trend_polls.items():
+                    run = trend_runs.get(name)
+                    if run and not run.done():
+                        continue
+                    if run and run.exception():
+                        LOGGER.error(
+                            "%s trend poll failed (%s)",
+                            name,
+                            type(run.exception()).__name__,
+                        )
+                    trend_runs[name] = trend_pool.submit(poll, sessions)
                 trend_due = monotonic() + 5
             try:
                 dispatcher.poll()
