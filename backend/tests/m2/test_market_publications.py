@@ -131,8 +131,7 @@ def test_market_generation_history_withdrawal_and_role_gates(
             if full:
                 s.full_checked = None
 
-    def release():
-        assert collection.collect(sessions, key)
+    def finish_generation():
         with sessions() as db:
             s = db.get(MarketSource, key)
             ids = list(
@@ -145,8 +144,10 @@ def test_market_generation_history_withdrawal_and_role_gates(
         for id_ in ids:
             JobExecutor(sessions, evidence).execute(id_)
         assert collection.publish(sessions, key)
+        assert not collection.publish(sessions, key)
 
-    release()
+    assert collection.collect(sessions, key)
+    finish_generation()
     assert catalog.search_activity(sessions)["total"] == 2
     entries[:] = [
         dict(
@@ -156,17 +157,24 @@ def test_market_generation_history_withdrawal_and_role_gates(
             ],
         )
     ]
+    entries.append(dict(entries[0]))
     due()
-    release()
+    assert collection.collect(sessions, key)
     assert observations[-1][0] is not None
+    assert not collection.publish(sessions, key)
+    previous = catalog.creator_detail(sessions, publication["creator_id"])
+    assert previous["activity_count"] == 2 and previous["measurements"] == []
+    finish_generation()
     assert catalog.search_activity(sessions)["total"] == 2
     detail = catalog.creator_detail(sessions, publication["creator_id"])
     assert (
         detail["activity_count"] == 2
+        and len(detail["measurements"]) == 1
         and detail["measurements"][0]["metrics"][0]["value"] == 5
     )
     due(True)
-    release()
+    assert collection.collect(sessions, key)
+    finish_generation()
     assert catalog.search_activity(sessions)["total"] == 1
     assert catalog.overview(sessions)["platforms"][0]["measured_count"] == 1
     assert len(catalog.overview(sessions)["months"]) == 12
