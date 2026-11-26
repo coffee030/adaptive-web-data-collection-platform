@@ -257,3 +257,36 @@ def test_television_requires_verified_presenter_and_does_not_equate_street_food_
         for v in hits
     )
     assert hits[0]["license_url"] == "https://creativecommons.org/licenses/by-sa/4.0/"
+
+
+def test_related_dining_preserves_price_gap_and_requested_scope():
+    calls = []
+
+    def find(sessions, **filters):
+        calls.append(filters)
+        return {"items": [{"name": "Source-credited guest"}], "total": 1}
+
+    result = catalog.related_dining(
+        {"total": 0, "items": []},
+        "香港平價美食",
+        "Television · TVmaze",
+        None,
+        find,
+        None,
+    )
+    assert result["total"] == 0 and result["items"] == []
+    assert result["related"]["basis"] == "dining_coverage_without_price_evidence"
+    assert calls == [
+        {
+            "q": "food",
+            "platform": "Television · TVmaze",
+            "topic": "Dining",
+            "page_size": 3,
+        }
+    ]
+    assert "related" not in catalog.related_dining(
+        {"total": 0}, "skincare", None, None, find, None
+    )
+    assert "related" not in catalog.related_dining(
+        {"total": 1}, "affordable dining", None, None, find, None
+    )

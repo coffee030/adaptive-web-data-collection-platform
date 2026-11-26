@@ -65,7 +65,18 @@ class Reader:
                     except (ValueError, TypeError, OverflowError):
                         seconds = 3600
                     raise PublisherError(
-                        "publisher_rate_limited", max(3600, min(seconds, 2_592_000))
+                        "publisher_rate_limited",
+                        max(
+                            3600,
+                            min(
+                                seconds,
+                                (
+                                    datetime.max.replace(tzinfo=UTC) - datetime.now(UTC)
+                                ).days
+                                * 86400
+                                - 86400,
+                            ),
+                        ),
                     )
                 response.raise_for_status()
                 body = bytearray()
@@ -216,6 +227,7 @@ def nature_rows(reader, now, since=None, sample=False):
                 excerpt=f"Research-grade {taxon.get('name', species)} observation. Field date {value.get('observed_on') or 'unavailable'}.",
             )
             if row:
+                row["credit_role"] = "Observation publisher"
                 yield row
         if sample or len(raw) < params["per_page"]:
             return
@@ -283,6 +295,7 @@ def photo_rows(reader, now, since=None, sample=False):
                 [],
             )
             if row:
+                row["credit_role"] = "Credited photographer"
                 yield row
         if sample or page >= int(headers.get("x-wp-totalpages", "1")):
             return

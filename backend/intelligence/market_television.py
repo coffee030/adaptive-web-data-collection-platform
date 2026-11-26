@@ -2,7 +2,6 @@
 
 import re
 from datetime import datetime, timedelta
-from urllib.parse import urlsplit
 
 from .market_sources import CC, HK, PublisherError, owned_url, publication, text
 
@@ -128,9 +127,8 @@ def food_programmes(reader, now, since=None, sample=False):
                         credit_role="Series presenter",
                         series_title=series,
                         credit_url=credit_url + "/cast",
-                        broadcaster_url=official
-                        if urlsplit(official).scheme == "https"
-                        else None,
+                        broadcaster_url=owned_url(official, "www.sbs.com.au", "/")
+                        or owned_url(official, "www.itv.com", "/"),
                         excerpt_scope="Episode synopsis"
                         if desc
                         else "Series description",
