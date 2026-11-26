@@ -158,7 +158,55 @@ Test-Case 'Failed frontend build leaves no success stamp and can resume' {
     [IO.File]::Delete($stamp)
 }
 
+Test-Case 'Style build configuration changes invalidate the installed frontend image' {
+    $Root = $testRoot
+    $Frontend = Join-Path $Root 'style-build-inputs'
+    $null = New-Item -ItemType Directory -Path $Frontend
+    foreach ($name in 'tailwind.config.cjs', 'postcss.config.cjs') {
+        $path = Join-Path $Frontend $name
+        Write-AtomicFile $path 'module.exports = {}'
+        $before = Get-ImageFingerprint frontend
+        Write-AtomicFile $path 'module.exports = { plugins: [] }'
+        Assert ($before -cne (Get-ImageFingerprint frontend)) "A change to $name reused the old frontend image."
+    }
+}
 Test-Case 'API port conflict leaves other listener bound' { Test-PortConflict 'NET-001' 'API' }
+Test-Case 'Pilot diagnosis only probes owned ports and prints the working company destination' {
+    $savedConfig = $script:Config
+    $savedDocker = $script:Docker
+    $savedLocal = $script:Local
+    try {
+        Set-LauncherMode -Pilot
+        Assert ($StartCommand -ceq 'Start-Harbourline-Pilot.bat' -and $DiagnoseCommand -ceq 'Diagnose-Platform.bat -Pilot' -and $StopCommand -ceq 'Stop-Platform.bat -Pilot') 'Lost pilot role during recovery.'
+        $messages = [Collections.Generic.List[string]]::new()
+        function Write-Step($Message) { $messages.Add($Message) }
+        function Get-SystemFacts {}
+        function Get-WSLStatus {}
+        function Get-DockerTools { return @{ CLI = 'docker'; Desktop = 'desktop' } }
+        function Get-LinuxEngine { return @{ Code = 0; Out = 'linux' } }
+        function Invoke-Docker { return @{ Out = '5.0.0' } }
+        function Get-LauncherConfig { return @{ API_PORT = 58099; FRONTEND_PORT = 5199; POSTGRES_PORT = 55499 } }
+        function Get-FrontendState {}
+        function Test-FrontendProcess { return $false }
+        function Confirm-DockerOwnership { return $true }
+        function Write-ServiceDiagnosis {}
+        function Test-BackendPort { return $owned }
+        function Test-ApiHealth { Assert $owned 'Contacted an unrelated service.'; return $true }
+        $owned = $false
+        Invoke-Diagnosis
+        Assert ($messages.Contains('[INFO] API health: False.') -and !$messages.Contains('[INFO] Company sign-in: http://127.0.0.1:5199/')) 'Reported an unrelated service as healthy.'
+        $owned = $true
+        Invoke-Diagnosis
+        Assert ($messages.Contains('[INFO] Company sign-in: http://127.0.0.1:5199/')) 'Missing pilot sign-in destination.'
+        Set-LauncherMode -Demo -Harbourline
+        Assert ($StartCommand -ceq 'Start-Harbourline-Demo.bat' -and $DiagnoseCommand -ceq 'Diagnose-Platform.bat -Demo') 'Lost Harbourline Demo role during recovery.'
+    } finally {
+        Set-LauncherMode
+        $script:Config = $savedConfig
+        $script:Docker = $savedDocker
+        $script:Local = $savedLocal
+    }
+}
 Test-Case 'Frontend port conflict leaves other listener bound' { Test-PortConflict 'NET-002' 'Frontend' }
 Test-Case 'PostgreSQL startup failure halts storage startup' {
     function Invoke-Compose($Arguments) {

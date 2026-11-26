@@ -99,7 +99,7 @@ function Initialize-Docker($System) {
         if ($System.Virtualization -eq 'disabled') {
             Stop-WithError 'ENV-003' 'Hardware Virtualization Is Disabled' 'Windows reports that firmware virtualization is disabled.' `
                 'AMD SVM Mode or Intel Virtualization Technology may be disabled in BIOS/UEFI.' `
-                @('Restart into BIOS/UEFI and enable hardware virtualization.', 'Start Windows, open Docker Desktop, and run Start-Platform.bat again.')
+                @('Restart into BIOS/UEFI and enable hardware virtualization.', "Start Windows, open Docker Desktop, and run $StartCommand again.")
         }
         if (!$script:WSL.Available -and $engine.Reason -ne 'access denied') {
             $flag = if ($script:WSL.Outdated) { '--update' } else { '--install' }
@@ -146,7 +146,7 @@ function Initialize-Docker($System) {
         $probe = @{ Engine = $engine }
         if (!(Wait-Until { $probe.Engine = Get-LinuxEngine $docker; Test-LinuxEngine $probe.Engine } 120 3)) {
             Stop-WithError 'ENV-006' 'Docker Linux Engine Is Unavailable' 'The Docker Desktop Linux Engine did not respond within the startup window.' `
-                $probe.Engine.Reason @('Open Docker Desktop and finish its prompts.', 'Check that it uses Linux containers and the WSL 2 backend.', 'Run Diagnose-Platform.bat if the problem persists.') $attempt
+                $probe.Engine.Reason @('Open Docker Desktop and finish its prompts.', 'Check that it uses Linux containers and the WSL 2 backend.', "Run $DiagnoseCommand if the problem persists.") $attempt
         }
         Write-LauncherLog INFO 'Docker startup recovery succeeded.'
     }

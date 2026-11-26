@@ -99,6 +99,13 @@ status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$@"; }
 [[ "$(status -H 'Origin: https://external.invalid' "$url/api/v1/sources")" == 403 ]]
 [[ "$(status -X POST "$url/api/v1/sources/test/versions/test/approve")" == 403 ]]
 [[ "$(status "$url/assets/missing.js")" == 404 ]]
+[[ "$(status "$url/licenses/missing.txt")" == 404 ]]
+for notice in frontend/public/licenses/*.txt; do
+    curl -fsS --max-time 10 "$url/licenses/${notice##*/}" -o "$output/notice.txt"
+    cmp "$notice" "$output/notice.txt"
+done
+curl -fsS --max-time 10 "$url/licenses/dependencies.md" -o "$output/dependencies.md"
+grep -Fq '## react - ' "$output/dependencies.md"
 echo "Production frontend, API forwarding and local boundary checks passed."
 
 sample() {

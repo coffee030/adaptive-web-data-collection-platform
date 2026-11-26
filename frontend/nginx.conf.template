@@ -59,5 +59,6 @@ server {
     }
     location /api/ { return 404; }
     location /assets/ { try_files $uri =404; }
+    location /licenses/ { try_files $uri =404; }
     location / { try_files $uri $uri/ /index.html; }
 }

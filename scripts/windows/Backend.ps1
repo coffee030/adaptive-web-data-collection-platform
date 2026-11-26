@@ -100,7 +100,7 @@ function Stop-DisabledFixture {
     }
     if ($fixture.Code -ne 0) {
         Stop-WithError 'STOP-002' 'Disabled Fixture Could Not Be Stopped' 'The launcher could not verify shutdown of its disabled fixture.' `
-            $fixture.Reason @('Run Stop-Platform.bat before launching in a different fixture mode.')
+            $fixture.Reason @("Run $StopCommand before launching in a different fixture mode.")
     }
 }
 
@@ -129,9 +129,8 @@ function Assert-PortAvailable($Port, $Code, $Name, [switch]$Owned) {
             if ($entry.Success) { $owner = "PID $($entry.Groups[1].Value)." }
         }
         $settings = "$(Split-Path -Leaf $Local)/launcher.env"
-        $command = if ($DemoMode) { 'Start-Platform.bat -Demo' } else { 'Start-Platform.bat' }
         Stop-WithError $Code "$Name Port Is Unavailable" "The launcher cannot bind TCP port $Port." $owner `
-            @('Close the other application if appropriate.', "Or change the matching port in $settings after stopping this launcher installation.", "Run $command again.")
+            @('Close the other application if appropriate.', "Or change the matching port in $settings after stopping this launcher installation.", "Run $StartCommand again.")
     }
     finally { $listener.Stop() }
 }
@@ -156,7 +155,7 @@ function Start-StorageServices {
                 $postgres.Reason @('Check Docker networks and Windows/VPN routes.', 'Select an unused private subnet as described in the Windows setup guide.')
         }
         Stop-WithError 'DB-004' 'PostgreSQL Failed Its Startup Checks' 'PostgreSQL did not become healthy or rejected the saved database login.' `
-            "$($postgres.Reason); $details." @('Check Docker Desktop and available disk space.', 'Run Diagnose-Platform.bat and check the PostgreSQL state.', 'Restore the original launcher.env if its credentials changed. Keep the database volume.')
+            "$($postgres.Reason); $details." @('Check Docker Desktop and available disk space.', "Run $DiagnoseCommand and check the PostgreSQL state.", 'Restore the original launcher.env if its credentials changed. Keep the database volume.')
     }
     Write-Step '[PASS] PostgreSQL is healthy and accepts the saved login.'
     $redis = Invoke-Compose @('up', '-d', '--wait', '--wait-timeout', '45', 'redis') 180
@@ -166,7 +165,7 @@ function Start-StorageServices {
         $retry = Invoke-Compose @('restart', 'redis') 35
         if ($retry.Code -ne 0 -or !(Wait-Until { Test-Redis } 30)) {
             Stop-WithError 'DB-005' 'Redis Failed Its Health Check' 'The launcher could not verify the Redis broker.' "$($redis.Reason); $details." `
-                @('Check the Redis state with Diagnose-Platform.bat.', 'Check available disk space and Docker Desktop resources.') 'Failed after one restart attempt.'
+                @("Check the Redis state with $DiagnoseCommand.", 'Check available disk space and Docker Desktop resources.') 'Failed after one restart attempt.'
         }
         Write-LauncherLog INFO 'Redis recovery succeeded.'
     }
@@ -182,7 +181,7 @@ function Get-ImageFingerprint([ValidateSet('api', 'frontend')][string]$Service) 
             Where-Object { $_.FullName -notmatch '[\\/](?:__pycache__|\.pytest_cache|\.ruff_cache)[\\/]' -and $_.Extension -notin @('.pyc', '.pyo') })
     } else {
         $files = @(Get-ChildItem -LiteralPath $Frontend -File -Force |
-            Where-Object { $_.Name -match '^(Dockerfile|\.dockerignore|package(-lock)?\.json|index\.html|vite\.config\.ts|tsconfig.*\.json|nginx\.conf\.template)$' })
+            Where-Object { $_.Name -match '^(Dockerfile|\.dockerignore|package(-lock)?\.json|index\.html|vite\.config\.ts|(postcss|tailwind)\.config\.cjs|tsconfig.*\.json|nginx\.conf\.template)$' })
         foreach ($directory in @('src', 'public')) {
             $path = Join-Path $Frontend $directory
             if (Test-Path -LiteralPath $path) { $files += @(Get-ChildItem -LiteralPath $path -File -Recurse) }
@@ -220,7 +219,7 @@ function Update-PlatformImage([ValidateSet('api', 'frontend')][string]$Service, 
     if ($built.Code -ne 0) {
         if ($AllowFailure) { return $false }
         Stop-WithError 'SVC-001' 'Container Image Build Failed' "Docker could not build the $kind image." $built.Reason `
-            @('Check internet access to Docker Hub and the package registries.', 'Check free disk space and Docker Desktop.', 'Run Diagnose-Platform.bat, then try again.')
+            @('Check internet access to Docker Hub and the package registries.', 'Check free disk space and Docker Desktop.', "Run $DiagnoseCommand, then try again.")
     }
     $image = Invoke-Docker @('image', 'inspect', '--format', '{{.Id}}', $imageName)
     if ($image.Code -eq 0) { Write-AtomicFile $stamp "$fingerprint $($image.Out)" }
@@ -278,19 +277,19 @@ function Start-BackendServices {
     if ($startup.Code -ne 0) {
         foreach ($service in $services) { $null = Write-ServiceDiagnosis $service }
         Stop-WithError 'SVC-002' 'Backend Services Could Not Start' 'Docker Compose could not start all requested services.' $startup.Reason `
-            @('Check the service states and port bindings with Diagnose-Platform.bat.', 'Check Docker Desktop resources and try again.')
+            @("Check the service states and port bindings with $DiagnoseCommand.", 'Check Docker Desktop resources and try again.')
     }
     $url = "http://127.0.0.1:$($Config.API_PORT)/api/v1/health"
     if (!(Wait-Until { Test-ApiHealth $url } 55)) {
         $details = Write-ServiceDiagnosis api
         Stop-WithError 'SVC-003' 'FastAPI Health Check Timed Out' 'The API did not return HTTP 200 with a healthy database connection.' $details `
-            @('Check PostgreSQL and the API state with Diagnose-Platform.bat.', 'After fixing the reported issue, run Start-Platform.bat again.')
+            @("Check PostgreSQL and the API state with $DiagnoseCommand.", "After fixing the reported issue, run $StartCommand again.")
     }
     Write-Step '[PASS] FastAPI health endpoint confirmed database access.'
     if (!(Wait-Until { Test-Dispatcher } 25)) {
         $details = Write-ServiceDiagnosis dispatcher
         Stop-WithError 'SVC-004' 'Dispatcher Is Unavailable' 'The dispatcher did not confirm that it is polling PostgreSQL.' $details `
-            @('Inspect the dispatcher and PostgreSQL states with Diagnose-Platform.bat.')
+            @("Inspect the dispatcher and PostgreSQL states with $DiagnoseCommand.")
     }
     Write-Step '[PASS] Dispatcher is running and reported PostgreSQL polling.'
     if (!(Wait-Until { Test-CeleryWorker } 40)) {
@@ -299,7 +298,7 @@ function Start-BackendServices {
         $retry = Invoke-Compose @('restart', 'worker') 100
         if ($retry.Code -ne 0 -or !(Wait-Until { Test-CeleryWorker } 45)) {
             Stop-WithError 'SVC-005' 'Celery Worker Is Unavailable' 'The worker did not report the registered collection task through Redis.' $details `
-                @('Check the worker and Redis states with Diagnose-Platform.bat.', 'Check Docker Desktop memory and try again.') 'Failed after one restart attempt.'
+                @("Check the worker and Redis states with $DiagnoseCommand.", 'Check Docker Desktop memory and try again.') 'Failed after one restart attempt.'
         }
         Write-LauncherLog INFO 'Celery worker recovery succeeded.'
     }
