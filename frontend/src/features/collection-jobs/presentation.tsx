@@ -3,9 +3,12 @@ import type { CollectionError, CollectionJob, JobStatus } from './api';
 export const statusLabels: Record<JobStatus, string> = {
   pending: 'Pending',
   running: 'Running',
+  pausing: 'Pausing',
+  paused: 'Paused',
   succeeded: 'Succeeded',
   partial: 'Partial',
   failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 export const resultCounts = [

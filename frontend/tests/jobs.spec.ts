@@ -415,7 +415,7 @@ test('invalid list parameters fall back to the first oldest page and preserve th
     queries.push(new URL(route.request().url()).searchParams);
     return route.fulfill({ json: [] });
   });
-  await page.goto(jobsUrl + '?status=cancelled&order=other&offset=1e4');
+  await page.goto(jobsUrl + '?status=unknown&order=other&offset=1e4');
   await expect(page.getByText('No collection jobs yet')).toBeVisible();
   expect(queries.at(-1)?.toString()).toBe('limit=21&offset=0&order=oldest');
   await page.goto(jobsUrl + '?status=failed&offset=2147483647');
@@ -467,6 +467,61 @@ test('retry and dispatch fields stay distinct and events keep their persisted se
   await expect(diagnostics.getByText('Earliest scheduled retry (UTC)')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Recorded error' })).toContainText('Rate limiting');
 });
+
+test('job control pauses and resumes a saved job and confirms cancellation explicitly', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let current: JobDetailResponse = { ...partialJob, status: 'pending', finished_at: null, valid_count: 0 };
+  let timeline: ExecutionEvent[] = [events[0]!];
+  const called: string[] = [];
+  await mockDetail(page);
+  await page.route(api + '/sources/' + sourceId, route => route.fulfill({ json: { source_name: 'Fixture source' } }));
+  await page.route(api + '/sources/' + sourceId + '/versions/' + profileId,
+    route => route.fulfill({ json: { version: 2 } }));
+  await page.route(api + jobUrl, route => route.fulfill({ json: current }));
+  await page.route(api + jobUrl + '/events', route => route.fulfill({ json: timeline }));
+  await page.route(api + jobUrl + '/control', route => {
+    const { action } = route.request().postDataJSON() as { action: 'pause' | 'resume' | 'cancel' };
+    called.push(action);
+    const status = { pause: 'paused', resume: 'pending', cancel: 'cancelled' }[action] as JobDetailResponse['status'];
+    current = { ...current, status };
+    timeline = [...timeline, { ...events[0]!, event_id: 'control-' + action, status,
+      kind: { pause: 'PAUSED', resume: 'RESUMED', cancel: 'CANCELLED' }[action] }];
+    return route.fulfill({ json: current });
+  });
+
+  await page.goto(jobUrl);
+  const overview = page.getByRole('region', { name: 'Run overview' });
+  const controls = page.getByRole('region', { name: 'Job controls' });
+  await controls.getByRole('button', { name: 'Pause job' }).click();
+  await expect(overview).toContainText('Collection is paused');
+  await expect(page.getByRole('region', { name: 'Related records' })).toContainText('Resume this job');
+  await expect(page.getByRole('heading', { name: 'Job controls' })).toBeFocused();
+  await controls.getByRole('button', { name: 'Resume job' }).click();
+  await expect(overview).toContainText('Waiting for execution');
+
+  const trigger = controls.getByRole('button', { name: 'Cancel job', exact: true });
+  await trigger.click();
+  const confirmation = page.getByRole('group', { name: 'Confirm cancellation' });
+  const keep = confirmation.getByRole('button', { name: 'Keep job' });
+  await expect(keep).toBeFocused();
+  await keep.press('Enter');
+  await expect(confirmation).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expect(called).toEqual(['pause', 'resume']);
+
+  await trigger.press('Enter');
+  await confirmation.getByRole('button', { name: 'Confirm cancellation' }).click();
+  await expect(overview).toContainText('Collection stopped');
+  await expect(controls.getByRole('status')).toContainText('Cancellation confirmed');
+  await expect(page.getByRole('region', { name: 'Execution events' })).toContainText('Collection cancelled');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  expect(called).toEqual(['pause', 'resume', 'cancel']);
+
+  await page.reload();
+  await expect(overview).toContainText('Cancelled');
+  await expect(controls).toHaveCount(0);
+});
+
 
 test('worker liveness preserves its recorded times independently of the job status', async ({ page }) => {
   const worker = 'abd42ca0-8850-43bb-b50c-008a46cb76c4';

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useResource } from '../../lib/useResource';
 import { apiGet } from '../../lib/api';
-import { getJob, jobsPath, listEvents, maxOffset, sameId } from './api';
+import { getJob, jobAwaitingOutcome, jobInProgress, jobsPath, listEvents, maxOffset, sameId } from './api';
+import { JobControls } from './JobControls';
 import type { CollectionJob, ExecutionEvent, ExecutionOrigin, JobDetailResponse } from './api';
 import { Loading, Pagination, RequestProblem, Status, Timestamp } from '../../components/feedback';
 import { profilePath } from '../profiles/api';
@@ -37,7 +38,8 @@ function JobDetailPage({ id }: { id: string }) {
   const parent = useResource(loadRequest, 0, false, !!job && !!requestOrigin).result;
   const requestId = parent.state === 'ready' && sameId(requestOrigin, parent.data.id)
     && parent.data.jobs.some(({ job }) => sameId(id, job.job_id)) ? requestOrigin : '';
-  const active = job?.status === 'pending' || job?.status === 'running';
+  const active = jobInProgress(job?.status);
+  const awaiting = jobAwaitingOutcome(job?.status);
   const readEvents = useCallback((signal: AbortSignal) => listEvents(id, signal), [id]);
   const events = useResource(readEvents, resolvedRevision, true, !!job, true);
   const poll = useCallback(() => setRevision(current => current + 1), []);
@@ -68,7 +70,10 @@ function JobDetailPage({ id }: { id: string }) {
   }, [active, busy, events.refreshError, poll, revision]);
 
   function refresh() {
-    if (busy) return;
+    if (!busy) refreshResults();
+  }
+
+  function refreshResults() {
     setManualRevision(current => current + 1);
     poll();
   }
@@ -111,16 +116,17 @@ function JobDetailPage({ id }: { id: string }) {
         <>
           {refreshError && <p className="notice job-stale" role="status">Job refresh failed. Showing the last recorded status. {active && 'Automatic refresh will resume while this page is visible.'}</p>}
           <JobOverview job={result.data} parentRequest={requestId ? origin : ''} />
-          <ExecutionDiagnostics job={result.data} active={active} />
+          <ExecutionDiagnostics job={result.data} active={active} refresh={refreshResults} />
           <JobError job={result.data} />
           <EventTimeline resource={events} />
-          {active ? <section className="panel detail-panel" aria-label="Related records">
-            <p className="notice muted">Records appear after the job publishes results.</p>
+          {awaiting ? <section className="panel detail-panel" aria-label="Related records">
+            <p className="notice muted">{result.data.status === 'paused' ? 'Resume this job to continue collecting records.'
+              : 'Records appear after the job publishes results.'}</p>
           </section> : <>
             <JobEvidence id={result.data.job_id} revision={manualRevision} requestId={requestId} />
             <RecordsPreview id={result.data.job_id} revision={manualRevision} />
           </>}
-          <RecordExport scope="job" id={result.data.job_id} pending={active} />
+          <RecordExport scope="job" id={result.data.job_id} pending={awaiting} />
           <JobMetadata job={result.data} />
         </>
       )}
@@ -137,9 +143,12 @@ function JobOverview({ job, parentRequest }: { job: CollectionJob; parentRequest
   const outcomes: Record<CollectionJob['status'], string> = {
     pending: job.next_attempt_at ? 'Awaiting a scheduled retry.' : 'Waiting for execution.',
     running: 'Collection is in progress.',
+    pausing: 'The current attempt can finish. New attempts wait for resume.',
+    paused: 'Collection is paused. Resume to continue.',
     succeeded: 'Collection finished successfully.',
     partial: job.valid_count ? 'Partial result. Validated records are available.' : 'Partial result. Review the recorded results.',
     failed: 'Collection failed. Review the recorded error and execution events.',
+    cancelled: 'Collection stopped. Published results remain available.',
   };
 
   return <section className="panel detail-panel job-outcome" aria-labelledby="overview-title" data-status={job.status}>
@@ -176,9 +185,9 @@ function ExecutionOwner({ workerId, origin }: { workerId?: string | null; origin
   return origin === 'direct' ? 'Direct execution' : 'Unknown Worker';
 }
 
-function ExecutionDiagnostics({ job, active }: { job: JobDetailResponse; active: boolean }) {
+function ExecutionDiagnostics({ job, active, refresh }: { job: JobDetailResponse; active: boolean; refresh: () => void }) {
   const pending = job.status === 'pending';
-  const lease = job.status === 'running' ? job.lease_expires_at : null;
+  const lease = job.status === 'running' || job.status === 'pausing' ? job.lease_expires_at : null;
   const published = job.last_dispatched_at;
   const publishedForRetry = published && (!job.next_attempt_at || Date.parse(published) >= Date.parse(job.next_attempt_at));
   return <section className="panel detail-panel" aria-labelledby="job-execution-title">
@@ -224,6 +233,7 @@ function ExecutionDiagnostics({ job, active }: { job: JobDetailResponse; active:
       </section>
     </div>
     {active && <p className="job-monitor muted">Status refreshes while this page is visible.</p>}
+    <JobControls job={job} refresh={refresh} />
   </section>;
 }
 
@@ -269,6 +279,10 @@ const eventLabels: ReadonlyMap<string, string> = new Map([
   ['RETRY_SCHEDULED', 'Retry scheduled'],
   ['WORKER_LOST', 'Lease expiry recorded'],
   ['RECOVERY_REQUESTED', 'Recovery requested'],
+  ['PAUSE_REQUESTED', 'Pause requested'],
+  ['PAUSED', 'Collection paused'],
+  ['RESUMED', 'Collection resumed'],
+  ['CANCELLED', 'Collection cancelled'],
   ['SUCCEEDED', 'Run succeeded'],
   ['PARTIAL', 'Run produced partial results'],
   ['FAILED', 'Run failed'],

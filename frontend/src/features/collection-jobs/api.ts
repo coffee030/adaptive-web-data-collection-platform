@@ -1,8 +1,18 @@
 import { ApiError, apiGet, apiPost } from '../../lib/api';
 import type { CollectionInput } from '../sources/collectionInput';
 
-export const jobStatuses = ['pending', 'running', 'succeeded', 'partial', 'failed'] as const;
+export const jobStatuses = ['pending', 'running', 'pausing', 'paused', 'succeeded', 'partial', 'failed', 'cancelled'] as const;
 export type JobStatus = (typeof jobStatuses)[number];
+export type JobAction = 'pause' | 'resume' | 'cancel';
+
+export function jobInProgress(status: JobStatus | undefined) {
+  return status === 'pending' || status === 'running' || status === 'pausing';
+}
+
+export function jobAwaitingOutcome(status: JobStatus | undefined) {
+  return jobInProgress(status) || status === 'paused';
+}
+
 export type JobOrder = 'oldest' | 'newest';
 export type ExecutionOrigin = 'worker' | 'direct';
 
@@ -94,6 +104,10 @@ export function listJobs(pageSize: number, offset: number, status: JobStatus | '
 
 export function getJob(id: string, signal: AbortSignal) {
   return apiGet<JobDetailResponse>(jobPath(id), signal);
+}
+
+export function controlJob(id: string, action: JobAction, signal: AbortSignal) {
+  return apiPost<CollectionJob>(`${jobPath(id)}/control`, { action }, signal);
 }
 
 export function listEvents(id: string, signal: AbortSignal) {

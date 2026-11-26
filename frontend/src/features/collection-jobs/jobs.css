@@ -1,5 +1,9 @@
 .job-ledger .toolbar { justify-content: flex-start; }
 .job-ledger .toolbar > button { margin-inline-start: auto; }
+.job-controls { padding: var(--md); border-block-start: 1px solid var(--divider); }
+.job-controls h3 { margin: 0 0 var(--sm); }
+.job-control-confirmation { margin-block-start: var(--sm); padding-inline-start: var(--sm); border-inline-start: 2px solid var(--warning); }
+.job-control-confirmation p { margin: 0 0 var(--sm); }
 .job-ledger-head, .job-ledger-row {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(5.5rem, .65fr) minmax(12.5rem, 1.2fr) minmax(6.5rem, .7fr) 6.5rem;

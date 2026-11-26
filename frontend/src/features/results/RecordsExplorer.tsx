@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Loading, Pagination, RequestProblem, Status } from '../../components/feedback';
 import { apiGet } from '../../lib/api';
 import { useResource } from '../../lib/useResource';
-import { getJob, jobPath, maxOffset, sameId } from '../collection-jobs/api';
+import { getJob, jobInProgress, jobPath, maxOffset, sameId } from '../collection-jobs/api';
 import { listSources, sourcePath } from '../sources/api';
 import { articlesPath, newRequestPath, requestArticlesPath, requestPath, type CollectionRequest } from '../topic-collections/api';
 import { listRecords, quarantinePath, recordsPath, type GenericRecord } from './api';
@@ -287,9 +287,10 @@ function JobQuality({ id }: { id: string }) {
       ? <p className="notice">No job exists for this ID.</p>
       : <RequestProblem error={result.error} resource="job quality" retry={retry} />)}
     {result.state === 'ready' && <>
-      {(result.data.status === 'pending' || result.data.status === 'running') && <p className="dashboard-list-note muted">
+      {jobInProgress(result.data.status) && <p className="dashboard-list-note muted">
         The job is still in progress. Published results may change.
       </p>}
+      {result.data.status === 'paused' && <p className="dashboard-list-note muted">Collection is paused. Resume it from Job Details.</p>}
       <dl className="result-metadata">
         <div><dt>Accepted</dt><dd><strong data-quality="accepted">{result.data.valid_count}</strong> · Published validated records</dd></div>
         <div><dt>Invalid</dt><dd><strong data-quality="invalid">{result.data.invalid_count}</strong> · <Link to={quarantinePath(id)}>View quarantine</Link></dd></div>
