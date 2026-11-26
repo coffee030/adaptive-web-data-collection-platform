@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from .contracts import CaptureKind, CollectionError
+from .contracts import CaptureKind, CollectionError, RenderedEvidence
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,9 @@ class CapturedInput:
     retry_after_seconds: int | None = None
     page_number: int = 1
     capture_kind: CaptureKind = "input"
+    publisher_csp: str | None = None
+    rendered_body: bytes | None = None
+    rendered_dom: RenderedEvidence | None = None
 
 
 class InputError(ValueError):

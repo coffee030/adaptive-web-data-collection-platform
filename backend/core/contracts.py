@@ -255,10 +255,24 @@ class ArticleMapping(Contract):
     body: Name | None = None
 
 
+class ControlledRendering(Contract):
+    ready_selector: SelectorText
+    script_sha256: Annotated[tuple[Sha256, ...], Field(min_length=1, max_length=8)]
+    timeout_ms: Annotated[int, Field(strict=True, ge=250, le=5000)] = 1500
+
+    @field_validator("script_sha256")
+    @classmethod
+    def distinct_scripts(cls, value):
+        return tuple(sorted(set(value)))
+
+
 class ExtractionConfiguration(ProfileConfiguration):
     adapter_type: Literal["web"] = "web"
     selector_type: Literal["css", "xpath"]
     item_selector: SelectorText
+    rendering: ControlledRendering | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     fields: Annotated[tuple[ExtractionField, ...], Field(min_length=1, max_length=64)]
     # Omitting absent pagination preserves hashes of existing approved profiles.
     pagination: NextLinkPagination | None = Field(
@@ -285,6 +299,8 @@ class ExtractionConfiguration(ProfileConfiguration):
     @model_validator(mode="after")
     def check_mappings(self):
         check_field_mapping(self.fields, self.record_schema)
+        if self.rendering and (self.search or self.pagination):
+            raise ValueError("Controlled rendering supports single-document profiles")
         if self.search and self.pagination:
             raise ValueError(
                 "Configure pagination inside keyword search for a search profile"
@@ -414,6 +430,13 @@ class ProfileValidationReport(Contract):
         )
 
 
+class RenderedEvidence(Contract):
+    sha256: Sha256
+    byte_count: Positive
+    rendered_at: datetime
+    engine: Name
+
+
 class EvidenceReference(Contract):
     evidence_id: Name
     source_id: Name
@@ -425,6 +448,9 @@ class EvidenceReference(Contract):
     requested_location: str | None = None
     captured_at: datetime
     content_hash: Sha256
+    rendered_dom: RenderedEvidence | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     http_status: int | None = None
     content_type: str | None = None
     page_number: Positive = 1

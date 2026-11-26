@@ -13,6 +13,7 @@ from backend.core.evidence import EvidenceError, LocalEvidenceStore
 from backend.core.profiles import ProfileError, ProfileRepository
 from backend.core.runner import CollectionRunner
 from backend.persistence.results import publish_results
+from backend.persistence.models import ProfileRow, SourceRow
 
 from .inputs import Entry
 from .jobs import Job, Jobs, job_from_row
@@ -92,6 +93,20 @@ class JobExecutor:
                     return self.jobs.retry(
                         session, row, result.error, delay, attempt_limit=limit
                     )
+            if any(capture.rendered_dom for capture in result.all_evidence):
+                source = session.get(SourceRow, row.source_id, with_for_update=True)
+                profile = session.get(
+                    ProfileRow, row.profile_version_id, with_for_update=True
+                )
+                if (
+                    source.approval_status != "approved"
+                    or profile.approval_status != "approved"
+                ):
+                    error = CollectionError(
+                        code="render_authorization_changed",
+                        message="Source or profile authorization changed before rendered results could be published",
+                    )
+                    return self.jobs._finish(session, row, "failed", error=error)
             publish_results(session, row, result, self.evidence)
             return self.jobs._finish(
                 session,

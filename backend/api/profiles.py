@@ -20,6 +20,7 @@ from backend.core.contracts import (
     SourceProfileVersion,
 )
 from backend.core.profiles import ProfileError
+from backend.core.rendering import permitted_render_origin
 from backend.core.suggestion_models import SuggestionRequest, SuggestionResult
 
 router = APIRouter(prefix="/sources", tags=["sources and profiles"])
@@ -111,6 +112,12 @@ def change_authorization(request: Request, source_id: UUID, body: Authorization)
 @router.post("/{source_id}/profile-suggestions", response_model=SuggestionResult)
 def suggest_profile(request: Request, source_id: UUID, body: SuggestionRequest):
     return request.app.state.profiles.suggest(source_id, body)
+
+
+@router.get("/{source_id}/rendering-policy")
+def rendering_policy(source_id: UUID, request: Request):
+    origin = permitted_render_origin(request.app.state.profiles.get_source(source_id))
+    return {"eligible": origin is not None, "origin": origin}
 
 
 @router.post(VERSIONS, response_model=ProfileSnapshot, status_code=201)

@@ -110,6 +110,9 @@ def _evidence_row(
         run_id=UUID(evidence.run_id),
         page_number=page_number,
         capture_kind=evidence.capture_kind,
+        rendered_dom=evidence.rendered_dom.model_dump(mode="json")
+        if evidence.rendered_dom
+        else None,
         storage_reference=f"{evidence_id.hex}/input.bin",
         captured_at=evidence.captured_at,
         content_type=evidence.content_type,

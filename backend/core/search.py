@@ -12,6 +12,7 @@ from .contracts import ExtractionConfiguration, Source
 from .html_extraction import Query
 from .inputs import CapturedInput, InputError, KeywordInput, WebInput
 from .origin_rate import OriginRate
+from .rendering import require_render_origin
 from .web_adapter import (
     MAX_ITEMS,
     SearchRequests,
@@ -33,6 +34,8 @@ def initial_input(
                 "keyword_not_supported", "Profile does not configure keyword search"
             )
         _, origin = checked_url(source, entry.url)
+        if config.rendering:
+            require_render_origin(source, origin)
         if origin.startswith("https://"):
             raise InputError(
                 "keyword_required", "Public HTTPS requires a keyword search profile"

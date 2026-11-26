@@ -521,6 +521,7 @@ def _get(
         http_status=status,
         content_type=response.headers.get("content-type"),
         retry_after_seconds=_retry_after(response.headers.get("retry-after")),
+        publisher_csp=response.headers.get("content-security-policy"),
     )
     challenge = response.headers.get("cf-mitigated", "").strip().lower() == "challenge"
     return document, response.headers.get("location"), challenge
@@ -560,7 +561,11 @@ def _decode_html(document: CapturedInput) -> str:
 def html_candidates(
     document: CapturedInput, config: ExtractionConfiguration
 ) -> list[CandidateRecord]:
-    html = _decode_html(document)
+    html = (
+        _decode_html(document)
+        if document.rendered_body is None
+        else document.rendered_body.decode("utf-8")
+    )
     rules = {
         field.name: Field(
             Query(field.selector_type or config.selector_type, field.selector),

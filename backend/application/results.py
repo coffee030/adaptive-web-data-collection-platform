@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -13,6 +14,7 @@ from backend.core.contracts import (
     Positive,
     Provenance,
     RecordProblem,
+    RenderedEvidence,
     Scalar,
     Sha256,
     SourcePosition,
@@ -60,6 +62,9 @@ class Evidence(Contract):
     run_id: UUID
     page_number: Positive
     capture_kind: CaptureKind
+    rendered_dom: RenderedEvidence | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     captured_at: datetime
     content_hash: Sha256
     content_type: str | None
@@ -115,6 +120,7 @@ def materialize_evidence(row: EvidenceRow, job: JobRow) -> Evidence:
         run_id=row.run_id,
         page_number=row.page_number,
         capture_kind=row.capture_kind,
+        rendered_dom=row.rendered_dom,
         captured_at=row.captured_at,
         content_hash=row.content_hash,
         content_type=row.content_type,
