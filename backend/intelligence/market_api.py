@@ -11,6 +11,7 @@ from . import market_catalog as catalog
 from . import market_collection as collection
 from .api import CustomerScope, Store
 from .market_sources import SOURCES
+from .market_measurements import Distribution, distributions
 
 router = APIRouter(
     prefix="/marketing/intelligence",
@@ -71,6 +72,16 @@ def activity(
     return catalog.search_activity(
         sessions, q, platform, topic, creator_id, page, page_size
     )
+
+
+@router.get("/{mode}/market/measurements")
+def measurements(
+    sessions: Sessions,
+    platform: Filter = None,
+    creator_id: Filter = None,
+    days: Annotated[int | None, Query(ge=1, le=3650)] = None,
+) -> list[Distribution]:
+    return distributions(sessions, platform, creator_id, days)
 
 
 @router.get("/{mode}/market/overview")

@@ -9,7 +9,8 @@ from secrets import compare_digest
 from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import column, func, select, true
+from sqlalchemy.dialects.postgresql import JSONB
 
 from backend.application.jobs import database_now
 from backend.marketing.store import MarketingError
@@ -19,8 +20,8 @@ from .contracts import Content, ImportDataset, Mode, Profile, Ref
 from .models import DatasetRow
 from .semantic import INDEX_VERSION, character_grams, content_key
 
-MAX_DATASETS = 64
-MAX_RECORDS = 800
+MAX_DATASETS = 2048
+MAX_RECORDS = 10000
 
 
 @dataclass(frozen=True)
@@ -135,33 +136,81 @@ def dataset_view(row: DatasetRow, now: datetime) -> DatasetStatus:
     )
 
 
-def _validate_identity(datasets: list[ImportDataset]) -> None:
+def check_import(session, scope, now, dataset_id, body):
+    others = (
+        active(scope, now)
+        .where(DatasetRow.dataset_id != dataset_id)
+        .with_only_columns(DatasetRow.payload)
+        .subquery()
+    )
+    size = session.execute(
+        select(
+            func.count(),
+            func.coalesce(
+                func.sum(func.jsonb_array_length(others.c.payload["records"])), 0
+            ),
+        ).select_from(others)
+    ).one()
+    if size[0] >= MAX_DATASETS or size[1] + len(body.records) > MAX_RECORDS:
+        raise MarketingError(409, "catalog_limit", "Workspace catalog limit reached")
     creators = set()
     accounts = set()
     posts = set()
-    for dataset in datasets:
-        for record in dataset.records:
-            if isinstance(record, Profile):
-                identities = {
-                    (item.platform, item.account_id) for item in record.accounts
-                }
-                if record.creator_id in creators or identities & accounts:
-                    raise MarketingError(
-                        409,
-                        "duplicate_creator_identity",
-                        "Creator or account already registered",
-                    )
-                creators.add(record.creator_id)
-                accounts.update(identities)
-            elif isinstance(record, Content):
-                identity = (record.platform, record.id)
-                if identity in posts:
-                    raise MarketingError(
-                        409,
-                        "duplicate_post_identity",
-                        "Platform post already registered",
-                    )
-                posts.add(identity)
+    kinds = set()
+
+    def duplicate_profile():
+        raise MarketingError(
+            409, "duplicate_creator_identity", "Creator or account already registered"
+        )
+
+    def duplicate_post():
+        raise MarketingError(
+            409, "duplicate_post_identity", "Platform post already registered"
+        )
+
+    for row in body.records:
+        if isinstance(row, Profile):
+            identities = {(a.platform, a.account_id) for a in row.accounts}
+            if row.creator_id in creators or accounts & identities:
+                duplicate_profile()
+            creators.add(row.creator_id)
+            accounts.update(identities)
+            kinds.add("profile")
+        elif isinstance(row, Content):
+            key = (row.platform, row.id)
+            if key in posts:
+                duplicate_post()
+            posts.add(key)
+            kinds.add("content")
+    if not kinds:
+        return
+    records = (
+        func.jsonb_array_elements(others.c.payload["records"])
+        .table_valued(column("value", JSONB))
+        .lateral()
+    )
+    record = records.c.value
+    existing = (
+        select(
+            record["kind"].astext,
+            record["creator_id"].astext,
+            record["accounts"],
+            record["platform"].astext,
+            record["id"].astext,
+        )
+        .select_from(others.join(records, true()))
+        .where(record["kind"].astext.in_(kinds))
+    )
+    for kind, creator, account_list, platform, row_id in session.execute(
+        existing
+    ).yield_per(256):
+        if kind == "profile" and (
+            creator in creators
+            or any((a["platform"], a["account_id"]) in accounts for a in account_list)
+        ):
+            duplicate_profile()
+        if kind == "content" and (platform, row_id) in posts:
+            duplicate_post()
 
 
 class IntelligenceStore:
@@ -188,6 +237,7 @@ class IntelligenceStore:
         body: ImportDataset,
         *,
         expected_imported_at: datetime | None = None,
+        create_only: bool = False,
     ) -> DatasetStatus:
         if not body.grant.allows(scope.mode):
             raise MarketingError(
@@ -216,6 +266,12 @@ class IntelligenceStore:
                 raise MarketingError(
                     409, "dataset_withdrawn", "Dataset identifier has been withdrawn"
                 )
+            if create_only and row and row.digest != digest:
+                raise MarketingError(
+                    409,
+                    "receipt_exists",
+                    "This record was already reviewed with different contents",
+                )
             if expected_imported_at is not None:
                 if row is None or row.payload is None or row.expires_at <= now:
                     raise MarketingError(
@@ -234,21 +290,7 @@ class IntelligenceStore:
             if row and row.digest == digest:
                 row.refresh_error = None
                 return dataset_view(row, now)
-            others = [
-                ImportDataset.model_validate(other.payload)
-                for other in session.scalars(
-                    active(scope, now).where(DatasetRow.dataset_id != dataset_id)
-                )
-            ]
-            if (
-                len(others) >= MAX_DATASETS
-                or sum(len(other.records) for other in others) + len(body.records)
-                > MAX_RECORDS
-            ):
-                raise MarketingError(
-                    409, "catalog_limit", "Workspace catalog limit reached"
-                )
-            _validate_identity([*others, body])
+            check_import(session, scope, now, dataset_id, body)
             if row is None:
                 row = DatasetRow(
                     id=uuid4(),

@@ -320,7 +320,7 @@ export function PerformanceReport({ id }: { id: string }) {
               className="studio-table-scroll"
               tabIndex={0}
               role="region"
-              aria-label="Reporting periods"
+              aria-label="Reporting period records"
             >
               <table className="studio-table">
                 <thead>
@@ -389,7 +389,7 @@ export function PerformanceReport({ id }: { id: string }) {
         title="Actuals and plan"
         description="Compare company-reported results with your saved scenario. A dash means an input is unavailable."
       >
-        <div className="studio-table-scroll" role="region" aria-label="Actuals and plan" tabIndex={0}>
+        <div className="studio-table-scroll" role="region" aria-label="Reported and assumed figures" tabIndex={0}>
           <table className="studio-table">
             <thead>
               <tr>

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
-import { Link, Route, Routes, useLocation } from 'react-router';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import { jobsPath, newJobPath } from '../features/collection-jobs/api';
 import { Overview } from '../features/dashboard/Overview';
 import { OperationsFrame } from '../features/operator/OperationsFrame';
@@ -44,6 +44,7 @@ export function App() {
   const path = pathname.replace(/\/+$/, '') || '/';
   const demo = path === '/demo' || path.startsWith('/demo/');
   const operations = operatorPrefixes.some(prefix => path === prefix || path.startsWith(prefix + '/'));
+  if(demo && __HARBOURLINE_INSTALLATION__ === 'pilot') return <Navigate to="/" replace/>;
   if (demo || (!operations && !(path === '/' && __PLATFORM_SYNTHETIC_DEMO__))) {
     return <Suspense fallback={<Loading>Loading campaign workspace…</Loading>}><MarketingWorkspace mode={path === '/demo/connected' || path.startsWith('/demo/connected/') ? 'server-demo' : demo ? 'sample' : 'partner'} /></Suspense>;
   }

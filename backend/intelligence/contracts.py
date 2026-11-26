@@ -5,6 +5,8 @@ from typing import Annotated, Literal
 
 from pydantic import (
     AwareDatetime,
+    HttpUrl,
+    field_validator,
     BaseModel,
     ConfigDict,
     Field,
@@ -67,6 +69,16 @@ class InputRow(StrictModel):
     creator_id: Ref
     evidence_ref: Ref
     observed_at: AwareDatetime
+    source_url: HttpUrl | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @field_validator("source_url")
+    @classmethod
+    def public_reference(cls, value):
+        if value and (value.username or value.password):
+            raise ValueError("A source link may not contain sign-in credentials")
+        return value
 
 
 class PlatformAccount(StrictModel):

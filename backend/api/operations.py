@@ -129,6 +129,8 @@ FROM bounds b CROSS JOIN queue_state q CROSS JOIN totals t CROSS JOIN workers w
 def pulse(request: Request, window: Literal["24h", "7d"] = "24h"):
     hours, width = (24, 2) if window == "24h" else (168, 24)
     with request.app.state.sessions() as session:
-        return session.execute(
-            pulse_query, {"hours": hours, "width": width}
-        ).mappings().one()
+        return (
+            session.execute(pulse_query, {"hours": hours, "width": width})
+            .mappings()
+            .one()
+        )

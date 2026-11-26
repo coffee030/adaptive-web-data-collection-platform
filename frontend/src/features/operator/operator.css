@@ -148,3 +148,14 @@ button.operator-danger:hover { background: var(--error-surface); }
 .operator-source-management summary { width: fit-content; cursor: pointer; }
 .operator-source-management .operator-research-toolbar { margin-block-start: 12px; }
 @media (max-width: 600px) { .operator-source-status > div { grid-template-columns: 1fr; } }
+
+.first-party-entry {margin-block:1.3rem;padding:1rem 1.15rem;border:1px solid var(--studio-border);border-radius:6px;background:var(--studio-surface)}
+.first-party-entry summary {cursor:pointer;font-weight:600;min-height:36px}
+.first-party-entry .period-form {display:grid;gap:1rem;max-width:62rem}
+.first-party-entry fieldset {padding:1rem;min-width:0;border:1px solid var(--studio-border)}
+.first-party-entry .form-pair {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}
+.first-party-entry label {display:grid;gap:.35rem;margin-block:.25rem}
+.first-party-entry :is(input,select,textarea) {width:100%;min-height:40px}
+.first-party-entry .check-line {display:flex;align-items:center;gap:.6rem}
+.first-party-entry .check-line input {width:18px;min-height:18px}
+@media(max-width:720px){.first-party-entry .form-pair{grid-template-columns:1fr}}

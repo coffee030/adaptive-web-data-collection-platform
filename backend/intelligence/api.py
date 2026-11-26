@@ -1,6 +1,7 @@
 """Campaign, catalog and operator endpoints for the separate intelligence store."""
 
 from datetime import date, timedelta
+from hashlib import sha256
 from secrets import compare_digest
 from typing import Annotated, Literal
 
@@ -312,6 +313,22 @@ def dataset_scope(
             if session.get(CompanyRow, company) is not None:
                 return Scope("partner", company)
     raise MarketingError(404, "company_unavailable", "Company unavailable")
+
+
+@router.post("/operator/partner/receipts", dependencies=[Depends(operator_store)])
+def register_receipt(company: Ref, body: ImportDataset, store: Store) -> DatasetStatus:
+    if len(body.records) != 1:
+        raise MarketingError(
+            422, "one_receipt_required", "Review one first-party record at a time"
+        )
+    row = body.records[0]
+    key = sha256(f"{row.creator_id}/{row.kind}/{row.id}".encode()).hexdigest()[:48]
+    return store.ingest(
+        dataset_scope("partner", store, company),
+        "receipt-" + key,
+        body,
+        create_only=True,
+    )
 
 
 @router.get("/operator/{mode}/datasets", dependencies=[Depends(operator_store)])

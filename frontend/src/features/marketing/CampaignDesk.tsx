@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { PageHeader, Panel } from '../../components/studio/Workspace';
 import { blankBrief } from './contracts';
+import { apiAttachment } from '../../lib/api';
 import {
   BusinessProblem,
   campaignBase,
@@ -47,6 +48,42 @@ function SavedLead({ id }: { id: string }) {
       </div>
       <SaveMarketLead creator={result.data} />
     </li>
+  );
+}
+
+function RateRequest({ id, version }: { id: string; version: number }) {
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function download() {
+    setBusy(true);
+    setError('');
+    try {
+      const file = await apiAttachment(
+        campaignBase + '/' + id + '/rate-request?version=' + version,
+        new AbortController().signal,
+        'text/csv'
+      );
+      const href = URL.createObjectURL(file);
+      const anchor = document.createElement('a');
+      anchor.href = href;
+      anchor.download = 'harbourline-rate-request.csv';
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+    } catch {
+      setError(
+        'The shortlist changed or its sources are unavailable. Reopen the campaign and check the saved creators.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <button className="studio-secondary" disabled={busy} onClick={download}>
+        Download rate request
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </div>
   );
 }
 
@@ -136,6 +173,9 @@ export function CampaignDetail({ report = false }: { report?: boolean }) {
                 <p>
                   Your shortlist is empty. <Link to="/creators">Find creators →</Link>
                 </p>
+              )}
+              {Boolean(draft.market_leads?.length) && (
+                <RateRequest id={id} version={campaignReceipt.version} />
               )}
               {draft.shortlist.length > 0 && (
                 <Link to="/creators/company">

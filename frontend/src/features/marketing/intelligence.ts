@@ -15,6 +15,7 @@ export interface EvidenceRef {
   attribution: string;
   row_id: string;
   reference: string;
+  source_url?: string | null;
   observed_at: string;
   expires_at: string;
 }

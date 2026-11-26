@@ -47,6 +47,13 @@ export interface Activity {
   url: string;
   topics: string[];
   license_url: string;
+  credit_role?: string;
+  credit_url?: string;
+  broadcaster_url?: string;
+  series_title?: string;
+  attribution?: string;
+  date_precision?: string;
+  affordability_evidence?: string | null;
   metrics: Measurement[];
   observed_at: string;
 }
@@ -69,6 +76,7 @@ export interface Facet {
   count: number;
 }
 export interface Results<T> {
+  related?: { query: string; topic: string; total: number; basis: string; items: T[] };
   items: T[];
   total: number;
   page: number;

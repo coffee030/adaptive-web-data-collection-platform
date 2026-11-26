@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Loading, Status, Timestamp } from '../../components/feedback';
 import { getOperatorCredential, ApiError, apiLocal } from '../../lib/api';
 import { CompanyRegistry } from './CompanyRegistry';
+import { FirstPartyEvidence } from './FirstPartyEvidence';
 import { operationsPath } from './OperationsTasks';
 
 interface DatasetStatus { dataset_id: string; state: string; record_count: number; imported_at: string; expires_at: string | null; refresh_error?: string | null }
@@ -105,6 +106,7 @@ export function IntelligenceDatasets() {
         request.current?.abort();request.current=undefined;setPending(false);setCompany(id);setDatasetId('');
         setDirectory(undefined);setMore(false);setResult(undefined);setNotice('');setError('');
       }}/>
+      {company && getOperatorCredential() && <FirstPartyEvidence key={company} company={company}/>}
       <form className="operator-dataset-form" onSubmit={submit} onChange={event => {
         request.current?.abort(); request.current = undefined; setPending(false);
         setResult(undefined); setNotice(''); setError('');

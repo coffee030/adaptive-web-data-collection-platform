@@ -26,6 +26,7 @@ class Evidence(BaseModel):
     attribution: str
     row_id: str
     reference: str
+    source_url: str | None = None
     observed_at: datetime
     expires_at: datetime
 
@@ -81,6 +82,7 @@ def evidence(dataset: Dataset, row) -> Evidence:
         attribution=grant.attribution,
         row_id=row.id,
         reference=row.evidence_ref,
+        source_url=str(row.source_url) if row.source_url else None,
         observed_at=row.observed_at,
         expires_at=grant.expires_at,
     )

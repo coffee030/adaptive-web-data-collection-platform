@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { PageHeader, Panel } from '../../components/studio/Workspace';
+import { MarketMeasures } from './MarketMeasures';
 import { Overlay } from './components';
 import {
   BusinessProblem,
@@ -29,6 +30,12 @@ function SampleWork({ post }: { post: Activity }) {
       <h3>
         <SourceLink url={post.url}>{post.title}</SourceLink>
       </h3>
+      {post.credit_role && (
+        <p>
+          {post.credit_role} · {post.creator_name}
+          {post.series_title && <> · {post.series_title}</>}
+        </p>
+      )}
       {post.metrics.length > 0 && (
         <dl className="work-measures">
           {post.metrics.map((metric) => (
@@ -42,8 +49,10 @@ function SampleWork({ post }: { post: Activity }) {
       <details>
         <summary>Source and usage</summary>
         <p>
-          Credited to {post.creator_name}. Observed {displayDate(post.observed_at)}.{' '}
-          <SourceLink url={post.license_url}>Usage terms</SourceLink>
+          {post.attribution || 'Credited to ' + post.creator_name}. Observed{' '}
+          {displayDate(post.observed_at)}. <SourceLink url={post.license_url}>Usage terms</SourceLink>{' '}
+          {post.credit_url && <SourceLink url={post.credit_url}>Presenter credit</SourceLink>}{' '}
+          {post.broadcaster_url && <SourceLink url={post.broadcaster_url}>Broadcaster</SourceLink>}
         </p>
       </details>
     </article>
@@ -77,6 +86,7 @@ function ComparisonColumn({ id }: { id: string }) {
         </div>
       </dl>
       {creator.example && <SampleWork post={creator.example} />}
+      <MarketMeasures creatorId={creator.id} />
       <SaveMarketLead creator={creator} />
     </section>
   );
@@ -91,6 +101,7 @@ export function MarketDiscovery() {
   const page = Math.max(1, Number(params.get('page')) || 1);
   const selected = Array.from(new Set(params.getAll('compare'))).slice(0, 4);
   const [query, setQuery] = useState(q);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [comparing, setComparing] = useState(false);
   useEffect(() => setQuery(q), [q]);
   const search = new URLSearchParams({ page: String(page), page_size: '15', sort });
@@ -147,39 +158,53 @@ export function MarketDiscovery() {
             <button className="studio-primary">Search</button>
           </div>
         </label>
-        <label>
-          Platform
-          <select value={platform} onChange={(e) => update('platform', e.target.value)}>
-            <option value="">All platforms</option>
-            {(summary?.platforms ?? []).map((item) => (
-              <option key={item.platform} value={item.platform}>
-                {platformName(item.platform)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Topic
-          <select value={topic} onChange={(e) => update('topic', e.target.value)}>
-            <option value="">All topics</option>
-            {topic && !(summary?.topics ?? []).some((t) => t.value === topic) && (
-              <option>{topic}</option>
-            )}
-            {(summary?.topics ?? []).map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Sort by
-          <select value={sort} onChange={(e) => update('sort', e.target.value)}>
-            <option value="recent">Latest work</option>
-            <option value="activity">Most publications</option>
-            <option value="name">Creator name</option>
-          </select>
-        </label>
+        <button
+          type="button"
+          className="mobile-filter-button"
+          aria-expanded={filtersOpen}
+          aria-controls="creator-filters"
+          onClick={() => setFiltersOpen(!filtersOpen)}
+        >
+          Filters and sort
+          {platform || topic
+            ? ' · ' + [platform && platformName(platform), topic].filter(Boolean).join(', ')
+            : ''}
+        </button>
+        <div id="creator-filters" className="supplemental-filters" data-open={filtersOpen}>
+          <label>
+            Platform
+            <select value={platform} onChange={(e) => update('platform', e.target.value)}>
+              <option value="">All platforms</option>
+              {(summary?.platforms ?? []).map((item) => (
+                <option key={item.platform} value={item.platform}>
+                  {platformName(item.platform)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Topic
+            <select value={topic} onChange={(e) => update('topic', e.target.value)}>
+              <option value="">All topics</option>
+              {topic && !(summary?.topics ?? []).some((t) => t.value === topic) && (
+                <option>{topic}</option>
+              )}
+              {(summary?.topics ?? []).map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sort by
+            <select value={sort} onChange={(e) => update('sort', e.target.value)}>
+              <option value="recent">Latest work</option>
+              <option value="activity">Most publications</option>
+              <option value="name">Creator name</option>
+            </select>
+          </label>
+        </div>
       </form>
       <div className="results-heading">
         <h2>
@@ -243,8 +268,14 @@ export function MarketDiscovery() {
                         <Platform value={person.platform} />
                       </td>
                       <td>{person.example?.title ?? 'No credited example available'}</td>
-                      <td className="numeric">{formatCount(person.activity_count)}</td>
-                      <td>{displayDate(person.latest_published_at)}</td>
+                      <td className="numeric">
+                        <span className="row-label">Publications </span>
+                        {formatCount(person.activity_count)}
+                      </td>
+                      <td>
+                        <span className="row-label">Latest </span>
+                        {displayDate(person.latest_published_at)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -271,6 +302,35 @@ export function MarketDiscovery() {
             <p>
               Broaden your search or ask Campaign Advisor to check available sources against your brief.
             </p>
+            {data.related?.basis === 'dining_coverage_without_price_evidence' && (
+              <section className="related-discovery">
+                <h3>Related dining coverage</h3>
+                <p>
+                  These presenters cover Hong Kong food. Their source records do not confirm an
+                  affordable price point.
+                </p>
+                <ul>
+                  {data.related.items.map((creator) => (
+                    <li key={creator.id}>
+                      <Link to={'/creators/' + encodeURIComponent(creator.id) + '?' + params}>
+                        {creator.name}
+                      </Link>
+                      {creator.example && (
+                        <span>{creator.example.series_title || creator.example.title}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={
+                    '/creators?' +
+                    new URLSearchParams({ q: data.related.query, ...(platform ? { platform } : {}) })
+                  }
+                >
+                  Explore dining coverage →
+                </Link>
+              </section>
+            )}
             <div className="biz-actions">
               <button
                 className="studio-secondary"
@@ -354,6 +414,7 @@ export function MarketProfile() {
                 </dl>
                 <SourceLink url={state.data.profile_url}>Publisher profile</SourceLink>
               </Panel>
+              <MarketMeasures creatorId={state.data.id} />
               <Panel title="Campaign eligibility">
                 <p>
                   Current audience, availability and fees require company evidence. Save this creator for

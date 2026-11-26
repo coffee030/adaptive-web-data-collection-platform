@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.application.jobs import database_now
+from backend.core.csv_export import protect_csv_text
 from backend.intelligence.contracts import Campaign, Ref, Scenario, StrictModel
 from backend.intelligence.plan_export import allocation_rows
 from backend.persistence.database import settings
@@ -110,9 +111,9 @@ class CampaignDraft(StrictModel):
     brief: CampaignBrief
     saved: bool
     shortlist: list[Ref] = Field(max_length=120)
-    market_leads: list[
-        Annotated[str, StringConstraints(min_length=1, max_length=160)]
-    ] = Field(default_factory=list, max_length=120)
+    market_leads: list[Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{32}$")]] = (
+        Field(default_factory=list, max_length=120)
+    )
     lines: list[None] = Field(max_length=0)
     explorer: str = Field(max_length=2000)
     evaluation: Campaign | None = None
@@ -598,5 +599,98 @@ def export_campaign(
         media_type="text/csv",
         headers={
             "Content-Disposition": "attachment; filename=harbourline-campaign.csv"
+        },
+    )
+
+
+@router.get("/campaigns/{campaign_id}/rate-request")
+def export_rate_request(
+    campaign_id: UUID, version: int, user: User, session: Database
+) -> Response:
+    from backend.intelligence.market_catalog import A, activity_query, item
+
+    campaign = session.get(
+        CompanyCampaignRow, (user.id, campaign_id), with_for_update={"read": True}
+    )
+    if campaign is None:
+        raise MarketingError(404, "campaign_unavailable", "Campaign unavailable")
+    if campaign.version != version:
+        raise MarketingError(
+            409, "campaign_changed", "Reload the latest campaign shortlist"
+        )
+    ids = list(dict.fromkeys(campaign.draft.get("market_leads", [])))
+    rows = session.scalars(
+        activity_query(session)
+        .where(A.creator_id.in_(ids))
+        .distinct(A.creator_id)
+        .order_by(A.creator_id, A.published.desc(), A.id)
+    )
+    works = {row.creator_id: item(row) for row in rows}
+    if not works:
+        raise MarketingError(
+            409,
+            "no_current_leads",
+            "Save a creator with currently eligible published work",
+        )
+    out = io.StringIO()
+    writer = csv.writer(out, quoting=csv.QUOTE_ALL)
+    brief = campaign.draft["brief"]
+    writer.writerow(["Company", protect_csv_text(user.name)])
+    writer.writerow(
+        ["Campaign", protect_csv_text(brief["name"] or "Creator shortlist")]
+    )
+    writer.writerow(["Requested deliverable", protect_csv_text(brief["deliverable"])])
+    writer.writerow(
+        [
+            "Request purpose",
+            "Ask each creator for availability, a current fee and permission to use their response.",
+        ]
+    )
+    writer.writerow(["Currently eligible leads", len(works)])
+    writer.writerow(["Unavailable or withdrawn leads omitted", len(ids) - len(works)])
+    writer.writerow([])
+    writer.writerow(
+        [
+            "Credited creator",
+            "Public profile",
+            "Supporting work",
+            "Source",
+            "Source license",
+            "Availability",
+            "Firm or indicative",
+            "Fee (HKD)",
+            "Valid until",
+            "Deliverable and terms",
+            "Permission reference",
+        ]
+    )
+    for creator_id in ids:
+        if creator_id in works:
+            work = works[creator_id]
+            writer.writerow(
+                [
+                    *[
+                        protect_csv_text(work[key])
+                        for key in (
+                            "creator_name",
+                            "profile_url",
+                            "title",
+                            "url",
+                            "license_url",
+                        )
+                    ],
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
+    return Response(
+        content="\ufeff" + out.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=harbourline-rate-request.csv"
         },
     )

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MarketMeasures } from './MarketMeasures';
 import { Link, useNavigate } from 'react-router';
 import { PageHeader, Panel } from '../../components/studio/Workspace';
 import {
@@ -100,6 +101,7 @@ export function PlatformAnalysis() {
         <p role="status">Opening platform activity…</p>
       ) : (
         <>
+          <MarketMeasures />
           <PublicationTrend summary={state.data} />
           <Panel
             title="Platform comparison"
@@ -107,7 +109,7 @@ export function PlatformAnalysis() {
           >
             <div
               role="region"
-              aria-label="Platform comparison"
+              aria-label="Platform publication counts"
               className="studio-table-scroll"
               tabIndex={0}
             >
@@ -215,13 +217,6 @@ export function MarketOverview() {
       </section>
       <div className="biz-two-col">
         <div className="overview-primary">
-          {market.result.state === 'error' ? (
-            <BusinessProblem error={market.result.error} retry={market.retry} />
-          ) : available ? (
-            <PublicationTrend summary={available} />
-          ) : (
-            <p role="status">Loading market activity…</p>
-          )}
           <Panel title="Latest publications" actions={<Link to="/creators">Explore creators →</Link>}>
             {activity.result.state === 'ready' ? (
               activity.result.data.items.length ? (
@@ -235,7 +230,8 @@ export function MarketOverview() {
                       <h3>
                         <SourceLink url={a.url}>{a.title}</SourceLink>
                       </h3>
-                      <Link to={'/creators/' + encodeURIComponent(a.creator_id)}>{a.creator_name}</Link>
+                      <Link to={'/creators/' + encodeURIComponent(a.creator_id)}>{a.creator_name}</Link>{' '}
+                      {a.credit_role && <small>· {a.credit_role}</small>}
                     </li>
                   ))}
                 </ol>
@@ -251,6 +247,13 @@ export function MarketOverview() {
               <p role="status">Opening publications…</p>
             )}
           </Panel>
+          {market.result.state === 'error' ? (
+            <BusinessProblem error={market.result.error} retry={market.retry} />
+          ) : available ? (
+            <PublicationTrend summary={available} />
+          ) : (
+            <p role="status">Loading market activity…</p>
+          )}
         </div>
         <aside>
           <Panel
