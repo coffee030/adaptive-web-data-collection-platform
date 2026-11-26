@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.application.jobs import Jobs, database_now
 from backend.core.contracts import CollectionError
 from backend.intelligence.indexing import INDEX_CLAIM_WINDOW, Indexing
+from backend.intelligence.market_poll import MarketPoll
 from backend.intelligence import commons_works, public_directory, public_feed
 from backend.intelligence.refresh import refresh_partner_files
 from backend.intelligence.store import Config as IntelligenceConfig
@@ -151,8 +152,15 @@ def main() -> None:
     marketing = Pipeline(sessions, ResearchSettings.load())
     intelligence = Indexing(sessions, IntelligenceConfig.load())
     partner_directory = os.getenv("MARKETING_PARTNER_REFRESH_DIR")
+    market = (
+        MarketPoll(sessions)
+        if intelligence.config.workspace or intelligence.config.public_demo_directory
+        else None
+    )
     try:
         if args.once:
+            if market:
+                market.poll()
             dispatcher.poll()
             marketing.maintain()
             marketing.dispatch(publish_marketing)
@@ -173,6 +181,8 @@ def main() -> None:
         indexing_due = 0.0
         indexing_cleanup_due = 0.0
         while True:
+            if market:
+                market.poll()
             try:
                 dispatcher.poll()
             except SQLAlchemyError as error:
@@ -227,6 +237,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if market:
+            market.close()
         engine.dispose()
 
 

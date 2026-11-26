@@ -29,6 +29,7 @@ from backend.core.profiles import ProfileError
 from backend.intelligence.api import router as intelligence_router
 from backend.intelligence.directory_api import router as directory_router
 from backend.intelligence.works_api import router as historical_works_router
+from backend.intelligence.market_api import router as market_router
 from backend.intelligence.store import Config as IntelligenceConfig
 from backend.intelligence.store import IntelligenceStore
 from backend.marketing.api import router as marketing_router
@@ -207,6 +208,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
     app.include_router(intelligence_router, prefix="/api/v1")
     app.include_router(directory_router, prefix="/api/v1")
     app.include_router(historical_works_router, prefix="/api/v1")
+    app.include_router(market_router, prefix="/api/v1")
 
     @app.get("/api/v1/version", response_model=dict[str, str], tags=["health"])
     def version():
