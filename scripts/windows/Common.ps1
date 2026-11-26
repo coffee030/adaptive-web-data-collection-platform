@@ -65,7 +65,6 @@ function Protect-LocalDirectory {
         $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
             $identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
     }
-    # Set only the DACL. Set-Acl can require audit privileges in Windows PowerShell.
     [IO.Directory]::SetAccessControl($Local, $acl)
 }
 
@@ -96,7 +95,6 @@ function Invoke-Tool($File, [string[]]$Arguments, $Seconds = 20, $Directory = $R
     $info = $process.StartInfo
     $info.FileName = $File
     if ([IO.Path]::GetFileName($File) -eq 'wsl.exe' -and $Arguments.Count -eq 1 -and $Arguments[0] -in @('--version', '--status')) {
-        # WSL recognizes these switches only when they are unquoted.
         $info.Arguments = $Arguments[0]
         $info.StandardOutputEncoding = [Text.Encoding]::Unicode
     } else { $info.Arguments = ConvertTo-NativeArguments $Arguments }
@@ -137,7 +135,6 @@ function Invoke-Tool($File, [string[]]$Arguments, $Seconds = 20, $Directory = $R
 }
 
 function Get-SafeReason($Text) {
-    # Only approved categories leave memory. Tool output can include arbitrary URLs or evidence.
     switch -Regex ($Text) {
         'password authentication failed' { return 'database login rejected' }
         'permission denied|access is denied|unauthorized|forbidden|EACCES|EPERM' { return 'access denied' }

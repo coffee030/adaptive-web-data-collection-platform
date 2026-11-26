@@ -79,8 +79,6 @@ def limits_for(
     reviewed: Iterable[KeywordSearch],
 ) -> SuggestionLimits:
     public = origin.startswith("https://")
-    # Source has no reviewed onboarding cap. Unknown public permissions get the
-    # three-request, 15-second ceiling from the reviewed publisher runs.
     applicable = tuple(cap for cap in reviewed if cap.origin == origin)
     requests = min(
         [

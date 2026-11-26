@@ -44,7 +44,6 @@ def site(monkeypatch):
                 self.end_headers()
                 self.wfile.write(BODY)
             except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-                # A timeout case may disconnect before the server writes.
                 pass
 
         def log_message(self, format, *args):

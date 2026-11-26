@@ -260,7 +260,6 @@ class ExtractionConfiguration(ProfileConfiguration):
     selector_type: Literal["css", "xpath"]
     item_selector: SelectorText
     fields: Annotated[tuple[ExtractionField, ...], Field(min_length=1, max_length=64)]
-    # Omitting absent pagination preserves hashes of existing approved profiles.
     pagination: NextLinkPagination | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

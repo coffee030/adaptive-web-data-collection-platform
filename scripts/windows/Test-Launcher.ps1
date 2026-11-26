@@ -352,7 +352,6 @@ Test-Case 'Native arguments preserve spaces and Unicode' {
     $command = Join-Path $env:SystemRoot 'System32/where.exe'
     $pattern = $Local + ':launcher.env'
     $result = Invoke-Tool $command @($pattern) 10
-    # Where may use an OEM code page. Successful lookup verifies argument transmission.
     Assert ($result.Code -eq 0) 'Windows did not receive the Unicode path as a single argument.'
 }
 Test-Case 'Demo settings use a distinct identity, credentials, flags and ports' {

@@ -278,7 +278,6 @@ class Provisioner:
         identity = self.state.get(key)
         request = api(f"{path}/{identity}") if identity else None
         if self.retry and request and request["status"] in FAILED:
-            # Persist the new intent before submitting it so an interrupted retry reuses its key.
             generation += 1
             self.state[key + "/generation"] = generation
             self.save(key, None)

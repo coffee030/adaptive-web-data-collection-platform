@@ -49,8 +49,6 @@ app.conf.update(
 def _identify_worker(sender, **kwargs) -> None:
     global _worker_instance_id
     if sender.app is app:
-        # The node initializes before starting the pool. Prefork children
-        # (including replacements) inherit this value from their parent.
         _worker_instance_id = uuid4()
 
 

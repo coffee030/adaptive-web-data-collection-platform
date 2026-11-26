@@ -78,7 +78,6 @@ def distinct_bindings(value: list[UUID]) -> list[UUID]:
     return value
 
 
-# Match NewRequest's shape without importing the database-backed application layer.
 Keyword = Annotated[Name, AfterValidator(printable_keyword)]
 BindingIds = Annotated[
     list[UUID], Field(min_length=1, max_length=4), AfterValidator(distinct_bindings)

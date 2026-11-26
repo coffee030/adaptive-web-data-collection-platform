@@ -220,7 +220,6 @@ class Results:
                 raise ProfileError(
                     "record_export_pending", "Wait for all jobs in this scope to finish"
                 )
-            # Terminal jobs publish their records in the same transaction as the final status.
             query = (
                 _records_query(job_id, request_id)
                 .order_by(RecordRow.created_at, RecordRow.id)

@@ -18,7 +18,6 @@ MARKET_FIELDS = (
     "summary",
 )
 
-# Each tuple represents one editorial item. Names and market instruments are fictional.
 MARKETING = {
     "creator-brief": (
         (

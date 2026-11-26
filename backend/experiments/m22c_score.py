@@ -45,7 +45,6 @@ def capture(target):
     markup = fixture_html(target)
     if markup is None:
         raise ValueError(f"Missing frozen replay target {target}")
-    # Match FixtureHandler.do_GET, including the wrapper that affects absolute XPath.
     body = ('<!doctype html><link rel="icon" href="data:,">' + markup).encode()
     return CapturedInput(
         body, ORIGIN + target, http_status=200, content_type="text/html"
@@ -254,7 +253,6 @@ def verify_reference(directory):
         (row["channel"], row["caller"], row["method"], row["status"], row["target"])
         for row in mirror
     ] == [("mirror", "browser", "GET", 200, route(event["url"])) for event in site]
-    # Browser and internal origins are paired only for this fixture and exact targets.
     assert all(
         utc(request) <= utc(receipt) <= utc(end_by_id[request["id"]])
         for request, receipt in zip(site, mirror, strict=True)

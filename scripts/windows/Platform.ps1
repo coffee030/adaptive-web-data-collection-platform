@@ -121,7 +121,6 @@ function Stop-Platform {
             $engine.Reason @("Open Docker Desktop, then run $StopCommand again.")
     }
     Assert-OwnedDocker
-    # Include the optional fixture even if its setting was changed while it was running.
     $Config.LAUNCHER_FIXTURE = '1'
     $result = Invoke-Compose @('stop') 220
     $running = Invoke-Docker @('container', 'ls', '--filter', "label=com.docker.compose.project=$($Config.COMPOSE_PROJECT_NAME)", '--format', '{{.ID}}')

@@ -10,8 +10,6 @@ export POSTGRES_PASSWORD="$(python -c 'from secrets import token_hex; print(toke
 if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
     printf '::add-mask::%s\n' "$POSTGRES_PASSWORD"
 fi
-# Existing recovery tests restart or recreate containers and retain the same URLs.
-# Reserve distinct loopback ports together so Docker can rebind them on restart.
 ports="$(python - <<'PY'
 import socket
 

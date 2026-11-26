@@ -36,7 +36,6 @@ def _public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
 def resolve_public(host: str, timeout: float) -> tuple[str, ...]:
     if not _dns_slots.acquire(blocking=False):
         raise InputError("transport_error", "Public DNS resolver is busy")
-    # An absolute DNS name prevents resolver search suffixes from changing the host.
     future = _dns_pool.submit(
         socket.getaddrinfo, host + ".", 443, 0, socket.SOCK_STREAM
     )
@@ -65,8 +64,6 @@ def public_get(
     pins = ",".join(
         f"[{address}]" if ":" in address else address for address in addresses
     )
-    # A fresh handle pins the connect address while retaining the original TLS SNI,
-    # certificate hostname and HTTP authority. Proxies and automatic redirects are disabled.
     with Session(
         trust_env=False,
         curl_options={CurlOpt.RESOLVE: [f"{host}:443:{pins}"], CurlOpt.PROXY: b""},

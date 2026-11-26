@@ -93,7 +93,6 @@ export function reviewKey(selection: CollectionSelection) {
 }
 
 export function keywordError(value: string) {
-  // The API counts Unicode code points and accepts only Python str.isprintable() characters.
   const keyword = value.trim();
   if (!keyword) return 'Enter a keyword.';
   if ([...keyword].length > 128) return 'Use 128 characters or fewer.';

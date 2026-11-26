@@ -52,11 +52,9 @@ def publish_articles(
     if not projected:
         return
     session.flush()
-    # Acquire identity locks in a global order across concurrent publications.
     for identity_hash, observations in sorted(projected.items()):
         projection = observations[0][0]
         if projection.identity_kind == "url" and len(observations) > 1:
-            # A page-level canonical URL shared by separate detail results is ambiguous.
             continue
         session.execute(
             insert(ArticleRow)

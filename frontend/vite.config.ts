@@ -51,7 +51,6 @@ export default defineConfig(({ mode, command, isPreview }) => {
   const port = Number(env.HARBOURLINE_PEER_PORT);
   const peerPort = Number.isInteger(port) && port >= 1024 && port <= 65535 ? port : 0;
   const target = env.API_PROXY_TARGET || 'http://127.0.0.1:8000';
-  // The container enforces the local approval boundary at its reverse proxy.
   const containerApproval = command === 'build' && env.PLATFORM_CONTAINER_FRONTEND === '1'
     && env.LOCAL_PROFILE_APPROVAL === '1';
   const localApproval = command === 'serve' && !isPreview && env.LOCAL_PROFILE_APPROVAL === '1'
@@ -61,7 +60,6 @@ export default defineConfig(({ mode, command, isPreview }) => {
   const apiProxy = {
     '/api/v1': {
       target,
-      // Preserve the browser's loopback authority for the API origin check.
       changeOrigin: false,
     },
   };

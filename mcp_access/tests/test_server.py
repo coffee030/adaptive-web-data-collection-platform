@@ -557,7 +557,6 @@ def test_stdio_bounded_errors(rest_api):
 
 
 def test_stdio_unavailable_api():
-    # Keep a local port reserved without accepting or serving requests.
     with socket.socket() as reserved:
         reserved.bind(("127.0.0.1", 0))
         base = f"http://127.0.0.1:{reserved.getsockname()[1]}/api/v1"

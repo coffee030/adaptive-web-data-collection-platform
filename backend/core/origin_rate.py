@@ -16,7 +16,6 @@ from redis.retry import Retry
 from .inputs import InputError
 
 MAX_WAIT_SECONDS = 11
-# Longer than the Celery hard limit, including a killed request holder.
 LEASE_MS = 65_000
 
 ACQUIRE = """
