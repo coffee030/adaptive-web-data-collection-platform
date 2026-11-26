@@ -190,6 +190,17 @@ check "Empty Normal workspace" \
     env M4_FRONTEND_PORT="$normal_web" M14_EMPTY_NORMAL=1 M15_EMPTY_NORMAL=1 M12_EMPTY_NORMAL=1 \
     npm --prefix frontend test -- jobs.integration.ts operator.integration.ts topic-collections.integration.ts \
     -g 'fresh Normal database|isolated empty Normal' --workers=1
+company_check() (
+    export HARBOURLINE_SELF_REGISTRATION=1 MARKETING_PARTNER_WORKSPACE=release-company
+    MARKETING_PILOT_PASSWORD="$(openssl rand -hex 32)"
+    MARKETING_CUSTOMER_TOKEN="$(openssl rand -hex 32)"
+    MARKETING_OPERATOR_TOKEN="$(openssl rand -hex 32)"
+    export MARKETING_PILOT_PASSWORD MARKETING_CUSTOMER_TOKEN MARKETING_OPERATOR_TOKEN
+    normal up -d --no-build --wait --wait-timeout 90 api dispatcher worker || return 1
+    M4_FRONTEND_PORT="$normal_web" HARBOURLINE_RESEARCH_TEST_PILOT=1 \
+        npm --prefix frontend test -- campaign-research.integration.ts --workers=1
+)
+check "Company campaign research and financial assumptions" company_check
 if (( ${#failures[@]} )); then
     printf 'FAIL %s\n' "${failures[@]}"
     exit 1
