@@ -90,7 +90,12 @@ class Dispatcher:
             )
             self.jobs._add_event(session, row, "WORKER_LOST", error=error)
             self.jobs.retry(
-                session, row, error, timedelta(seconds=5), kind="RECOVERY_REQUESTED"
+                session,
+                row,
+                error,
+                timedelta(seconds=5),
+                kind="RECOVERY_REQUESTED",
+                delay_from=row.lease_expires_at,
             )
             return True
 

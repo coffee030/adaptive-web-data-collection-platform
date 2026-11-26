@@ -45,7 +45,7 @@ Job creation, Job list, Collection Request child summaries and the MCP status pr
 | Network transport, timeout, temporary DB connection or pool error | 10 seconds, then 20 seconds, at most three claims |
 | HTTP 429 | 30 seconds, then 60 seconds, respecting a later valid Retry-After |
 | HTTP 5xx, including unavailable robots policy | 10 seconds, then 20 seconds, respecting a later valid Retry-After |
-| Lease expiry | At most three claims. Wait 5 seconds if budget remains. |
+| Lease expiry | At most three claims. The next claim is eligible five seconds after the expired lease deadline. A watchdog that observes the loss later uses the same deadline. |
 | HTTP 401 or 403, explicit challenge, unauthorised access, robots denial, or other HTTP 4xx | Terminal failure |
 | Retired or invalid Profile, content and validation errors, Evidence error, and non-transient SQL failure | Existing failed or partial outcome |
 

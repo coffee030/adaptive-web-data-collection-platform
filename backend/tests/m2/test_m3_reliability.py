@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
@@ -38,6 +39,40 @@ def expire(sessions, job_id, field):
 def make_retry_due(sessions, job_id):
     expire(sessions, job_id, JobRow.next_attempt_at)
     expire(sessions, job_id, JobRow.dispatch_due_at)
+
+
+@pytest.mark.parametrize("elapsed", [1, 8])
+def test_recovery_cooldown_is_measured_from_the_lease_deadline(
+    sessions, execution, elapsed
+):
+    executor, job_id = execution
+    executor.jobs.claim(job_id, worker_instance_id=uuid4())
+    with sessions.begin() as session:
+        deadline = session.scalar(
+            update(JobRow)
+            .where(JobRow.id == job_id)
+            .values(
+                lease_expires_at=func.clock_timestamp() - timedelta(seconds=elapsed)
+            )
+            .returning(JobRow.lease_expires_at)
+        )
+    delivered = []
+    dispatcher = Dispatcher(sessions, delivered.append)
+    assert dispatcher.recover_one()
+    recovered = executor.jobs.get(job_id)
+    assert (
+        recovered.next_attempt_at
+        == recovered.dispatch_due_at
+        == deadline + timedelta(seconds=5)
+    )
+    assert dispatcher.dispatch_one() is (elapsed > 5)
+    assert delivered == ([job_id] if elapsed > 5 else [])
+    if elapsed < 5:
+        with pytest.raises(ProfileError, match="not due"):
+            executor.jobs.claim(job_id)
+    else:
+        claimed, _ = executor.jobs.claim(job_id, worker_instance_id=uuid4())
+        assert claimed.execution_attempt == 2
 
 
 def test_failed_dispatch_remains_durable_and_can_be_republished(sessions, execution):

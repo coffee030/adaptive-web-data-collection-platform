@@ -454,6 +454,7 @@ class Jobs:
         *,
         kind: str = "RETRY_SCHEDULED",
         attempt_limit: int | None = None,
+        delay_from: datetime | None = None,
     ) -> Job:
         if row.execution_attempt >= (attempt_limit or self.attempt_limit(session, row)):
             return self._finish(session, row, "failed", error=error)
@@ -461,7 +462,7 @@ class Jobs:
         row.started_at = None
         row.lease_expires_at = None
         row.error = error.model_dump(mode="json")
-        row.next_attempt_at = database_now(session) + delay
+        row.next_attempt_at = (delay_from or database_now(session)) + delay
         row.dispatch_due_at = row.next_attempt_at if row.status == "pending" else None
         self._add_event(session, row, kind, error=error)
         return job_from_row(row)
