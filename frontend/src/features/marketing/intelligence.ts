@@ -149,7 +149,7 @@ interface BriefOptions extends ScopeResult {
   reviewed_facts: string[];
   quoted_deliverables: Deliverable[];
 }
-export const briefOptions = async (mode: DataMode, platform: Platform, signal: AbortSignal) =>
+export const briefOptions = async (mode: DataMode, platform: Platform | '', signal: AbortSignal) =>
   scoped(await apiGet<BriefOptions>(prefix(mode) + '/brief-options' + (platform ? '?platform='+encodeURIComponent(platform) : ''), signal), mode);
 export const creatorDetail = (mode: DataMode, id: string, signal: AbortSignal) =>
   apiGet<CreatorDetail>(prefix(mode) + '/creators/' + encodeURIComponent(id), signal);
@@ -171,7 +171,7 @@ export const processing = async (mode: DataMode, signal: AbortSignal) =>
 export const calculateScenario = (mode: DataMode, input: ScenarioRequest, signal: AbortSignal) =>
   apiPost<ScenarioResult>(prefix(mode) + '/scenarios', input, signal);
 
-export function campaignInput(brief: Brief): CampaignRequest {
+export function campaignFields(brief: Brief) {
   const list = (text?: string) => [...new Set((text ?? '').split(',').map(value => value.trim()).filter(Boolean))];
   const platform = brief.platform.toLowerCase() as Platform;
   const deliverable = brief.deliverable as Deliverable;
@@ -179,29 +179,39 @@ export function campaignInput(brief: Brief): CampaignRequest {
   const language = (brief.language === 'Cantonese' ? 'yue' : brief.language) as Language;
   const required_facts = list(brief.requiredFacts), preferred_facts = list(brief.preferredFacts);
   const category_labels = list(brief.categoryLabels);
-  if (brief.description.length < 2 || !Object.hasOwn(platformOptions, platform) || !Object.hasOwn(deliverableOptions, deliverable)) {
+  return {
+    description: brief.description,
+    objective: brief.objective.trim().toLowerCase() === 'engagement' ? 'engagement' as const : 'awareness' as const,
+    budget_minor: Math.round(brief.budget * 100), currency: 'HKD' as const,
+    platform: Object.hasOwn(platformOptions, platform) ? platform : undefined,
+    deliverable: Object.hasOwn(deliverableOptions, deliverable) ? deliverable : undefined,
+    market: market || undefined, minimum_market_share: brief.minAudience > 0 ? String(brief.minAudience / 100) : undefined,
+    language: Object.hasOwn(languageOptions, language) ? language : undefined,
+    require_language: brief.requireCantonese, required_facts, preferred_facts,
+    minimum_creators: brief.creatorCount, maximum_creators: brief.creatorCount,
+    category_labels: category_labels.length ? category_labels : undefined,
+  };
+}
+
+export function campaignInput(brief: Brief): CampaignRequest {
+  const fields = campaignFields(brief);
+  const { platform, deliverable, market, language, required_facts, preferred_facts, category_labels } = fields;
+  if (brief.description.length < 2 || !platform || !deliverable) {
     throw Error('Enter a campaign description, platform and deliverable.');
   }
   if (brief.creatorCount < 1 || brief.creatorCount > 8) throw Error('Choose between one and eight creators.');
   if (market && !/^[A-Z]{2}$/.test(market)) throw Error('Use Hong Kong or a two-letter market code.');
   if (brief.minAudience > 0 && !market) throw Error('Choose a market for the audience minimum.');
-  if ((language && !Object.hasOwn(languageOptions, language)) || (brief.requireCantonese && !language)) {
+  if ((brief.language || brief.requireCantonese) && !language) {
     throw Error('Choose a supported campaign language.');
   }
   if ([required_facts, preferred_facts].some(facts => facts.length > 10 || facts.some(fact => !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(fact)))) {
     throw Error('Use up to ten comma-separated reviewed fact identifiers in each field.');
   }
-  if (category_labels.length > 9 || category_labels.some(label => label.length > 120)) {
+  if (category_labels && (category_labels.length > 9 || category_labels.some(label => label.length > 120))) {
     throw Error('Use up to nine category labels of 120 characters each.');
   }
-  return {
-    description: brief.description, objective: brief.objective === 'Engagement' ? 'engagement' : 'awareness',
-    budget_minor: Math.round(brief.budget * 100), currency: 'HKD', platform, deliverable,
-    market: market || undefined, minimum_market_share: brief.minAudience > 0 ? String(brief.minAudience / 100) : undefined,
-    language: language || undefined, require_language: brief.requireCantonese, required_facts, preferred_facts,
-    minimum_creators: brief.creatorCount, maximum_creators: brief.creatorCount,
-    category_labels: category_labels.length ? category_labels : undefined,
-  };
+  return { ...fields, platform, deliverable };
 }
 
 export const amount = (minor: number, currency = 'HKD') =>

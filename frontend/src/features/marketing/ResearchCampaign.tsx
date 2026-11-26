@@ -6,6 +6,7 @@ import { useResource } from '../../lib/useResource';
 import {
   amount,
   briefOptions,
+  campaignFields,
   date,
   deliverableOptions,
   languageOptions,
@@ -13,7 +14,7 @@ import {
   type CampaignRequest,
 } from './intelligence';
 import { ResearchFindings, type BusinessBrief, type ResearchReport } from './ResearchFindings';
-import { useMarketing } from './workspace';
+import { useMarketing, type Draft } from './workspace';
 import './research-campaign.css';
 
 type State = 'queued' | 'collecting' | 'analyzing' | 'ready' | 'failed' | 'cancelled';
@@ -322,13 +323,105 @@ function RunDetail({
   );
 }
 
+type BriefSeed = Omit<Partial<BusinessBrief>, 'campaign'> & { campaign?: Partial<CampaignRequest> };
+
+function SavedCampaignBrief({
+  id,
+  onOpen,
+  onNew,
+}: {
+  id: string;
+  onOpen: (id: string) => void;
+  onNew: () => void;
+}) {
+  const { path } = useMarketing();
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      if (!id) throw new ApiError('http', 404);
+      const key = encodeURIComponent(id);
+      const [saved, runs] = await Promise.all([
+        apiGet<{ draft: Draft }>('/marketing/companies/campaigns/' + key, signal),
+        apiGet<Run[]>(route + '?campaign_id=' + key + '&limit=26', signal),
+      ]);
+      const { draft } = saved;
+      const campaign = draft.evaluation ?? campaignFields(draft.brief);
+      const previous = runs.find(
+        (run) => run.brief.campaign.description === campaign.description,
+      )?.brief;
+      const brief: BriefSeed = {
+        ...previous,
+        campaign,
+        product: draft.brief.name || draft.research?.title || previous?.product || '',
+        scenario: draft.scenario ?? previous?.scenario,
+      };
+      return { brief, required: draft.brief.required, preferred: draft.brief.preferred };
+    },
+    [id],
+  );
+  const { result, retry } = useResource(load);
+  if (result.state === 'loading')
+    return (
+      <p role="status" className="rc-message">
+        Opening the saved campaign…
+      </p>
+    );
+  if (result.state === 'error') {
+    const unavailable = [403, 404, 422].includes(result.error.status ?? 0);
+    return (
+      <Panel title={unavailable ? 'Campaign unavailable' : 'Could not open the saved campaign'}>
+        <p role="alert">
+          {unavailable
+            ? 'This campaign link is unavailable in your company workspace.'
+            : result.error.kind === 'timeout'
+              ? 'The company workspace took too long to respond.'
+              : 'The campaign details could not be loaded.'}
+        </p>
+        <div className="rc-actions">
+          {!unavailable && (
+            <button className="studio-secondary" onClick={retry}>
+              Try again
+            </button>
+          )}
+          <Link className="studio-secondary" to={path('campaigns')}>
+            Open company campaigns
+          </Link>
+          <button className="studio-secondary" onClick={onNew}>
+            Start a new brief
+          </button>
+        </div>
+      </Panel>
+    );
+  }
+  const { brief, required, preferred } = result.data;
+  return (
+    <>
+      <BriefForm initial={brief} initialDestination={id} query="" onOpen={onOpen} />
+      {(required || preferred) && (
+        <details className="rc-method">
+          <summary>Campaign notes for manual review</summary>
+          {required && (
+            <p>
+              <strong>Requirements</strong> {required}
+            </p>
+          )}
+          {preferred && (
+            <p>
+              <strong>Preferences</strong> {preferred}
+            </p>
+          )}
+        </details>
+      )}
+    </>
+  );
+}
+
 function BriefForm({
   initial,
   query,
   initialDestination,
   onOpen,
 }: {
-  initial: BusinessBrief | null;
+  initial: BriefSeed | null;
   query: string;
   initialDestination: string | null;
   onOpen: (id: string) => void;
@@ -340,23 +433,26 @@ function BriefForm({
   const [audience, setAudience] = useState(initial?.audience ?? '');
   const [focus, setFocus] = useState(initial?.discovery_focus ?? query.slice(0, 120));
   const [budget, setBudget] = useState(
-    initialCampaign ? String(initialCampaign.budget_minor / 100) : '',
+    initialCampaign?.budget_minor != null ? String(initialCampaign.budget_minor / 100) : '',
   );
-  const [channel, setChannel] = useState<CampaignRequest['platform']>(
-    initialCampaign?.platform ?? 'instagram',
+  const [channel, setChannel] = useState<CampaignRequest['platform'] | ''>(
+    initialCampaign?.platform ?? (initialDestination ? '' : 'instagram'),
   );
-  const [deliverable, setDeliverable] = useState<CampaignRequest['deliverable']>(
-    initialCampaign?.deliverable ?? 'social_post',
+  const [deliverable, setDeliverable] = useState<CampaignRequest['deliverable'] | ''>(
+    initialCampaign?.deliverable ?? (initialDestination ? '' : 'social_post'),
   );
   const [objective, setObjective] = useState<CampaignRequest['objective']>(
     initialCampaign?.objective ?? 'awareness',
   );
   const [alternative, setAlternative] = useState<CampaignRequest['platform'] | ''>(
-    initial?.alternative_platforms[0] ?? '',
+    initial?.alternative_platforms?.[0] ?? '',
+  );
+  const [secondAlternative, setSecondAlternative] = useState<CampaignRequest['platform'] | ''>(
+    initial?.alternative_platforms?.[1] ?? '',
   );
   const [testShare, setTestShare] = useState(String(initial?.test_share ?? 60));
-  const [required, setRequired] = useState(initialCampaign?.required_facts.join(', ') ?? '');
-  const [preferred, setPreferred] = useState(initialCampaign?.preferred_facts.join(', ') ?? '');
+  const [required, setRequired] = useState(initialCampaign?.required_facts?.join(', ') ?? '');
+  const [preferred, setPreferred] = useState(initialCampaign?.preferred_facts?.join(', ') ?? '');
   const [marketShare, setMarketShare] = useState(
     initialCampaign?.minimum_market_share != null
       ? String(100 * Number(initialCampaign.minimum_market_share))
@@ -401,6 +497,8 @@ function BriefForm({
       : []),
     ...otherDrafts(),
   ];
+  if (initialDestination && !destinations.some((item) => item.key === initialDestination))
+    destinations.push({ key: initialDestination, name: initial?.product || 'Saved campaign' });
   const [busy, setBusy] = useState(false);
   const [awaitingSave, setAwaitingSave] = useState<{
     brief: BusinessBrief;
@@ -475,6 +573,14 @@ function BriefForm({
     ];
     const must = terms(required),
       preferences = terms(preferred);
+    if (!channel || !deliverable) {
+      setError('Choose a primary channel and required deliverable for this campaign.');
+      return;
+    }
+    if (question.trim().length > 1000) {
+      setError('Shorten the research question to 1,000 characters.');
+      return;
+    }
     if (Number(minimum) > Number(maximum)) {
       setError('Choose a maximum creator count at least as large as the minimum.');
       return;
@@ -503,26 +609,35 @@ function BriefForm({
       budget_minor: Math.round(Number(budget) * 100),
       currency: 'HKD',
     };
+    const scenario = {
+      ...assumptions,
+      currency: 'HKD' as const,
+      impressions: impressions === '' ? undefined : Number(impressions),
+      click_rate: clickRate === '' ? undefined : String(Number(clickRate) / 100),
+      conversion_rate: conversionRate === '' ? undefined : String(Number(conversionRate) / 100),
+    };
     const brief: BusinessBrief = {
       product: product.trim(),
       audience: audience.trim(),
       discovery_focus: focus.trim() || null,
       test_share: Number(testShare),
-      alternative_platforms: alternative && alternative !== channel ? [alternative] : [],
+      alternative_platforms:
+        alternative && alternative !== channel
+          ? [
+              alternative,
+              ...(secondAlternative &&
+              secondAlternative !== alternative &&
+              secondAlternative !== channel
+                ? [secondAlternative]
+                : []),
+            ]
+          : [],
       campaign,
       discovery_scope: scope,
       max_evidence_age_days: freshDays ? Number(freshDays) : null,
-      scenario:
-        impressions === '' && clickRate === '' && conversionRate === ''
-          ? null
-          : {
-              ...assumptions,
-              currency: 'HKD',
-              impressions: impressions === '' ? undefined : Number(impressions),
-              click_rate: clickRate === '' ? undefined : String(Number(clickRate) / 100),
-              conversion_rate:
-                conversionRate === '' ? undefined : String(Number(conversionRate) / 100),
-            },
+      scenario: Object.entries(scenario).some(([key, value]) => key !== 'currency' && value != null)
+        ? scenario
+        : null,
     };
     if (destination === 'new' && campaignReceipt) {
       const previous =
@@ -542,8 +657,12 @@ function BriefForm({
   }
   return (
     <Panel
-      title="Write a research brief"
-      description="Describe the decision you need to make. Harbourline will check eligible sources and compare options within your budget."
+      title={initialDestination ? 'Research this campaign' : 'Write a research brief'}
+      description={
+        initialDestination
+          ? 'Review your saved campaign details and fill in the remaining research criteria.'
+          : 'Describe the decision you need to make. Harbourline will check eligible sources and compare options within your budget.'
+      }
     >
       <form onSubmit={submit} className="rc-form">
         <label>
@@ -558,9 +677,11 @@ function BriefForm({
             placeholder="Describe your campaign and the evidence you need."
           />
         </label>
-        <button type="button" className="rc-example" onClick={useExample}>
-          Use a Hong Kong dining brief
-        </button>
+        {!initialDestination && (
+          <button type="button" className="rc-example" onClick={useExample}>
+            Use a Hong Kong dining brief
+          </button>
+        )}
         <label>
           Save research to
           <select value={destination} onChange={(e) => setDestination(e.target.value)}>
@@ -621,7 +742,14 @@ function BriefForm({
           </label>
           <label>
             Primary channel
-            <select value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)}>
+            <select
+              required
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as typeof channel)}
+            >
+              <option value="" disabled>
+                Choose a channel
+              </option>
               {Object.entries(platformOptions).map(([key, label]) => (
                 <option key={key} value={key}>
                   {label}
@@ -630,7 +758,10 @@ function BriefForm({
             </select>
           </label>
         </div>
-        <details className="rc-settings">
+        <details
+          className="rc-settings"
+          open={Boolean(initialDestination && !initialCampaign?.deliverable)}
+        >
           <summary>Research scope and alternatives</summary>
           <label>
             Discovery focus
@@ -668,9 +799,13 @@ function BriefForm({
             <label>
               Required deliverable
               <select
+                required
                 value={deliverable}
                 onChange={(e) => setDeliverable(e.target.value as typeof deliverable)}
               >
+                <option value="" disabled>
+                  Choose a deliverable
+                </option>
                 {Object.entries(deliverableOptions).map(([key, label]) => (
                   <option key={key} value={key}>
                     {label}
@@ -695,6 +830,30 @@ function BriefForm({
               </select>
             </label>
           </div>
+          {alternative && alternative !== channel && (
+            <label>
+              Second comparison channel
+              <select
+                value={
+                  secondAlternative === alternative || secondAlternative === channel
+                    ? ''
+                    : secondAlternative
+                }
+                onChange={(event) =>
+                  setSecondAlternative(event.target.value as typeof secondAlternative)
+                }
+              >
+                <option value="">No third channel</option>
+                {Object.entries(platformOptions)
+                  .filter(([key]) => key !== alternative && key !== channel)
+                  .map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
           <label>
             Test allocation (% of full budget)
             <input
@@ -888,6 +1047,7 @@ export function ResearchCampaign() {
   const [initial, setInitial] = useState<BusinessBrief | null>(null);
   const { result: history, retry } = useResource(loadHistory, 0, true, !!company);
   const selected = params.get('run');
+  const campaign = params.get('campaign');
   const open = useCallback(
     (id: string) => {
       setParams({ run: id });
@@ -901,7 +1061,7 @@ export function ResearchCampaign() {
   }
   if (!company)
     return (
-      <main className="rc-page">
+      <section className="rc-page">
         <PageHeader
           title="Campaign research"
           description="Sign in to a company workspace to run research with permitted sources and save your findings."
@@ -909,14 +1069,14 @@ export function ResearchCampaign() {
         <Link className="studio-primary" to={path()}>
           Open company access
         </Link>
-      </main>
+      </section>
     );
   return (
-    <main className="rc-page">
+    <section className="rc-page">
       <PageHeader
         title="Campaign Advisor"
         actions={
-          selected ? (
+          selected || campaign ? (
             <button className="studio-secondary" onClick={() => fresh()}>
               New research
             </button>
@@ -927,12 +1087,14 @@ export function ResearchCampaign() {
         <div>
           {selected ? (
             <RunDetail key={selected} id={selected} onAdjust={fresh} onRefresh={retry} />
+          ) : campaign !== null ? (
+            <SavedCampaignBrief key={campaign} id={campaign} onNew={() => fresh()} onOpen={open} />
           ) : (
             <BriefForm
               key={params.get('q') ?? ''}
               query={params.get('q')?.slice(0, 1000) ?? ''}
               initial={initial}
-              initialDestination={params.get('campaign')}
+              initialDestination={null}
               onOpen={open}
             />
           )}
@@ -966,6 +1128,6 @@ export function ResearchCampaign() {
           )}
         </aside>
       </div>
-    </main>
+    </section>
   );
 }
