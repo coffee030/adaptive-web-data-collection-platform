@@ -14,21 +14,35 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.application.jobs import Jobs, database_now
 from backend.core.contracts import CollectionError
+from backend.marketing.pipeline import CLAIM_WINDOW as MARKETING_CLAIM_WINDOW
+from backend.marketing.pipeline import Pipeline
+from backend.marketing.store import ResearchSettings
 from backend.persistence.database import database_url, make_engine, session_factory
 from backend.persistence.models import JobRow
 
-from .celery_app import TASK, app
+from .celery_app import MARKETING_TASK, TASK, app
 
 LOGGER = logging.getLogger(__name__)
 POLL_SECONDS = 1
 BATCH_SIZE = 20
 DISPATCH_RETRY = timedelta(seconds=5)
 CLAIM_WINDOW = timedelta(seconds=120)
+MARKETING_POLL_SECONDS = 5
+MARKETING_CLEANUP_SECONDS = 60
 
 
 def publish_job(job_id: UUID) -> None:
     app.send_task(
         TASK, args=[str(job_id)], retry=False, expires=CLAIM_WINDOW.total_seconds()
+    )
+
+
+def publish_marketing(run_id: UUID) -> None:
+    app.send_task(
+        MARKETING_TASK,
+        args=[str(run_id)],
+        retry=False,
+        expires=MARKETING_CLAIM_WINDOW.total_seconds(),
     )
 
 
@@ -117,12 +131,18 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
     engine = make_engine(database_url())
-    dispatcher = Dispatcher(session_factory(engine))
+    sessions = session_factory(engine)
+    dispatcher = Dispatcher(sessions)
+    marketing = Pipeline(sessions, ResearchSettings.load())
     try:
         if args.once:
             dispatcher.poll()
+            marketing.maintain()
+            marketing.dispatch(publish_marketing)
             return
         LOGGER.info("Collection dispatcher polling PostgreSQL")
+        marketing_due = 0.0
+        cleanup_due = 0.0
         while True:
             try:
                 dispatcher.poll()
@@ -130,6 +150,24 @@ def main() -> None:
                 LOGGER.warning(
                     "Dispatcher database operation failed (%s)", type(error).__name__
                 )
+            if monotonic() >= marketing_due:
+                interval = (
+                    MARKETING_POLL_SECONDS
+                    if marketing.config.enabled
+                    else MARKETING_CLEANUP_SECONDS
+                )
+                marketing_due = monotonic() + interval
+                try:
+                    purge = monotonic() >= cleanup_due
+                    marketing.maintain(purge=purge)
+                    if purge:
+                        cleanup_due = monotonic() + MARKETING_CLEANUP_SECONDS
+                    marketing.dispatch(publish_marketing)
+                except SQLAlchemyError as error:
+                    LOGGER.warning(
+                        "Marketing dispatcher database operation failed (%s)",
+                        type(error).__name__,
+                    )
             sleep(POLL_SECONDS)
     except KeyboardInterrupt:
         pass
