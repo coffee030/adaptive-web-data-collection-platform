@@ -82,6 +82,7 @@ if __name__ == "__main__":
             "src/assets/workspace-icon.png",
             "public/licenses/Geist.txt",
             "public/licenses/Tremor.txt",
+            "public/licenses/Tabler.txt",
         ),
         (
             "public/.env",

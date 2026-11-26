@@ -74,7 +74,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'harbourline-installation.json',
           source: JSON.stringify({ application: 'Harbourline', workspace }) });
-        for (const file of ['Geist.txt', 'Tremor.txt', 'TailAdmin.txt']) {
+        for (const file of ['Geist.txt', 'Tremor.txt', 'TailAdmin.txt', 'Tabler.txt']) {
           this.emitFile({ type: 'asset', fileName: 'licenses/' + file, source: readFileSync('public/licenses/' + file, 'utf8') });
         }
       },
