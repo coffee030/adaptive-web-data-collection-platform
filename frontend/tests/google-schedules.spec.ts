@@ -117,6 +117,14 @@ test('retain last verified regional evidence through a publisher stop, preserve 
   await expect(first.getByRole('link', { name: '香港餐飲展, validated record' })).toHaveAttribute('href', '/records/' + record);
   await expect(first.getByRole('link', { name: 'Normalized evidence for 香港餐飲展' })).toHaveAttribute('href', '/evidence/' + evidence);
   await expect(first.getByRole('link', { name: 'Collection job for 香港餐飲展' })).toHaveAttribute('href', '/collection-jobs/' + job);
+  for (const [width, height, minimum] of [[1440, 960, 32], [390, 844, 44], [320, 640, 44]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const link of await first.getByRole('link').all()) {
+      const bounds = await link.boundingBox();
+      expect(bounds?.width).toBeGreaterThanOrEqual(minimum);
+      expect(bounds?.height).toBeGreaterThanOrEqual(minimum);
+    }
+  }
   await expect(first.getByRole('cell', { name: /2K\+.*2,000/ })).toBeVisible();
   await expect(first.getByText('Lower bound 2,000')).toBeVisible();
   await expect(first.getByText('Traffic observed (UTC)', { exact: false }).first()).toBeVisible();
