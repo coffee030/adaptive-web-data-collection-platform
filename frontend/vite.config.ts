@@ -14,7 +14,7 @@ function approvalBoundary(enabled: boolean): Plugin {
         return;
       }
       const profileApproval = /^\/api\/v1\/sources\/[^/]+\/versions\/[^/]+\/approve\/?$/.test(path);
-      const trendApproval = request.method === 'POST' && /^\/api\/v1\/trends\/wikimedia\/provider\/?$/.test(path);
+      const trendApproval = request.method === 'POST' && /^\/api\/v1\/trends\/(?:wikimedia|google)\/provider\/?$/.test(path);
       const bindingChange = request.method === 'POST'
         && /^\/api\/v1\/topics\/[^/]+\/bindings(?:\/[^/]+\/(?:approve|disable))?\/?$/.test(path);
       if (!profileApproval && !bindingChange && !trendApproval) {

@@ -49,9 +49,17 @@ def authorized(session, state, *, lock=False):
 
 
 def provider_status(session, state):
+    source = (
+        session.get(SourceRow, state.source_id)
+        if state.source_id
+        else session.scalar(
+            select(SourceRow).where(SourceRow.request_key == rss.SOURCE_KEY)
+        )
+    )
     return {
         "authorized": authorized(session, state),
-        "source_id": state.source_id,
+        "source_id": source.id if source else None,
+        "source_approval_status": source.approval_status if source else None,
         "profile_id": state.profile_id,
         "policy": rss.POLICY,
         "blocked": state.blocked,
@@ -371,7 +379,10 @@ def record_result(sessions, claim, snapshot=None, rows=None, error=None):
             failure(state, error, now)
         if row.claim_id != claim.id:
             return
+        expired = row.claimed_at + CLAIM_LEASE <= now
         row.claim_id = row.claimed_at = None
+        if expired:
+            return
         if not authorized(session, state, lock=True) or (
             state.source_id,
             state.profile_id,

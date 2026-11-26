@@ -191,6 +191,7 @@ def test_cursor_changes_only_after_verified_core_result_and_survives_pause(
     assert executor.execute(UUID(pending)).status == "failed"
     schedule.poll(sessions)
     call(client, "GET", "/schedules/US/snapshot", 403)
+    assert call(client, "GET", "/provider")["source_approval_status"] == "revoked"
     assert (
         client.get("/api/v1/records/" + first["events"][0]["record_id"]).status_code
         == 200
@@ -221,9 +222,11 @@ def test_lost_claim_is_fenced_and_publisher_cooldown_survives_restart(
         row.claimed_at = (
             database_now(session) - schedule.CLAIM_LEASE - timedelta(seconds=1)
         )
+    stale = feed("US", 1, [("Stale worker", "200+")])
+    schedule.record_result(sessions, old, stale, rss.observations(stale))
+    assert total_jobs(sessions) == 0 and schedule_row(client)["claimed_at"] is None
     new = schedule.claim_next(sessions)
     assert new.region == old.region and old.id != new.id
-    stale = feed("US", 1, [("Stale worker", "200+")])
     schedule.record_result(sessions, old, stale, rss.observations(stale))
     assert total_jobs(sessions) == 0 and schedule_row(client)["claimed_at"]
 
@@ -253,3 +256,49 @@ def test_lost_claim_is_fenced_and_publisher_cooldown_survives_restart(
     set_active(client, False)
     call(client, "PATCH", "/schedules/US", 403, {"active": True})
     assert total_jobs(sessions) == 0
+
+
+def test_setup_reuses_the_prior_cli_approved_source_and_profile(client, monkeypatch):
+    source = client.post(
+        "/api/v1/sources",
+        json={
+            "source_name": rss.ATTRIBUTION,
+            "adapter_type": "csv",
+            "allowed_datasets": [rss.DATASET],
+            "permission_reference": rss.POLICY,
+            "approval_status": "approved",
+            "request_key": str(rss.SOURCE_KEY),
+        },
+    ).json()
+    versions = f"/api/v1/sources/{source['source_id']}/versions"
+    draft = client.post(
+        versions, json={"configuration": rss.MAPPING.model_dump(mode="json")}
+    ).json()
+    version = versions + "/" + draft["profile_version_id"]
+    input_body = rss.entry(feed("US", 1, [("Existing", "100+")])).model_dump(
+        mode="json"
+    )
+    report = client.post(version + "/validate", json=input_body).json()
+    assert report["passed"]
+    approved = client.post(
+        version + "/approve",
+        json={
+            "approver": "Existing operator",
+            "report_id": report["report_id"],
+            "config_hash": report["config_hash"],
+        },
+    )
+    assert approved.status_code == 200
+
+    def no_new_capture(_):
+        pytest.fail("The deployed CLI approval already contains a validated sample")
+
+    monkeypatch.setattr(rss, "capture", no_new_capture)
+    body = {"region": "US", "approver": "Schedule operator"}
+    status = call(client, "GET", "/provider")
+    assert status["source_approval_status"] == "approved" and not status["authorized"]
+    result = call(client, "POST", "/provider", body=body)
+    assert result["authorized"] and result["source_id"] == str(
+        UUID(source["source_id"])
+    )
+    assert result["profile_id"] == str(UUID(draft["profile_version_id"]))
