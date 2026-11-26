@@ -1,0 +1,20 @@
+services:
+  api:
+    environment:
+      MARKETING_MODEL_DIR: /opt/marketing-granite
+    volumes:
+      - type: bind
+        source: ${MARKETING_MODEL_HOST_DIR:?set the verified model directory}
+        target: /opt/marketing-granite
+        read_only: true
+  worker:
+    environment:
+      MARKETING_MODEL_DIR: /opt/marketing-granite
+    volumes:
+      - type: bind
+        source: ${MARKETING_MODEL_HOST_DIR:?set the verified model directory}
+        target: /opt/marketing-granite
+        read_only: true
+  dispatcher:
+    environment:
+      MARKETING_MODEL_DIR: /opt/marketing-granite

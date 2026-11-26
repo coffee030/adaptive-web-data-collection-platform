@@ -57,6 +57,7 @@ For a direct HTML page or a CSV dataset, open **Collection Jobs → Single-sourc
 ## Documentation
 
 - [Marketing M1 backend and research API](docs/contracts/Marketing-M1-youtube-research.md)
+- [Marketing M2 intelligence, onboarding, and frontend contracts](docs/contracts/Marketing-M2-intelligence.md)
 - [Topic collection and article history](docs/contracts/M8-data-identity-collection-management.md)
 - [Windows setup and troubleshooting](docs/setup/Windows-One-Click-Setup.md)
 - [Example data and manual Docker Compose setup](docs/demo/M5.5-dashboard-demo-runbook.md)

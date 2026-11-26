@@ -10,6 +10,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.application.execution import JobExecutor
 from backend.core.evidence import LocalEvidenceStore
 from backend.core.profiles import ProfileError
+from backend.intelligence.indexing import Indexing
+from backend.intelligence.store import Config as IntelligenceConfig
 from backend.marketing.pipeline import Pipeline
 from backend.marketing.store import ResearchSettings
 from backend.persistence.database import (
@@ -20,7 +22,7 @@ from backend.persistence.database import (
     settings,
 )
 
-from .celery_app import MARKETING_TASK, TASK, app, worker_instance_id
+from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, TASK, app, worker_instance_id
 
 LOGGER = logging.getLogger(__name__)
 
@@ -82,3 +84,24 @@ def execute_youtube_run(run_id: str) -> None:
             "Marketing run %s database error (%s)", run_uuid, type(error).__name__
         )
         raise RuntimeError("Marketing run state could not be confirmed") from None
+
+
+@lru_cache(maxsize=1)
+def intelligence_indexer() -> Indexing:
+    return Indexing(
+        session_factory(make_engine(database_url())), IntelligenceConfig.load()
+    )
+
+
+@app.task(name=INTELLIGENCE_TASK)
+def index_intelligence_dataset(dataset_id: str, claim: str) -> None:
+    try:
+        dataset_uuid, token = UUID(dataset_id), UUID(claim)
+    except (ValueError, TypeError, AttributeError):
+        LOGGER.warning("Discarded intelligence message with an invalid identity")
+        return
+    try:
+        intelligence_indexer().execute(dataset_uuid, token)
+    except SQLAlchemyError as error:
+        LOGGER.warning("Intelligence index database error (%s)", type(error).__name__)
+        raise RuntimeError("Intelligence index state could not be confirmed") from None

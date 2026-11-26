@@ -2,9 +2,11 @@
 !alembic.ini
 !backend/cli.py
 !backend/requirements-runtime.txt
+!backend/requirements-marketing-onnx.txt
 !backend/api/**/*.py
 !backend/application/**/*.py
 !backend/core/**/*.py
+!backend/intelligence/**/*.py
 !backend/marketing/**/*.py
 !backend/migrations/**/*.py
 !backend/migrations/script.py.mako

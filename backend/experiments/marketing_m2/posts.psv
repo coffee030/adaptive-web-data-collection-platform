@@ -1,0 +1,65 @@
+post_id|creator_id|language|labels|text
+p01|c01|yue|dining,budget|荃灣收工醫肚，呢間街坊粉麵檔四十蚊有找，湯底仲可以走辣。排隊十分鐘就有位。
+p02|c01|zh-Hant|dining,family|大圍小店有兒童椅和寬敞座位。實試推嬰兒車進店，午市輪候約五分鐘。
+p03|c01|mix|dining,budget|Sham Shui Po lunch run：叫咗兩款蒸飯，加埋飲品人均 $48，學生放學行過都啱。
+p04|c02|en|dining,lifestyle|A linen-tablecloth tasting menu in Central with wine pairings, tiny courses and a four-figure bill for two.
+p05|c02|zh-Hant|dining|訪問粵菜主廚，拆解炭火燒味的肉質與醃料，附餐廳八道菜套餐資料。
+p06|c02|yue|dining|尖沙咀酒店週末飲茶，介紹點心同茶位收費。成餐坐得舒服，不過埋單唔平。
+p07|c03|yue|beauty|塊面一轉天氣就紅同㷫。我揀冇香味、成分簡單嘅保濕霜，連續搽兩星期記低泛紅變化。
+p08|c03|en|beauty|Three unscented barrier creams on reactive skin. I tracked stinging and patch-tested each before the full wear trial.
+p09|c03|zh-Hant|beauty|比較清爽型與滋潤型乳液，附成分表和冷氣環境下的乾燥紀錄。
+p10|c04|mix|tech,budget|$250 USB-C hub 真係頂得順 remote work？用部舊 laptop 試 HDMI、過熱同充電，附平價替代。
+p11|c04|yue|tech,budget|唔使換新機：兩百蚊 SSD 幫舊 notebook 開機快咗幾多？逐項計埋價錢同埋安裝時間。
+p12|c04|en|tech,budget|Inexpensive desk upgrade: a wired keyboard, laptop stand and second-hand monitor tested during a full week of remote calls.
+p13|c05|en|tech|Flagship mirrorless camera review with high-bit-rate video, premium lenses and a sponsored launch event.
+p14|c05|zh-Hant|tech|實測旗艦顯示卡的光線追蹤，組裝高階遊戲電腦，預算一萬八千港元。
+p15|c05|mix|tech|Luxury wireless ANC headphones unboxing；開箱有降噪 demo，但價錢追求旗艦定位。
+p16|c06|zh-Hant|family,outdoors|沙田兒童單車路線沿河平坦，有洗手間和中途退出點。三歲孩子可在草地休息。
+p17|c06|yue|family,lifestyle|落雨帶細路去社區中心整紙燈籠，講清楚報名步驟同埋有冇位泊 BB 車。
+p18|c06|en|family,outdoors|Step-free waterfront outing with a preschooler, shade breaks and a gentle route that fits a Sunday morning.
+p19|c07|mix|outdoors|Sunrise ridge hike：摸黑行急斜碎石上頂，路窄冇欄，建議有經驗行山友先好去。
+p20|c07|yue|outdoors|攀澗裝備檢查，呢段石面瀡到踢腳，一定要有領隊同識睇水勢，唔適合新手。
+p21|c07|en|outdoors|Fastpacking route with exposed scrambling, a steep descent and no water stops for five hours.
+p22|c08|zh-Hant|lifestyle,sustainability,budget|在二手市集用不超過三百元配搭通勤服，列出改衣和保養費用。
+p23|c08|mix|lifestyle,sustainability,budget|Capsule wardrobe 唔一定買新衫：行咗兩間 thrift store，執到三件返工著嘅 basic。
+p24|c08|en|lifestyle,sustainability,budget|A budget workwear capsule from pre-loved pieces. Each price and repair cost is itemized.
+p25|c09|yue|lifestyle|名牌袋試揹，講皮革同手工。廿幾萬嘅收藏版主要襯出席晚宴。
+p26|c09|en|lifestyle|Designer fragrance launch with a bright floral drydown, presented alongside a luxury accessories edit.
+p27|c09|zh-Hant|lifestyle|新一季設計師晚裝造型，從秀場到品牌貴賓預覽，沒有平價單品。
+p28|c10|en|dining,lifestyle|I compared three Hong Kong pourover bars, from fruity washed coffee to a deeper house blend.
+p29|c10|mix|dining,lifestyle|Coffee crawl 落雨照去：三間小店試 espresso 同手沖，記低沖煮法、座位同豆香。
+p30|c10|zh-Hant|dining|訪問烘豆店主，示範家用手沖的水溫與研磨粗細，附咖啡豆風味對照。
+p31|c11|yue|lifestyle,tech|講返工桌面收納，我拆咗部舊顯示器換底座，慳返空間但冇做價錢比較。
+p32|c11|en|lifestyle|A home reset: folding methods, pantry labels, and a renter-safe way to arrange shelves.
+p33|c11|mix|sustainability,tech,budget|Repair cafe：用 $20 零件救返舊電風扇，師傅示範換掣，仲解釋點樣避開整壞摩打。
+p34|c11|zh-Hant|lifestyle|租住單位收納改造，示範可拆卸層板，並比較幾種無痕固定方式。
+p35|c12|zh-Hant|dining|九龍城三款不含肉類的午餐，逐一問店家湯底和魚露，整理全素選擇。
+p36|c12|mix|dining,sustainability|Plant-based lunch spots：有兩間真係 vegan，另有一間用咗魚露，我問清楚先落單。
+p37|c12|en|dining|Four vegetarian café lunches with a note on which dishes are vegan and how each kitchen handles shared cookware.
+p38|c13|en|beauty|SPF reapplication over makeup during a humid commute, with finish and pilling checks.
+p39|c13|zh-Hant|beauty|以三款有香味的底妝作半臉持妝測試，重點是高溫下的妝效與遮瑕。
+p40|c13|yue|beauty|成日焗住口罩容易出油，實試三款防曬夠唔夠薄，冇跟蹤敏感或泛紅。
+p41|c14|en|sustainability,family|A neighborhood repair meetup teaches families to fix toys and lamps instead of replacing them. Children observe while adults handle tools.
+p42|c14|yue|sustainability,budget|拎把壞遮去社區維修站，義工換咗粒鉚釘，十蚊物料費就整得返。
+p43|c14|zh-Hant|sustainability,lifestyle|記錄社區舊物交換的參加流程，附重用小家電、驗收注意事項及捐贈資訊。
+p44|c15|en|family,dining|Stroller access and high chairs at three Kowloon brunch spots. A map flags steps and space beside tables.
+p45|c15|mix|family,dining|Kids menu 真係有得揀？實測推車入三間茶餐廳，記低有冇兒童餐椅同走廊夠唔夠闊。
+p46|c15|zh-Hant|family,lifestyle|親子圖書館比較，整理幼兒故事活動和無障礙出入口，附洗手間位置。
+p47|c16|en|finance,budget|A plain-language guide to tracking household spending and building a small emergency fund. No investment picks.
+p48|c16|mix|finance,budget|學生 allowance 點分配？用 spreadsheet 實試記低食飯同搭車使費，冇推介餐廳。
+p49|c16|zh-Hant|finance,tech|比較記帳應用程式的匯出格式和權限，內容聚焦個人預算管理。
+p50|c17|en|outdoors,lifestyle|Low-effort urban nature walks: flat shade-covered paths, benches every few minutes, and an MTR exit nearby.
+p51|c17|yue|outdoors,family|一家大細沿城門河行平路，有位坐有廁所，細路行攰可以就近搭車走。
+p52|c17|zh-Hant|outdoors|初學者郊遊路線以短途平緩路段為主，列出交通和中途退出點。
+p53|c18|mix|lifestyle,dining|Sustainable packaging 展覽：植物纖維餐盒 demo，場內冇提供食物。
+p54|c18|en|sustainability,lifestyle|I toured a compostable packaging exhibition. The examples were utensils, mailers and takeout boxes.
+p55|c18|zh-Hant|sustainability|社區回收工作坊介紹廚餘堆肥和垃圾分類，沒有二手衣物或維修服務。
+p56|c19|yue|dining,budget|想平平哋食晏，深水埗呢個兩餸飯四十八蚊，揀餸覆蓋唔同口味。收工時間會排隊。
+p57|c19|en|dining,budget|Lunch around the wet market for under HK$55. Cash-only rice stalls and a quick-service noodle counter.
+p58|c19|zh-Hant|dining,budget|學生用餐日記，依區域列出五十元以內的快餐和街坊小店。
+p59|c20|en|beauty,lifestyle|An unscented laundry detergent comparison for sensitive fabric care, with wash temperatures and stain removal scores.
+p60|c20|mix|beauty,lifestyle|Scent-free home routine：洗衣液同清潔噴霧點揀，只講家居清潔，冇試護膚品。
+p61|c20|zh-Hant|lifestyle|測試衣物去漬劑與柔順劑，不含香精的配方在這次清洗最少留氣味。
+p62|c03|mix|beauty|Fragrance-free face sunscreen：搽完四個鐘睇紅唔紅，底霜前薄薄一層 patch test。
+p63|c17|mix|outdoors,family|Easy walk with kids：由地鐵站行入海濱，BB 車過到，海旁夠位歇一歇。
+p64|c08|yue|lifestyle,sustainability,budget|執二手返工衫買少啲，兩百零蚊搞掂恤衫同西褲，教你睇磨損同改褲腳。

@@ -9,6 +9,7 @@ from fastapi.routing import APIRoute
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
+from backend.intelligence.store import partner_token
 from backend.persistence.database import settings
 
 from .contracts import Account, Capability, ChannelId, DiscoveryResult, Purpose, Run
@@ -63,8 +64,12 @@ Operator = Annotated[ResearchStore, Depends(operator_store)]
 
 
 @router.get("/capabilities")
-def capabilities() -> Capability:
-    return Capability()
+def capabilities(request: Request) -> Capability:
+    config = request.app.state.intelligence.config
+    return Capability(
+        customer_intelligence="available" if partner_token(config) else "unavailable",
+        demo_intelligence="available" if config.demo_enabled else "unavailable",
+    )
 
 
 @router.post(
