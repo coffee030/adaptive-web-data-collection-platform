@@ -32,6 +32,12 @@ class JobExecutor:
 
     def execute(self, job_id: UUID, *, worker_instance_id: UUID | None = None) -> Job:
         job, entry = self.jobs.claim(job_id, worker_instance_id=worker_instance_id)
+        if worker_instance_id is not None:
+            with self.jobs.maintain_worker_lease(job):
+                return self._execute_claim(job, entry)
+        return self._execute_claim(job, entry)
+
+    def _execute_claim(self, job: Job, entry: dict) -> Job:
         try:
             result = self._run(job, entry)
         except ProfileError as error:
@@ -39,7 +45,9 @@ class JobExecutor:
         except (DBAPIError, PoolTimeoutError) as error:
             return self._fail(job, self._database_error(error))
         except Exception as error:  # noqa: BLE001 - persist an unexpected runner failure
-            LOGGER.error("Job %s runner failed with %s", job_id, type(error).__name__)
+            LOGGER.error(
+                "Job %s runner failed with %s", job.job_id, type(error).__name__
+            )
             return self._fail(
                 job,
                 CollectionError(
@@ -52,7 +60,9 @@ class JobExecutor:
             return self._fail(job, CollectionError(code=error.code, message=str(error)))
         except SQLAlchemyError as error:
             LOGGER.error(
-                "Job %s could not publish results (%s)", job_id, type(error).__name__
+                "Job %s could not publish results (%s)",
+                job.job_id,
+                type(error).__name__,
             )
             return self._fail(job, self._database_error(error))
 

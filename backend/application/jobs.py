@@ -2,11 +2,14 @@
 
 import hashlib
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timedelta
+from threading import Event, Thread
 from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.contracts import (
@@ -16,7 +19,7 @@ from backend.core.contracts import (
     canonical_json,
 )
 from backend.core.profiles import ProfileError, ProfileRepository
-from backend.persistence.models import EventRow, JobRow
+from backend.persistence.models import EventRow, JobRow, WorkerPresenceRow
 from backend.persistence.profiles import (
     ProfileStorage,
     profile_from_row,
@@ -40,6 +43,8 @@ ATTEMPT_EVENTS = frozenset(
     }
 )
 LEASE_DURATION = timedelta(seconds=90)
+WORKER_LEASE = timedelta(seconds=30)
+RENEWAL_SECONDS = 10
 MAX_ATTEMPTS = MAX_JOB_ATTEMPTS
 LOGGER = logging.getLogger(__name__)
 
@@ -73,6 +78,8 @@ class Job(Contract):
 class JobDetail(Job):
     latest_claim_worker_instance_id: UUID | None = None
     latest_claim_execution_origin: ExecutionOrigin | None = None
+    latest_worker_heartbeat_at: datetime | None = None
+    latest_worker_offline_detected_at: datetime | None = None
 
 
 class ExecutionEvent(Contract):
@@ -193,7 +200,12 @@ class Jobs:
 
     def detail(self, job_id: UUID) -> JobDetail:
         query = (
-            select(JobRow, EventRow.worker_instance_id, EventRow.execution_origin)
+            select(
+                JobRow,
+                EventRow.worker_instance_id,
+                EventRow.execution_origin,
+                WorkerPresenceRow,
+            )
             .outerjoin(
                 EventRow,
                 and_(
@@ -202,17 +214,27 @@ class Jobs:
                     EventRow.kind == "CLAIMED",
                 ),
             )
+            .outerjoin(
+                WorkerPresenceRow,
+                WorkerPresenceRow.instance_id == EventRow.worker_instance_id,
+            )
             .where(JobRow.id == job_id)
         )
         with self.sessions() as session:
             match = session.execute(query).one_or_none()
             if match is None:
                 raise ProfileError("job_not_found", "Collection job does not exist")
-            row, worker, origin = match
+            row, worker, origin, presence = match
             return JobDetail(
                 **job_from_row(row).model_dump(),
                 latest_claim_worker_instance_id=worker,
                 latest_claim_execution_origin=origin,
+                latest_worker_heartbeat_at=presence.last_heartbeat_at
+                if presence
+                else None,
+                latest_worker_offline_detected_at=presence.offline_detected_at
+                if presence
+                else None,
             )
 
     def list_jobs(
@@ -287,7 +309,9 @@ class Jobs:
             row.status = "running"
             row.execution_attempt += 1
             row.started_at = now
-            row.lease_expires_at = now + LEASE_DURATION
+            row.lease_expires_at = now + (
+                WORKER_LEASE if worker_instance_id else LEASE_DURATION
+            )
             row.dispatch_due_at = None
             row.next_attempt_at = None
             row.error = None
@@ -298,6 +322,42 @@ class Jobs:
                 "direct" if worker_instance_id is None else "worker"
             )
             return job_from_row(row), row.input_payload
+
+    def renew(self, job_id: UUID, attempt: int) -> bool:
+        with self.sessions.begin() as session:
+            row = self._get_row(session, job_id, lock=True)
+            now = database_now(session)
+            if (
+                row.status != "running"
+                or row.execution_attempt != attempt
+                or row.lease_expires_at <= now
+            ):
+                return False
+            row.lease_expires_at = max(row.lease_expires_at, now + WORKER_LEASE)
+            return True
+
+    @contextmanager
+    def maintain_worker_lease(self, job: Job):
+        stopped = Event()
+
+        def maintain():
+            while not stopped.wait(RENEWAL_SECONDS):
+                try:
+                    if not self.renew(job.job_id, job.execution_attempt):
+                        return
+                except SQLAlchemyError as error:
+                    LOGGER.warning(
+                        "Job %s lease renewal failed (%s)",
+                        job.job_id,
+                        type(error).__name__,
+                    )
+
+        thread = Thread(target=maintain, name="collection-lease-renewal", daemon=True)
+        thread.start()
+        try:
+            yield
+        finally:
+            stopped.set()
 
     @staticmethod
     def _get_row(session: Session, job_id: UUID, *, lock: bool = False) -> JobRow:

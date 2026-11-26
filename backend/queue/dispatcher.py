@@ -29,6 +29,7 @@ from backend.persistence.models import JobRow
 from backend.trends.service import poll as poll_wikimedia
 
 from .celery_app import INTELLIGENCE_TASK, MARKETING_TASK, TASK, app
+from .presence import WATCHDOG_SECONDS, detect_offline
 
 LOGGER = logging.getLogger(__name__)
 POLL_SECONDS = 1
@@ -68,6 +69,7 @@ class Dispatcher:
         self.jobs = Jobs(sessions)
         self.publish = publish
         self.broker_resume_at = 0.0
+        self.next_presence_check = 0.0
 
     def recover_one(self) -> bool:
         with self.jobs.sessions.begin() as session:
@@ -130,6 +132,9 @@ class Dispatcher:
             return True
 
     def poll(self) -> None:
+        if monotonic() >= self.next_presence_check:
+            self.next_presence_check = monotonic() + WATCHDOG_SECONDS
+            detect_offline(self.jobs.sessions)
         for _ in range(BATCH_SIZE):
             if not self.recover_one():
                 break

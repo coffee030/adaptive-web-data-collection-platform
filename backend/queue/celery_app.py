@@ -1,11 +1,14 @@
 """Celery transport settings for the collection queue."""
 
 import logging
+from threading import Event, Thread
 from uuid import UUID, uuid4
 
 from celery import Celery, signals
 
 from backend.persistence.database import settings
+
+from .presence import heartbeat_loop
 
 QUEUE = "collection"
 TASK = "collection.execute_job"
@@ -15,6 +18,7 @@ TASK_TIME_LIMIT = 60
 VISIBILITY_TIMEOUT = 180
 LOGGER = logging.getLogger(__name__)
 _worker_instance_id: UUID | None = None
+_heartbeat_stop: Event | None = None
 
 app = Celery(
     "collection",
@@ -61,5 +65,23 @@ def worker_instance_id() -> UUID:
 
 @signals.worker_ready.connect
 def _log_worker_identity(sender, **kwargs) -> None:
+    global _heartbeat_stop
     if sender.app is app:
-        LOGGER.info("Collection Worker instance ID: %s", worker_instance_id())
+        instance = worker_instance_id()
+        LOGGER.info("Collection Worker instance ID: %s", instance)
+        if _heartbeat_stop is None:
+            _heartbeat_stop = Event()
+            Thread(
+                target=heartbeat_loop,
+                args=(instance, _heartbeat_stop),
+                name="collection-worker-heartbeat",
+                daemon=True,
+            ).start()
+
+
+@signals.worker_shutdown.connect
+def _stop_heartbeat(sender, **kwargs) -> None:
+    global _heartbeat_stop
+    if getattr(sender, "app", None) is app and _heartbeat_stop is not None:
+        _heartbeat_stop.set()
+        _heartbeat_stop = None

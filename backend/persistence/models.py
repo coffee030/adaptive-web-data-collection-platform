@@ -12,6 +12,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class WorkerPresenceRow(Base):
+    __tablename__ = "worker_presence"
+
+    instance_id: Mapped[UUID] = mapped_column(primary_key=True)
+    last_heartbeat_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True))
+    offline_detected_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True)
+    )
+
+
 class Timestamps:
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now()

@@ -103,8 +103,13 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
     executor, job_id = execution
     worker_a, worker_b = uuid4(), uuid4()
     old, entry = executor.jobs.claim(job_id, worker_instance_id=worker_a)
+    assert (old.lease_expires_at - old.started_at).total_seconds() == 30
+    assert executor.jobs.renew(job_id, old.execution_attempt)
+    renewed = executor.jobs.get(job_id).lease_expires_at
+    assert renewed > old.lease_expires_at
     stale_result = executor._run(old, entry)
     expire(sessions, job_id, JobRow.lease_expires_at)
+    assert not executor.jobs.renew(job_id, old.execution_attempt)
     with caplog.at_level("INFO"):
         assert executor._publish(old, stale_result).status == "running"
         assert Dispatcher(sessions).recover_one()
@@ -112,6 +117,8 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
             executor.jobs.claim(job_id)
         make_retry_due(sessions, job_id)
         current, entry = executor.jobs.claim(job_id, worker_instance_id=worker_b)
+        assert not executor.jobs.renew(job_id, old.execution_attempt)
+        assert executor.jobs.get(job_id).lease_expires_at == current.lease_expires_at
         assert current.execution_attempt == 2
         assert executor._publish(old, stale_result) == current
         assert (
@@ -141,6 +148,8 @@ def test_expired_attempt_cannot_publish_or_fail_a_new_claim(
     assert detail.json() == final.model_dump(mode="json") | {
         "latest_claim_worker_instance_id": str(worker_b),
         "latest_claim_execution_origin": "worker",
+        "latest_worker_heartbeat_at": None,
+        "latest_worker_offline_detected_at": None,
     }
     assert [
         (

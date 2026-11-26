@@ -105,6 +105,8 @@ def test_job_api_creates_a_pending_job(pg_engine, tmp_path, job_setup):
         assert client.get(url).json() == job | {
             "latest_claim_worker_instance_id": None,
             "latest_claim_execution_origin": None,
+            "latest_worker_heartbeat_at": None,
+            "latest_worker_offline_detected_at": None,
         }
         assert [event["status"] for event in client.get(url + "/events").json()] == [
             "pending"
