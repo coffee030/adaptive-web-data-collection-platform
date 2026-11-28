@@ -22,6 +22,7 @@ export function lockOperator() {
   operatorCredential = '';
   window.dispatchEvent(new Event('harbourline-operator-locked'));
 }
+export function getCompanyScope() { return activeCompany; }
 export function setCompanyScope(id: string | undefined) { activeCompany = id; }
 
 async function responseError(response: Response) {
@@ -122,7 +123,8 @@ async function request<T>(path: string, signal: AbortSignal, init?: RequestInit,
       const problem = await responseError(response);
       if (activeOperatorRequest && sentCredential === operatorCredential &&
           (problem.code === 'pilot_operator_login' || problem.code === 'operator_required')) lockOperator();
-      if (companyScoped && activeCompany && problem.code === 'company_login_required') {
+      if (companyScoped && activeCompany && companyHeader['X-Harbourline-Company'] === activeCompany &&
+          (problem.code === 'company_login_required' || problem.code === 'company_changed')) {
         window.dispatchEvent(new Event('company-session'));
       }
       throw problem;

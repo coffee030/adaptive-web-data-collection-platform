@@ -80,7 +80,7 @@ export interface CampaignRequest {
   description: string;
   objective: 'awareness' | 'engagement';
   budget_minor: number;
-  currency: 'HKD';
+  currency: string;
   platform: Platform;
   deliverable: Deliverable;
   market?: string;
@@ -129,9 +129,9 @@ interface CatalogResult extends ScopeResult { retrieval?: 'browse'|'granite_int8
 export interface ComparisonResult extends ScopeResult { state: 'available' | 'empty' | 'incomplete'; creators: CreatorDetail[]; unavailable_ids: string[] }
 interface ProcessingResult extends ScopeResult { revision: string; state: 'empty' | 'preparing' | 'ready' | 'fallback'; eligible_datasets: number; indexed_datasets: number }
 export interface ScenarioRequest {
-  currency: 'HKD'; impressions?: number; click_rate?: string; conversion_rate?: string;
+  currency: string; impressions?: number; click_rate?: string; conversion_rate?: string;
   value_per_conversion_minor?: number; advertising_spend_minor?: number; campaign_cost_minor?: number;
-  contribution_margin?: string;
+  contribution_margin?: string; spend_minor?: number;
 }
 export interface ScenarioResult {
   basis: 'assumption_based'; assumptions: ScenarioRequest; clicks: Measure; conversions: Measure;

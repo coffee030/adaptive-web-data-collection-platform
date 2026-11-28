@@ -1,6 +1,6 @@
 import type { ScenarioRequest } from './intelligence';
 
-export function readScenario(form: HTMLFormElement): ScenarioRequest {
+export function readScenario(form: HTMLFormElement, currency = 'HKD'): ScenarioRequest {
   const values = new FormData(form);
   function numeric(name: string) {
     const value = String(values.get(name) ?? '');
@@ -15,7 +15,7 @@ export function readScenario(form: HTMLFormElement): ScenarioRequest {
     return value === undefined ? undefined : Math.round(value * 100);
   }
   return {
-    currency: 'HKD',
+    currency,
     impressions: numeric('impressions'),
     click_rate: share('clicks'),
     conversion_rate: share('conversions'),
@@ -26,7 +26,7 @@ export function readScenario(form: HTMLFormElement): ScenarioRequest {
   };
 }
 
-export function ScenarioFields({ input }: { input?: ScenarioRequest | null }) {
+export function ScenarioFields({ input, currency = input?.currency ?? 'HKD' }: { input?: ScenarioRequest | null; currency?: string }) {
   function initial(value: string | number | undefined, scale = 1) {
     return value == null ? undefined : Number((Number(value) * scale).toFixed(6));
   }
@@ -65,7 +65,7 @@ export function ScenarioFields({ input }: { input?: ScenarioRequest | null }) {
         />
       </label>
       <label>
-        Value per conversion (HK$)
+        Value per conversion ({currency})
         <input
           type="number"
           name="value"
@@ -76,7 +76,7 @@ export function ScenarioFields({ input }: { input?: ScenarioRequest | null }) {
         />
       </label>
       <label>
-        Advertising spend (HK$)
+        Advertising spend ({currency})
         <input
           type="number"
           name="ads"
@@ -87,11 +87,11 @@ export function ScenarioFields({ input }: { input?: ScenarioRequest | null }) {
         />
       </label>
       <label>
-        Total campaign cost (HK$)
+        Total campaign cost ({currency})
         <input
           type="number"
           name="cost"
-          defaultValue={initial(input?.campaign_cost_minor, 0.01)}
+          defaultValue={initial(input?.campaign_cost_minor ?? input?.spend_minor, 0.01)}
           min={0}
           max={10000000}
           step={0.01}

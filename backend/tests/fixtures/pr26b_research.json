@@ -1,0 +1,26 @@
+{
+  "preparation": {
+    "protocol": "confirmed-v1",
+    "brief": {
+      "product": "Neighbourhood café lunch",
+      "audience": "Hong Kong weekday diners",
+      "discovery_focus": "affordable dining",
+      "campaign": {
+        "description": "Find affordable dining creators 最近30日",
+        "objective": "awareness",
+        "budget_minor": 120000,
+        "currency": "HKD",
+        "platform": "instagram",
+        "deliverable": "social_post"
+      }
+    },
+    "provenance": { "platform": "application_default", "deliverable": "application_default" }
+  },
+  "legacy_report_revision": "804399c238cb0ee2a40620797abd8fba154db7aeeba394c78a71a368f9a02d5b",
+  "public_evidence": [
+    { "id": "inside-limit", "platform": "Instagram", "age_days": 29 },
+    { "id": "outside-limit", "platform": "Instagram", "age_days": 31 },
+    { "id": "unknown-age", "platform": "Instagram", "age_days": null },
+    { "id": "excluded-channel", "platform": "Facebook", "age_days": 7 }
+  ]
+}

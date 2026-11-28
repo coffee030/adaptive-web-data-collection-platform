@@ -31,11 +31,27 @@ CHANNEL_NAMES = {
 SHORT_VIDEO = r"\b(?:shorts?|reels?|short[- ]form|short[- ]video)\b|短片|短視頻|短影音"
 
 
-def evidence_intent(brief, focus):
+def _topic_intent(brief, focus):
     original = " ".join(
         (brief.campaign.description, brief.product, brief.discovery_focus or "")
     )
     low = original.casefold()
+    return low, {
+        "topics": query_topics(original),
+        "focus_words": set(market_catalog.pieces(focus)),
+        "domain_words": set(market_catalog.pieces(original))
+        | set(re.findall(r"[^\W_]+", low)),
+        "needs_review": bool(
+            re.search(
+                r"\breviews\b|\b(?:product|video|sunscreen|restaurant|skincare) review\b|\b(?:who review|review of)\b|評測|評價|食評",
+                low,
+            )
+        ),
+    }
+
+
+def evidence_intent(brief, focus):
+    low, topics = _topic_intent(brief, focus)
     named = {key for key, pattern in CHANNEL_NAMES.items() if re.search(pattern, low)}
     selected = {brief.campaign.platform, *brief.alternative_platforms}
     cap = brief.max_evidence_age_days
@@ -55,10 +71,7 @@ def evidence_intent(brief, focus):
         elif re.search(r"\b(?:recent|current|latest|newly)\b|近期|最近|最新", low):
             cap = 90
     return {
-        "topics": query_topics(original),
-        "focus_words": set(market_catalog.pieces(focus)),
-        "domain_words": set(market_catalog.pieces(original))
-        | set(re.findall(r"[^\W_]+", low)),
+        **topics,
         "channels": named
         or (
             set()
@@ -75,16 +88,34 @@ def evidence_intent(brief, focus):
         or brief.campaign.deliverable == "short_video",
         "needs_video": brief.campaign.deliverable
         in {"short_video", "dedicated_video", "video_integration"},
-        "needs_review": bool(
-            re.search(
-                r"\breviews\b|\b(?:product|video|sunscreen|restaurant|skincare) review\b|\b(?:who review|review of)\b|評測|評價|食評",
-                low,
-            )
-        ),
         "needs_cantonese": bool(
             re.search(r"\bcantonese\b|廣東話|粵語", low)
             or (brief.campaign.require_language and brief.campaign.language == "yue")
         ),
+    }
+
+
+def confirmed_evidence_intent(brief, focus, resolution):
+    _, topics = _topic_intent(brief, focus)
+    criteria = resolution.criteria
+    channels = {criteria.platform, *(criteria.alternative_platforms or ())}
+    if brief.discovery_scope == "all_sources" and all(
+        resolution.fields[name].origin in {"legacy", "application_default", "absent"}
+        and not any(ref.matched_text for ref in resolution.fields[name].references)
+        for name in ("platform", "alternative_platforms", "platform_intent")
+    ):
+        channels.clear()
+    return {
+        **topics,
+        "channels": channels,
+        "excluded_channels": set(criteria.excluded_platforms or ()),
+        "channel_conflict": False,
+        "days": criteria.max_evidence_age_days,
+        "needs_short": criteria.deliverable == "short_video",
+        "needs_video": criteria.deliverable
+        in {"short_video", "dedicated_video", "video_integration"},
+        "needs_cantonese": criteria.require_language and criteria.language == "yue",
+        "required_language": criteria.language if criteria.require_language else None,
     }
 
 
@@ -151,6 +182,8 @@ def classify(record, intent, as_of, *, historical=False, identity=False):
         reasons.append("Directory identity only")
     platform = record.get("platform", "").casefold()
     channel = next((p for p in SOCIAL if p in platform), "other")
+    if channel in intent.get("excluded_channels", ()):
+        return None
     if intent["channel_conflict"]:
         reasons.append("The brief and selected campaign channels differ")
     elif intent["channels"] and channel not in intent["channels"]:
@@ -184,4 +217,7 @@ def classify(record, intent, as_of, *, historical=False, identity=False):
         and not re.search(r"\bcantonese\b|廣東話|粵語", low)
     ):
         reasons.append("Cantonese unverified")
+    language = intent.get("required_language")
+    if language and language != "yue" and language not in record.get("languages", []):
+        reasons.append("Required language unverified")
     return {"tier": "context" if reasons else "direct", "scope_notes": reasons}

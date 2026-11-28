@@ -54,6 +54,7 @@ async def exercise():
     async with connection(base, "company", **settings) as member:
         tools = (await member.list_tools()).tools
         assert {
+            "preview_campaign_research",
             "get_research_findings",
             "get_research_progress",
             "get_campaign_performance",
@@ -66,6 +67,7 @@ async def exercise():
             "change_campaign_budget",
             "shortlist_market_creator",
             "create_saved_campaign",
+            "start_campaign_research",
         } & {tool.name for tool in tools}
         records = await read(
             member, "search_creators", filters={"language": "yue"}, limit=1
@@ -154,6 +156,70 @@ async def exercise():
     async with connection(
         base, "company", **settings, HARBOURLINE_MCP_ALLOW_WORKSPACE_EDITS="1"
     ) as editor:
+        preparation = {
+            "protocol": "confirmed-v1",
+            "campaign_id": campaign,
+            "brief": {
+                "campaign": {
+                    **brief,
+                    "description": "Find affordable dining creators in the past 2 months",
+                },
+                "product": "Neighbourhood café lunch",
+                "audience": "Hong Kong diners",
+            },
+        }
+        unresolved = await read(
+            editor, "preview_campaign_research", preparation=preparation
+        )
+        assert unresolved["finalized"]["status"] == "needs_review"
+        assert not (await read(editor, "list_company_research"))["items"]
+        arguments = unresolved["preparation"] | {"request_key": str(uuid4())}
+        await denied(
+            editor, "start_campaign_research", "explicit approval", **arguments
+        )
+        arguments["confirmation"] = {
+            "action": "confirm",
+            "proposal_fingerprint": unresolved["fingerprint"],
+            "version": unresolved["finalized"]["version"],
+        }
+        await denied(
+            editor,
+            "start_campaign_research",
+            "research_criteria_unresolved: Resolve the reported blocking criteria",
+            **arguments,
+        )
+        preparation["decisions"] = {"publication_age": {"max_evidence_age_days": 30}}
+        proposal = await read(
+            editor, "preview_campaign_research", preparation=preparation
+        )
+        assert proposal["finalized"]["status"] == "ready"
+        arguments.update(proposal["preparation"])
+        await denied(
+            editor,
+            "start_campaign_research",
+            "research_confirmation_stale: Preview the current proposal again",
+            **arguments,
+        )
+        arguments["confirmation"]["proposal_fingerprint"] = proposal["fingerprint"]
+        started = await read(editor, "start_campaign_research", **arguments)
+        assert proposal["execution"] == {"status": "ready", "issues": []}
+        assert started["confirmed_criteria"]["proposal"] == {
+            name: value for name, value in proposal.items() if name != "execution"
+        }
+        assert await read(editor, "start_campaign_research", **arguments) == started
+        await denied(
+            editor,
+            "start_campaign_research",
+            "research_request_changed: Read the existing request or use a new key",
+            **(arguments | {"provenance": {"platform": "application_default"}}),
+        )
+        assert (
+            await read(editor, "get_research_progress", run_id=started["id"])
+        ) == started
+        assert (await read(editor, "cancel_campaign_research", run_id=started["id"]))[
+            "state"
+        ] == "cancelled"
+
         creation = dict(
             campaign_id=str(uuid4()),
             name="Dining shortlist",
@@ -234,6 +300,7 @@ async def exercise():
         assert not (await read(other, "list_saved_campaigns"))["items"]
         assert not (await read(other, "search_creators", filters={}))["items"]
         await denied(other, "get_saved_campaign", "404", campaign_id=campaign)
+        await denied(other, "get_research_progress", "404", run_id=started["id"])
         await denied(
             other,
             "export_rate_request",

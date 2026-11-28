@@ -84,8 +84,9 @@ export function useDraftActions(mode: WorkspaceMode, draft: Draft, setDraft: Rea
 
 interface CampaignNavigation {
   company?: Company;
+  saveResearchCampaign?: (id: string, version: number, draft: Draft, signal: AbortSignal) => Promise<number>;
   campaignReceipt?: { id:string; version:number; pending:boolean };
-  otherDrafts: () => { key: string; name: string }[];
+  otherDrafts: (savedOnly?: boolean) => { key: string; name: string }[];
   openDraft: (key?: string, initial?: Brief) => string | void;
 }
 

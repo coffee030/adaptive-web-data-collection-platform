@@ -33,6 +33,12 @@ class ResearchRunRow(Base):
             "state IN ('queued','collecting','analyzing','ready','failed','cancelled')",
             name="research_run_state",
         ),
+        CheckConstraint(
+            "(criteria_version IS NULL AND confirmed_criteria IS NULL) OR "
+            "(criteria_version IS NOT NULL AND confirmed_criteria IS NOT NULL "
+            "AND jsonb_typeof(confirmed_criteria) = 'object')",
+            name="research_confirmed_criteria_pair",
+        ),
         Index("ix_company_research_due", "state", "due_at"),
         Index("ix_company_research_recent", "company_id", "created_at"),
     )
@@ -51,3 +57,5 @@ class ResearchRunRow(Base):
     error: Mapped[str | None] = mapped_column(String(64))
     revision: Mapped[str | None] = mapped_column(String(64))
     review: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    criteria_version: Mapped[str | None] = mapped_column(String(64))
+    confirmed_criteria: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))

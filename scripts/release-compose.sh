@@ -57,7 +57,7 @@ cleanup() {
     normal down --volumes --timeout 75 || rc=1
     ref down --volumes --timeout 75 || rc=1
     dc down --volumes --timeout 75 || rc=1
-    rm -f "$output/stats.jsonl" "$output/m20.yaml"
+    rm -f "$output/stats.jsonl" "$output/m20.yaml" "$output/company-playwright.json"
     rmdir "$output"
     exit "$rc"
 }
@@ -201,7 +201,19 @@ company_check() (
     curl --fail --silent --max-time 10 "$normal_url/harbourline-installation.json" | grep -q '"workspace":"pilot"' || return 1
     normal exec -T frontend sh -ec 'test -z "$(find /usr/share/nginx/html/assets -name "*-portrait-*.webp" -o -name "*-post-*.webp")"' || return 1
     M4_FRONTEND_PORT="$normal_web" HARBOURLINE_RESEARCH_TEST_PILOT=1 \
-        npm --prefix frontend test -- campaign-research.integration.ts first-party-window.integration.ts market-sources.integration.ts --workers=1
+        PLAYWRIGHT_JSON_OUTPUT_FILE="$output/company-playwright.json" \
+        npm --prefix frontend test -- campaign-research.integration.ts research-preparation.integration.ts \
+        first-party-window.integration.ts market-sources.integration.ts --workers=1 --reporter=line,json || return 1
+    node - "$output/company-playwright.json" <<'JS'
+const { readFileSync } = require('node:fs');
+const { stats, suites } = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const prepared = suites.find(({ file }) => file === 'research-preparation.integration.ts');
+if (!stats.expected || stats.skipped || !prepared?.specs.some(({ tests }) =>
+    tests.some(({ status }) => status === 'expected'))) {
+  console.error('Company pilot requires passing research preparation tests and zero skips.', stats);
+  process.exitCode = 1;
+}
+JS
 )
 check "Company discovery, research, evidence intake and publisher navigation" company_check
 if (( ${#failures[@]} )); then

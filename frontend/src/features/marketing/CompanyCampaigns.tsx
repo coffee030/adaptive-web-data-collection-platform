@@ -68,8 +68,22 @@ function Editor({saved,company,children,reload}:{saved:Saved[];company:Company;c
     try { sessionStorage.setItem(pointer,next.id); } catch {}
     return next.id;
   }
+  async function saveResearchCampaign(id: string, version: number, draft: Draft, signal: AbortSignal) {
+    const row = await apiPut<Saved>(url + '/' + id, { version, draft }, signal);
+    signal.throwIfAborted();
+    if (row.id !== id || !Number.isInteger(row.version) || row.version < 1) {
+      throw new ApiError('invalid-response');
+    }
+    setEntries(previous => {
+      const entry = previous.find(item => item.id === id);
+      if (entry && entry.draft !== entry.acknowledged) return previous;
+      const acknowledged = { ...row, acknowledged: row.draft };
+      return entry ? previous.map(item => item.id === id ? acknowledged : item) : [acknowledged, ...previous];
+    });
+    return row.version;
+  }
   const actions=useDraftActions('partner',entry.draft,setDraft,false);
-  return <DraftContext.Provider value={{...actions,company,campaignReceipt:{id:entry.id,version:entry.version,pending:entry.draft!==entry.acknowledged},openDraft,otherDrafts:()=>entries.filter(row=>row.id!==active && (row.draft.saved||row.draft.shortlist.length>0||Boolean(row.draft.research))).map(row=>({key:row.id,name:row.draft.brief.name||row.draft.research?.title||'Untitled campaign'}))}}>
+  return <DraftContext.Provider value={{...actions,company,saveResearchCampaign,campaignReceipt:{id:entry.id,version:entry.version,pending:entry.draft!==entry.acknowledged},openDraft,otherDrafts:(savedOnly=false)=>entries.filter(row=>row.id!==active && (savedOnly ? row.version > 0 : row.draft.saved||row.draft.shortlist.length>0||Boolean(row.draft.research))).map(row=>({key:row.id,name:row.draft.brief.name||row.draft.research?.title||'Untitled campaign'}))}}>
     {failure && <p role="alert" className="hl-storage">{failure} <button onClick={()=>{if(conflict) reload(); else {setFailure('');setRetry(i=>i+1);}}}>{conflict?'Reload saved campaign':'Retry save'}</button></p>}
     {saving && <div className="hl-company-saving" role="status">Saving company campaign…</div>}{children}
   </DraftContext.Provider>;

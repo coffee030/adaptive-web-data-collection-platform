@@ -8,6 +8,12 @@ from backend.marketing.api import NonCacheableRoute
 from backend.marketing.company_api import Database, User
 from .research_contracts import NewResearch
 from .research_models import ResearchRunRow
+from .research_preparation import prepare
+from .research_preparation_contracts import (
+    ConfirmedResearch,
+    ResearchPreparation,
+    ResearchPreview,
+)
 from .research_runs import ResearchRuns, change, owned, receipt, start
 
 
@@ -18,8 +24,15 @@ router = APIRouter(
 )
 
 
+@router.post("/preview")
+def preview_research(body: ResearchPreparation, user: User) -> ResearchPreview:
+    return prepare(user.id, body)
+
+
 @router.post("")
-def submit_research(body: NewResearch, user: User, session: Database):
+def submit_research(
+    body: NewResearch | ConfirmedResearch, user: User, session: Database
+):
     return start(session, user.id, body)
 
 
