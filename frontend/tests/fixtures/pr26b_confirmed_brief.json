@@ -1,0 +1,25 @@
+{
+  "protocol": "confirmed-v1",
+  "brief": {
+    "product": "Neighbourhood café launch",
+    "audience": "Hong Kong diners",
+    "campaign": {
+      "description": "Find YouTube creators making short videos",
+      "objective": "awareness",
+      "budget_minor": 120000,
+      "currency": "HKD",
+      "platform": "instagram",
+      "deliverable": "social_post",
+      "language": "en",
+      "require_language": false
+    },
+    "alternative_platforms": ["tiktok"]
+  },
+  "provenance": {
+    "platform": "application_default",
+    "deliverable": "application_default",
+    "language": "application_default",
+    "alternative_platforms": "explicit"
+  },
+  "decisions": { "language": { "language": "yue", "require_language": true } }
+}

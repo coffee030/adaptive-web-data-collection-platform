@@ -1,0 +1,713 @@
+{
+  "company_id": "pre-r1-company",
+  "expected_platforms": [
+    "youtube",
+    "youtube",
+    "instagram"
+  ],
+  "report_revision": "2aa5a66a228e39616172353fb45bf2138296ba95b3d6addc5b0ecddfe1f00803",
+  "snapshot": {
+    "confirmation": {
+      "action": "confirm",
+      "proposal_fingerprint": "f94c1c66d42c9836ca5d22a235766f75f2af7ddc0f4b671a8f36ae3e12b1a60f",
+      "version": "research-criteria-v1"
+    },
+    "confirmed_at": "2026-11-28T12:01:04.414995Z",
+    "proposal": {
+      "effective_brief": {
+        "alternative_platforms": [
+          "instagram"
+        ],
+        "audience": "Hong Kong weekday diners",
+        "campaign": {
+          "budget_minor": 120000,
+          "category_labels": null,
+          "currency": "HKD",
+          "deliverable": "social_post",
+          "description": "Compare YouTube and Instagram",
+          "language": null,
+          "market": null,
+          "maximum_creators": 4,
+          "minimum_creators": 1,
+          "minimum_market_share": null,
+          "objective": "awareness",
+          "platform": "youtube",
+          "preferred_facts": [],
+          "require_language": false,
+          "required_facts": [],
+          "shortlist": null
+        },
+        "discovery_focus": "affordable dining",
+        "discovery_scope": "campaign_channels",
+        "max_evidence_age_days": null,
+        "product": "Neighbourhood café lunch",
+        "scenario": null,
+        "test_share": 60
+      },
+      "finalized": {
+        "assumptions": [
+          "The first platform named occupies the main slot for the comparison."
+        ],
+        "criteria": {
+          "alternative_platforms": [
+            "instagram"
+          ],
+          "budget_minor": 120000,
+          "currency": "HKD",
+          "deliverable": "social_post",
+          "excluded_platforms": null,
+          "language": null,
+          "market": null,
+          "max_evidence_age_days": null,
+          "maximum_creators": 4,
+          "minimum_creators": 1,
+          "minimum_market_share": null,
+          "platform": "youtube",
+          "platform_intent": "comparison",
+          "preferred_facts": [],
+          "require_language": false,
+          "required_facts": []
+        },
+        "defaults": {
+          "alternative_platforms": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "alternative_platforms",
+                "matched_text": null
+              }
+            ],
+            "value": []
+          },
+          "deliverable": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "deliverable",
+                "matched_text": null
+              }
+            ],
+            "value": "social_post"
+          },
+          "platform": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "platform",
+                "matched_text": null
+              }
+            ],
+            "value": "instagram"
+          }
+        },
+        "fields": {
+          "alternative_platforms": {
+            "origin": "text",
+            "references": [
+              {
+                "field": "research_text",
+                "matched_text": "Compare YouTube and Instagram"
+              }
+            ],
+            "state": "resolved"
+          },
+          "budget_minor": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "budget_minor",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "currency": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "currency",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "deliverable": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "deliverable",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "excluded_platforms": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "language": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "market": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "max_evidence_age_days": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "maximum_creators": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "maximum_creators",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "minimum_creators": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "minimum_creators",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "minimum_market_share": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "platform": {
+            "origin": "text",
+            "references": [
+              {
+                "field": "research_text",
+                "matched_text": "Compare YouTube and Instagram"
+              }
+            ],
+            "state": "resolved"
+          },
+          "platform_intent": {
+            "origin": "text",
+            "references": [
+              {
+                "field": "research_text",
+                "matched_text": "Compare YouTube and Instagram"
+              }
+            ],
+            "state": "resolved"
+          },
+          "preferred_facts": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "preferred_facts",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "require_language": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "require_language",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "required_facts": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "required_facts",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          }
+        },
+        "issues": [
+          {
+            "action": "Use the text-derived interpretation when reviewing the criteria.",
+            "candidates": [
+              {
+                "origin": "application_default",
+                "references": [
+                  {
+                    "field": "platform",
+                    "matched_text": null
+                  }
+                ],
+                "value": "instagram"
+              },
+              {
+                "origin": "text",
+                "references": [
+                  {
+                    "field": "research_text",
+                    "matched_text": "Compare YouTube and Instagram"
+                  }
+                ],
+                "value": "youtube"
+              }
+            ],
+            "code": "application_default_displaced",
+            "explanation": "The text displaces a known application default.",
+            "field": "platform",
+            "references": [],
+            "severity": "notice"
+          },
+          {
+            "action": "Use the text-derived interpretation when reviewing the criteria.",
+            "candidates": [
+              {
+                "origin": "application_default",
+                "references": [
+                  {
+                    "field": "alternative_platforms",
+                    "matched_text": null
+                  }
+                ],
+                "value": []
+              },
+              {
+                "origin": "text",
+                "references": [
+                  {
+                    "field": "research_text",
+                    "matched_text": "Compare YouTube and Instagram"
+                  }
+                ],
+                "value": [
+                  "instagram"
+                ]
+              }
+            ],
+            "code": "application_default_displaced",
+            "explanation": "The text displaces a known application default.",
+            "field": "alternative_platforms",
+            "references": [],
+            "severity": "notice"
+          }
+        ],
+        "original_input": {
+          "alternative_platforms": [],
+          "audience": "Hong Kong weekday diners",
+          "budget_minor": 120000,
+          "currency": "HKD",
+          "deliverable": "social_post",
+          "discovery_focus": "affordable dining",
+          "language": null,
+          "market": null,
+          "max_evidence_age_days": null,
+          "maximum_creators": 4,
+          "minimum_creators": 1,
+          "minimum_market_share": null,
+          "platform": "instagram",
+          "preferred_facts": [],
+          "product": "Neighbourhood café lunch",
+          "provenance": {
+            "alternative_platforms": "application_default",
+            "deliverable": "application_default",
+            "platform": "application_default"
+          },
+          "require_language": false,
+          "required_facts": [],
+          "research_text": "Compare YouTube and Instagram"
+        },
+        "status": "ready",
+        "version": "research-criteria-v1"
+      },
+      "fingerprint": "f94c1c66d42c9836ca5d22a235766f75f2af7ddc0f4b671a8f36ae3e12b1a60f",
+      "initial": {
+        "assumptions": [
+          "The first platform named occupies the main slot for the comparison."
+        ],
+        "criteria": {
+          "alternative_platforms": [
+            "instagram"
+          ],
+          "budget_minor": 120000,
+          "currency": "HKD",
+          "deliverable": "social_post",
+          "excluded_platforms": null,
+          "language": null,
+          "market": null,
+          "max_evidence_age_days": null,
+          "maximum_creators": 4,
+          "minimum_creators": 1,
+          "minimum_market_share": null,
+          "platform": "youtube",
+          "platform_intent": "comparison",
+          "preferred_facts": [],
+          "require_language": false,
+          "required_facts": []
+        },
+        "defaults": {
+          "alternative_platforms": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "alternative_platforms",
+                "matched_text": null
+              }
+            ],
+            "value": []
+          },
+          "deliverable": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "deliverable",
+                "matched_text": null
+              }
+            ],
+            "value": "social_post"
+          },
+          "platform": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "platform",
+                "matched_text": null
+              }
+            ],
+            "value": "instagram"
+          }
+        },
+        "fields": {
+          "alternative_platforms": {
+            "origin": "text",
+            "references": [
+              {
+                "field": "research_text",
+                "matched_text": "Compare YouTube and Instagram"
+              }
+            ],
+            "state": "resolved"
+          },
+          "budget_minor": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "budget_minor",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "currency": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "currency",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "deliverable": {
+            "origin": "application_default",
+            "references": [
+              {
+                "field": "deliverable",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "excluded_platforms": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "language": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "market": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "max_evidence_age_days": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "maximum_creators": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "maximum_creators",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "minimum_creators": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "minimum_creators",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "minimum_market_share": {
+            "origin": "absent",
+            "references": [],
+            "state": "absent"
+          },
+          "platform": {
+            "origin": "text",
+            "references": [
+              {
+                "field": "research_text",
+                "matched_text": "Compare YouTube and Instagram"
+              }
+            ],
+            "state": "resolved"
+          },
+          "platform_intent": {
+            "origin": "text",
+            "references": [
+              {
+                "field": "research_text",
+                "matched_text": "Compare YouTube and Instagram"
+              }
+            ],
+            "state": "resolved"
+          },
+          "preferred_facts": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "preferred_facts",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "require_language": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "require_language",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          },
+          "required_facts": {
+            "origin": "legacy",
+            "references": [
+              {
+                "field": "required_facts",
+                "matched_text": null
+              }
+            ],
+            "state": "resolved"
+          }
+        },
+        "issues": [
+          {
+            "action": "Use the text-derived interpretation when reviewing the criteria.",
+            "candidates": [
+              {
+                "origin": "application_default",
+                "references": [
+                  {
+                    "field": "platform",
+                    "matched_text": null
+                  }
+                ],
+                "value": "instagram"
+              },
+              {
+                "origin": "text",
+                "references": [
+                  {
+                    "field": "research_text",
+                    "matched_text": "Compare YouTube and Instagram"
+                  }
+                ],
+                "value": "youtube"
+              }
+            ],
+            "code": "application_default_displaced",
+            "explanation": "The text displaces a known application default.",
+            "field": "platform",
+            "references": [],
+            "severity": "notice"
+          },
+          {
+            "action": "Use the text-derived interpretation when reviewing the criteria.",
+            "candidates": [
+              {
+                "origin": "application_default",
+                "references": [
+                  {
+                    "field": "alternative_platforms",
+                    "matched_text": null
+                  }
+                ],
+                "value": []
+              },
+              {
+                "origin": "text",
+                "references": [
+                  {
+                    "field": "research_text",
+                    "matched_text": "Compare YouTube and Instagram"
+                  }
+                ],
+                "value": [
+                  "instagram"
+                ]
+              }
+            ],
+            "code": "application_default_displaced",
+            "explanation": "The text displaces a known application default.",
+            "field": "alternative_platforms",
+            "references": [],
+            "severity": "notice"
+          }
+        ],
+        "original_input": {
+          "alternative_platforms": [],
+          "audience": "Hong Kong weekday diners",
+          "budget_minor": 120000,
+          "currency": "HKD",
+          "deliverable": "social_post",
+          "discovery_focus": "affordable dining",
+          "language": null,
+          "market": null,
+          "max_evidence_age_days": null,
+          "maximum_creators": 4,
+          "minimum_creators": 1,
+          "minimum_market_share": null,
+          "platform": "instagram",
+          "preferred_facts": [],
+          "product": "Neighbourhood café lunch",
+          "provenance": {
+            "alternative_platforms": "application_default",
+            "deliverable": "application_default",
+            "platform": "application_default"
+          },
+          "require_language": false,
+          "required_facts": [],
+          "research_text": "Compare YouTube and Instagram"
+        },
+        "status": "ready",
+        "version": "research-criteria-v1"
+      },
+      "preparation": {
+        "brief": {
+          "alternative_platforms": [],
+          "audience": "Hong Kong weekday diners",
+          "campaign": {
+            "budget_minor": 120000,
+            "category_labels": null,
+            "currency": "HKD",
+            "deliverable": "social_post",
+            "description": "Compare YouTube and Instagram",
+            "language": null,
+            "market": null,
+            "maximum_creators": 4,
+            "minimum_creators": 1,
+            "minimum_market_share": null,
+            "objective": "awareness",
+            "platform": "instagram",
+            "preferred_facts": [],
+            "require_language": false,
+            "required_facts": [],
+            "shortlist": null
+          },
+          "discovery_focus": "affordable dining",
+          "discovery_scope": "campaign_channels",
+          "max_evidence_age_days": null,
+          "product": "Neighbourhood café lunch",
+          "scenario": null,
+          "test_share": 60
+        },
+        "campaign_id": null,
+        "decisions": {
+          "deliverable": null,
+          "language": null,
+          "platforms": null,
+          "publication_age": null
+        },
+        "protocol": "confirmed-v1",
+        "provenance": {
+          "alternative_platforms": "application_default",
+          "deliverable": "application_default",
+          "platform": "application_default"
+        }
+      }
+    },
+    "request_fingerprint": "800d2d658e61318c3c23892e88b3b3242c214a2dcef591d5650cf7f54ee90d0f"
+  },
+  "submission": {
+    "brief": {
+      "alternative_platforms": [],
+      "audience": "Hong Kong weekday diners",
+      "campaign": {
+        "budget_minor": 120000,
+        "category_labels": null,
+        "currency": "HKD",
+        "deliverable": "social_post",
+        "description": "Compare YouTube and Instagram",
+        "language": null,
+        "market": null,
+        "maximum_creators": 4,
+        "minimum_creators": 1,
+        "minimum_market_share": null,
+        "objective": "awareness",
+        "platform": "instagram",
+        "preferred_facts": [],
+        "require_language": false,
+        "required_facts": [],
+        "shortlist": null
+      },
+      "discovery_focus": "affordable dining",
+      "discovery_scope": "campaign_channels",
+      "max_evidence_age_days": null,
+      "product": "Neighbourhood café lunch",
+      "scenario": null,
+      "test_share": 60
+    },
+    "campaign_id": null,
+    "confirmation": {
+      "action": "confirm",
+      "proposal_fingerprint": "f94c1c66d42c9836ca5d22a235766f75f2af7ddc0f4b671a8f36ae3e12b1a60f",
+      "version": "research-criteria-v1"
+    },
+    "decisions": {
+      "deliverable": null,
+      "language": null,
+      "platforms": null,
+      "publication_age": null
+    },
+    "protocol": "confirmed-v1",
+    "provenance": {
+      "alternative_platforms": "application_default",
+      "deliverable": "application_default",
+      "platform": "application_default"
+    },
+    "request_key": "912ef41f-b639-4ac2-bf2f-f9b34acc05ad"
+  }
+}

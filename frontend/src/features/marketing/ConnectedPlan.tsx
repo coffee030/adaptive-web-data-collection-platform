@@ -13,20 +13,21 @@ import { exportCsv } from './CampaignPlan';
 function Assumptions({ mode, quoted }: { mode: DataMode; quoted?: number }) {
   const { draft, setDraft } = useMarketing();
   const input = draft.scenario;
+  const currency = input?.currency ?? draft.evaluation?.currency ?? 'HKD';
   const [edited, setEdited] = useState(false);
   const load = useCallback((signal: AbortSignal) => calculateScenario(mode,input!,signal), [mode,input]);
   const { result, retry } = useResource(load,0,false,Boolean(input));
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const scenario = readScenario(event.currentTarget);
+    const scenario = readScenario(event.currentTarget, currency);
     setEdited(false);
     setDraft(old => ({ ...old, scenario }));
   }
   return <section className="hl-scenario">
     <h2>Scenario assumptions</h2><p>Enter your own assumptions for a what-if calculation. Leave any unknown values blank.</p>
-    {quoted !== undefined && <p className="hl-note">Selected creator quotes total {amount(quoted)}. Enter your full campaign cost separately.</p>}
+    {quoted !== undefined && <p className="hl-note">Selected creator quotes total {amount(quoted, draft.evaluation?.currency ?? currency)}. Enter your full campaign cost separately.</p>}
     <form className="hl-form-grid" onSubmit={submit} onChange={() => setEdited(true)}>
-      <ScenarioFields input={input} />
+      <ScenarioFields input={input} currency={currency} />
       <div><button type="submit" disabled={input !== undefined && result.state === 'loading'}>Calculate scenario</button></div>
     </form>
     {input && result.state === 'loading' && <Pending>Calculating from your assumptions…</Pending>}
@@ -37,7 +38,7 @@ function Assumptions({ mode, quoted }: { mode: DataMode; quoted?: number }) {
       <dl className="hl-scenario-results">
           <div><dt>Clicks</dt><dd>{measureText(result.data.clicks)}</dd></div>
           <div><dt>Conversions</dt><dd>{measureText(result.data.conversions)}</dd></div>
-          <div><dt>Attributed revenue</dt><dd>{result.data.attributed_revenue_minor.value === null ? 'Unavailable' : amount(Number(result.data.attributed_revenue_minor.value))}</dd></div>
+          <div><dt>Attributed revenue</dt><dd>{result.data.attributed_revenue_minor.value === null ? 'Unavailable' : amount(Number(result.data.attributed_revenue_minor.value), result.data.assumptions.currency)}</dd></div>
           <div><dt>ROAS</dt><dd>{result.data.roas.value === null ? 'Unavailable' : measureText(result.data.roas) + '×'}</dd></div>
           <div><dt>Contribution-based ROI</dt><dd>{measureText(result.data.roi,true)}</dd></div>
         </dl><p className="hl-note">ROAS uses attributed revenue and advertising spend. ROI uses contribution after campaign cost.</p>
@@ -63,6 +64,7 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       minimum_creators:count, maximum_creators:count, shortlist:included });
   }
 
+  const currency = current?.campaign.currency ?? draft.evaluation?.currency ?? 'HKD';
   const active = current?.plan;
   const selected = current?.recommendations.filter(candidate => active?.selected.includes(candidate.creator_id)) ?? [];
   const confirmed = active?.status === 'optimal' && active.total_minor !== null ? active.total_minor : undefined;
@@ -129,23 +131,24 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
       }
     }
     const rows: (string|number)[][] = [['Classification', mode === 'demo' ? 'Fictional backend demo' : 'Local campaign draft'],
-      ['Campaign',draft.brief.name],['Budget cap (HKD)',(current?.campaign.budget_minor ?? draft.brief.budget * 100)/100],
+      ['Campaign',draft.brief.name],['Budget cap (' + currency + ')',(current?.campaign.budget_minor ?? draft.brief.budget * 100)/100],
       ['Brief',draft.brief.description],['Platform',draft.brief.platform],['Deliverable',draft.brief.deliverable],
       ['Required creators',current?.campaign.minimum_creators ?? draft.brief.creatorCount],['Required content evidence',draft.brief.requiredFacts ?? ''],
       ['Mandatory notes',draft.brief.required],['Optional notes',draft.brief.preferred]];
     if (mode === 'demo') {
-      rows.push(['Plan status',status],['Evidence reviewed at',current!.as_of],['Confirmed spend (HKD)',confirmed === undefined ? 'Unavailable' : confirmed / 100], [],
-        ['Selected fictional creator','Firm quote (HKD)','Quote evidence','Supporting post evidence']);
+      rows.push(['Plan status',status],['Evidence reviewed at',current!.as_of],['Confirmed spend (' + currency + ')',confirmed === undefined ? 'Unavailable' : confirmed / 100], [],
+        ['Selected fictional creator','Firm quote (' + currency + ')','Quote evidence','Supporting post evidence']);
       for (const item of selected) rows.push([item.name,item.quote?.data.amount_minor == null ? 'Unavailable' : item.quote.data.amount_minor / 100,
         item.quote?.evidence.reference ?? 'Unavailable',item.evidence.map(post => post.content.evidence.reference).join(', ')]);
     }
     const assumptions = draft.scenario;
     if (assumptions) {
+      const campaignCost = assumptions.campaign_cost_minor ?? assumptions.spend_minor;
       rows.push([], ['Scenario assumptions','User supplied'], ['Impressions',assumptions.impressions ?? 'Unavailable'],
         ['Click rate (fraction)',assumptions.click_rate ?? 'Unavailable'], ['Conversion rate (fraction)',assumptions.conversion_rate ?? 'Unavailable'],
-        ['Value per conversion (HKD)',assumptions.value_per_conversion_minor == null ? 'Unavailable' : assumptions.value_per_conversion_minor / 100],
-        ['Advertising spend (HKD)',assumptions.advertising_spend_minor == null ? 'Unavailable' : assumptions.advertising_spend_minor / 100],
-        ['Campaign cost (HKD)',assumptions.campaign_cost_minor == null ? 'Unavailable' : assumptions.campaign_cost_minor / 100],
+        ['Value per conversion (' + assumptions.currency + ')',assumptions.value_per_conversion_minor == null ? 'Unavailable' : assumptions.value_per_conversion_minor / 100],
+        ['Advertising spend (' + assumptions.currency + ')',assumptions.advertising_spend_minor == null ? 'Unavailable' : assumptions.advertising_spend_minor / 100],
+        ['Campaign cost (' + assumptions.currency + ')',campaignCost == null ? 'Unavailable' : campaignCost / 100],
         ['Contribution margin (fraction)',assumptions.contribution_margin ?? 'Unavailable']);
     }
     exportCsv(rows,mode === 'demo' ? 'harbourline-backend-demo.csv' : 'harbourline-draft.csv');
@@ -163,12 +166,12 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
     {running ? <Pending>Checking current campaign evidence…</Pending> : !current ? <div className="hl-decision hl-warning"><p>Evaluate the campaign brief to see eligible allocations.</p>
       <Link to={path('advisor')}>Open Campaign Advisor</Link></div> : <>
       <form className="hl-plan-scope" onSubmit={submit}>
-        <label>Budget cap (HK$)<input type="number" name="budget" required min={0} max={10000000} step={0.01} defaultValue={current.campaign.budget_minor/100} /></label>
+        <label>Budget cap ({currency === 'HKD' ? 'HK$' : currency})<input type="number" name="budget" required min={0} max={10000000} step={0.01} defaultValue={current.campaign.budget_minor/100} /></label>
         <label>Required creators<input type="number" name="count" required min={1} max={8} defaultValue={current.campaign.minimum_creators} /></label>
         <button type="submit" disabled={running || !included.length || included.length > 40}>Recalculate selection</button>
       </form>
       {!running && !error && <section className={`hl-decision ${confirmed === undefined || manual ? 'hl-warning' : ''}`} aria-label="Confirmed selection">
-        <strong>{status}</strong><p>{confirmed === undefined ? 'Confirmed spend unavailable.' : amount(confirmed) + ' confirmed for ' + selected.length + (selected.length === 1 ? ' creator allocation.' : ' creator allocations.')}</p>
+        <strong>{status}</strong><p>{confirmed === undefined ? 'Confirmed spend unavailable.' : amount(confirmed, currency) + ' confirmed for ' + selected.length + (selected.length === 1 ? ' creator allocation.' : ' creator allocations.')}</p>
         <EvaluationScope result={current}/>
         {active?.status === 'infeasible' && <div className="hl-actions">
           {current.campaign.shortlist && <button type="button" onClick={() => { setPool(undefined); evaluate({ ...current.campaign, shortlist: undefined }); }}>Evaluate all creators</button>}
@@ -176,7 +179,7 @@ export function ConnectedPlan({ mode }: { mode: DataMode }) {
         </div>}
         {confirmed !== undefined && <div className="hl-budget-usage">
           {current.campaign.budget_minor > 0 && <meter aria-label="Confirmed creator spend against the budget" min={0} max={current.campaign.budget_minor} value={confirmed}/>}
-          {amount(current.campaign.budget_minor - confirmed)} remaining of {amount(current.campaign.budget_minor)}
+          {amount(current.campaign.budget_minor - confirmed, currency)} remaining of {amount(current.campaign.budget_minor, currency)}
         </div>}
         {current.unavailable_shortlist_ids.length > 0 && <p>{current.unavailable_shortlist_ids.length} selected creators are unavailable.</p>}</section>}
       {selected.length > 0 && <section className="hl-plan-lines"><h2>Selected allocations</h2>

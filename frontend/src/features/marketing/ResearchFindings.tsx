@@ -6,22 +6,13 @@ import {
   platformOptions,
   type CampaignRequest,
   type ContentEvidence,
+  type EvidenceRef,
   type Observed,
-  type ScenarioRequest,
   type ScenarioResult,
 } from './intelligence';
-
-export interface BusinessBrief {
-  campaign: CampaignRequest;
-  product: string;
-  audience: string;
-  discovery_focus: string | null;
-  test_share: number;
-  alternative_platforms: CampaignRequest['platform'][];
-  scenario?: ScenarioRequest | null;
-  discovery_scope?: 'campaign_channels' | 'all_sources';
-  max_evidence_age_days?: number | null;
-}
+import { CriteriaSummary } from './ResearchCriteriaReview';
+import { ResearchSourceAvailability } from './ResearchSourceAvailability';
+import type { BusinessBrief, ResearchCriteriaMetadata, ResearchRun } from './researchClient';
 
 interface Finding {
   id: string;
@@ -32,7 +23,7 @@ interface Finding {
   profile_url: string;
   platform: string;
   published_at: string | null;
-  observed_at: string;
+  observed_at: string | null;
   license_url: string;
   basis: string;
   tier: 'direct' | 'context';
@@ -42,6 +33,7 @@ interface Finding {
   attribution?: string | null;
   series_title?: string | null;
   metrics: { label: string; value: number }[];
+  expires_at?: string | null;
   visual_evidence?: { source_text: string; interpretation: string };
 }
 
@@ -75,6 +67,18 @@ interface Strategy {
   topic_basis: string;
 }
 
+function EvidenceCitation({ evidence }: { evidence: EvidenceRef }) {
+  return (
+    <span className="rc-origin">
+      {evidence.attribution} {evidence.source_url
+        ? <a href={evidence.source_url} target="_blank" rel="noreferrer">{evidence.reference}</a>
+        : evidence.reference}
+      {' · '}{evidence.observed_at ? 'Observed ' + date(evidence.observed_at) : 'Observation date unknown'}
+      {evidence.expires_at && ' · Evidence expires ' + date(evidence.expires_at)}
+    </span>
+  );
+}
+
 function ReportedMeasurement({
   measurement,
   comparable,
@@ -96,21 +100,12 @@ function ReportedMeasurement({
       {!comparable && (
         <p>This measurement uses a different cutoff and is excluded from seven-day comparisons.</p>
       )}
-      <p>
-        {evidence.attribution} ·{' '}
-        {evidence.source_url ? (
-          <a href={evidence.source_url} target="_blank" rel="noreferrer">
-            {evidence.reference}
-          </a>
-        ) : (
-          evidence.reference
-        )}
-      </p>
+      <p><EvidenceCitation evidence={evidence} /></p>
     </div>
   );
 }
 
-export interface ResearchReport {
+export interface ResearchReport extends ResearchCriteriaMetadata {
   run_id: string;
   analyzed_at: string;
   research: {
@@ -120,6 +115,7 @@ export interface ResearchReport {
     historical_criteria: string;
     examples: Finding[];
     direct_count: number;
+    market_candidates_reviewed?: number;
     publication_window_days: number | null;
     requested_channels: string[];
     platform_activity: {
@@ -149,7 +145,7 @@ const statuses: Record<string, string> = {
   optimal: 'Quoted allocation available',
   needs_evidence: 'Evidence needed',
   infeasible: 'No verified combination fits',
-  search_limit: 'Selection limit reached',
+  search_limit: 'Search limit reached',
 };
 const reasons: Record<string, string> = {
   insufficient_relevant_content: 'Relevant content is missing',
@@ -158,6 +154,7 @@ const reasons: Record<string, string> = {
   required_market_share_unverified: 'Required audience share unverified',
   required_market_share_below_minimum: 'Audience share below minimum',
   required_language_unverified: 'Required language unverified',
+  comparable_performance_unavailable: 'Comparable performance unavailable',
 };
 function explain(value: string) {
   return (
@@ -174,22 +171,10 @@ function EvidenceList({ report }: { report: ResearchReport }) {
     other = examples.filter((e) => e.tier === 'context');
   const visible = context ? [...direct, ...other] : direct;
   return (
-    <Panel title="Source evidence" description={`Research focus · ${report.research.focus}`}>
-      {!direct.length && (
-        <p className="rc-inset">
-          Channels checked ·{' '}
-          {report.research.requested_channels.length
-            ? report.research.requested_channels
-                .map((key) => platformOptions[key as keyof typeof platformOptions] ?? key)
-                .join(', ')
-            : 'All eligible sources'}
-          . Publication window ·{' '}
-          {report.research.publication_window_days
-            ? `Past ${report.research.publication_window_days} days`
-            : 'Any date'}
-          .
-        </p>
-      )}
+    <Panel title="Returned public evidence" description={report.research.focus}>
+      <div className="rc-inset">
+        <p>Public counts use the source’s measurements and observation window.</p>
+      </div>
       {other.length > 0 && (
         <button
           className="rc-context"
@@ -199,7 +184,7 @@ function EvidenceList({ report }: { report: ResearchReport }) {
             setMore(true);
           }}
         >
-          {context ? 'Hide' : 'Show'} background sources ({other.length})
+          {context ? 'Hide' : 'Show'} background examples ({other.length})
         </button>
       )}
       {visible.length > 0 && (
@@ -208,16 +193,12 @@ function EvidenceList({ report }: { report: ResearchReport }) {
             <li key={item.platform + '/' + item.id}>
               <div className="rc-evidence-meta">
                 {evidences[item.basis] ?? 'Published activity'} <span>·</span> {item.platform}{' '}
-                {item.published_at && (
-                  <>
-                    {' '}
-                    <span>·</span> {date(item.published_at)}
-                  </>
-                )}
+                <span>·</span> {item.published_at ? 'Published ' + date(item.published_at) : 'Publication date unknown'}
               </div>
-              {item.tier === 'context' && (
-                <p className="rc-origin">Background only · {item.scope_notes.join(' · ')}</p>
-              )}
+              <p className="rc-origin">
+                {item.tier === 'context' ? 'Background evidence' : 'Direct example'}
+                {item.scope_notes.length > 0 && ' · ' + item.scope_notes.join(' · ')}
+              </p>
               <a className="rc-work-title" href={item.url} target="_blank" rel="noreferrer">
                 {item.title} <span aria-hidden="true">↗</span>
               </a>
@@ -256,10 +237,11 @@ function EvidenceList({ report }: { report: ResearchReport }) {
                 </div>
               )}
               <div className="rc-origin">
-                {item.attribution && <>{item.attribution} · </>}Observed {date(item.observed_at)} ·{' '}
+                {item.attribution && <>{item.attribution} · </>}{item.observed_at ? 'Observed ' + date(item.observed_at) : 'Observation date unknown'} ·{' '}
                 <a href={item.license_url} target="_blank" rel="noreferrer">
                   Source licence
                 </a>
+                {item.expires_at && ' · Evidence expires ' + date(item.expires_at)}
               </div>
             </li>
           ))}
@@ -267,15 +249,16 @@ function EvidenceList({ report }: { report: ResearchReport }) {
       )}
       {visible.length > 5 && (
         <button className="studio-secondary rc-more" onClick={() => setMore(!more)}>
-          {more ? 'Show fewer sources' : `Show all ${visible.length} sources`}
+          {more ? 'Show fewer examples' : `Show all ${visible.length} examples`}
         </button>
       )}
       {platform_activity.length > 0 && (
         <div className="rc-inset">
-          <h3>Activity in the reviewed results</h3>
+          <h3>Activity retained for market ranking</h3>
+          <p>Includes background records and counts before the example display limit.</p>
           <div
             role="region"
-            aria-label="Observed platform coverage"
+            aria-label="Retained market activity by platform"
             tabIndex={0}
             className="studio-table-scroll"
           >
@@ -283,9 +266,9 @@ function EvidenceList({ report }: { report: ResearchReport }) {
               <thead>
                 <tr>
                   <th>Platform</th>
-                  <th>Creators</th>
-                  <th>Activities</th>
-                  <th aria-label="Activities with measurements">Measured</th>
+                  <th>Creators in retained activity</th>
+                  <th>Retained activities</th>
+                  <th>Activities with public metrics</th>
                 </tr>
               </thead>
               <tbody>
@@ -301,6 +284,9 @@ function EvidenceList({ report }: { report: ResearchReport }) {
             </table>
           </div>
         </div>
+      )}
+      {report.research.market_candidates_reviewed != null && (
+        <p className="rc-inset">{report.research.market_candidates_reviewed} market records retained for ranking. Retrieval was bounded.</p>
       )}
       {(report.research.historical_criteria || examples.length > 0) && (
         <details className="rc-method">
@@ -322,15 +308,19 @@ function EvidenceList({ report }: { report: ResearchReport }) {
   );
 }
 
+const hasAllocation = (strategy: Strategy) =>
+  (strategy.status === 'optimal' || strategy.status === 'search_limit') &&
+  strategy.allocated_minor != null && strategy.selected.length > 0;
+
 type UseOption = (platform: CampaignRequest['platform'], budget: number) => void;
 
-function Options({ report, onUse }: { report: ResearchReport; onUse: UseOption }) {
-  const [index, setIndex] = useState(0);
+function Options({ report, initialIndex, onUse }: { report: ResearchReport; initialIndex: number; onUse: UseOption }) {
+  const [index, setIndex] = useState(initialIndex);
   const option = report.strategies[index];
   if (!option) return null;
   return (
     <Panel
-      title="Strategy comparison"
+      title="Company-authorized strategy evidence"
       description="Each option uses the same requirements and currency. Only a current firm quote can fund a place."
     >
       <div
@@ -363,7 +353,7 @@ function Options({ report, onUse }: { report: ResearchReport; onUse: UseOption }
                     ? 'Unavailable'
                     : amount(s.allocated_minor, s.currency)}
                 </td>
-                <td>{statuses[s.status] ?? s.status}</td>
+                <td>{s.status === 'optimal' && !hasAllocation(s) ? 'Allocation details unavailable' : statuses[s.status] ?? 'Decision unavailable'}</td>
               </tr>
             ))}
           </tbody>
@@ -374,24 +364,32 @@ function Options({ report, onUse }: { report: ResearchReport; onUse: UseOption }
           {option.name} · {platformOptions[option.platform]}
         </h3>
         <p>
-          {option.reviewed
-            ? `${option.reviewed} creator profiles reviewed for this channel. ${option.selected.length} in the verified allocation.`
-            : 'No company-authorized creator profile matches this strategy on the selected channel.'}
+          {option.reviewed} company-authorized creator profiles reviewed for this strategy.
+          {hasAllocation(option) && ' ' + option.selected.length + ' creators in the returned quoted allocation.'}
         </p>
-        {option.allocated_minor != null && (
+        {option.status === 'search_limit' && (
+          <p>{hasAllocation(option) ? 'A quoted allocation was returned within the search limit. A better fit may exist.'
+            : 'The search reached its limit before returning a usable allocation. Feasibility remains undetermined.'}</p>
+        )}
+        {option.status === 'infeasible' && <p>The verified constraints and current quotes do not fit this strategy.</p>}
+        {option.status === 'needs_evidence' && <p>Inspect the evidence gaps for this strategy before funding it.</p>}
+        {hasAllocation(option) && option.allocated_minor != null && (
           <p>
             {amount(option.budget_minor - option.allocated_minor, option.currency)} remains under
             this option’s cap.
           </p>
         )}
         {Object.entries(option.exclusions).length > 0 && (
-          <ul>
-            {Object.entries(option.exclusions).map(([reason, n]) => (
-              <li key={reason}>
-                {explain(reason)} · {n}
-              </li>
-            ))}
-          </ul>
+          <>
+            <p>A profile can appear under several exclusion reasons.</p>
+            <ul>
+              {Object.entries(option.exclusions).map(([reason, n]) => (
+                <li key={reason}>
+                  {explain(reason)} · {n}
+                </li>
+              ))}
+            </ul>
+          </>
         )}
         {option.candidates.map((c) => (
           <details className="rc-candidate" key={c.id}>
@@ -403,20 +401,22 @@ function Options({ report, onUse }: { report: ResearchReport; onUse: UseOption }
               <blockquote>
                 {c.content.data.text}
                 <footer>
-                  {c.content.evidence.attribution} · {c.content.evidence.reference} ·{' '}
-                  {date(c.content.data.published_at)}
+                  {c.content.data.published_at ? 'Published ' + date(c.content.data.published_at) : 'Publication date unknown'} ·{' '}
+                  <EvidenceCitation evidence={c.content.evidence} />
                 </footer>
               </blockquote>
             )}
             <p>
               {c.quote
-                ? `Firm quote ${amount(c.quote.data.amount_minor, option.currency)} · valid through ${date(c.quote.data.valid_until)} · ${c.quote.data.terms} · ${c.quote.evidence.reference}`
+                ? `Firm quote ${amount(c.quote.data.amount_minor, option.currency)} · valid through ${date(c.quote.data.valid_until)} · ${c.quote.data.terms}`
                 : 'No eligible firm quote.'}
+              {c.quote && <> · <EvidenceCitation evidence={c.quote.evidence} /></>}
             </p>
             <p>
               {c.audience?.data.share != null
-                ? `${c.audience.data.market} audience share ${(100 * Number(c.audience.data.share)).toFixed(1)}% · ${c.audience.evidence.reference}`
+                ? `${c.audience.data.market} audience share ${(100 * Number(c.audience.data.share)).toFixed(1)}%`
                 : 'Audience breakdown unavailable.'}
+              {c.audience && <> · <EvidenceCitation evidence={c.audience.evidence} /></>}
             </p>
             {c.historical.median_views.value != null && (
               <p>
@@ -484,19 +484,32 @@ export function ResearchFindings({
   onUse,
   onAdjust,
   brief,
+  run,
+  onRefreshEvidence,
+  refreshing,
 }: {
   report: ResearchReport;
   onUse: UseOption;
   onAdjust: () => void;
   brief: BusinessBrief;
+  run: ResearchRun;
+  onRefreshEvidence: () => void;
+  refreshing: boolean;
 }) {
   const [view, setView] = useState<'sources' | 'strategy'>('sources');
   const [messageStatus, setMessageStatus] = useState('');
-  const first = report.strategies[0];
-  const quoted = first?.status === 'optimal';
-  const privateMatch = first?.candidates.some((candidate) => candidate.content);
-  const infeasible = first?.status === 'infeasible' && privateMatch;
+  const [optionIndex, setOptionIndex] = useState(0);
+  const allocationIndex = report.strategies.findIndex(hasAllocation);
+  const allocation = report.strategies[allocationIndex];
+  const hasCompanyEvidence = report.strategies.some((strategy) => strategy.reviewed > 0);
   const lead = report.research.examples.find((item) => item.tier === 'direct');
+  const resolution = run.confirmed_criteria?.proposal.finalized;
+  const channels = report.research.requested_channels
+    .map((key) => platformOptions[key as keyof typeof platformOptions] ?? key).join(', ');
+  function viewStrategy(index = 0) {
+    setOptionIndex(index);
+    setView('strategy');
+  }
   const quoteRequest = lead
     ? [
         `We're researching a campaign for ${brief.product}, aimed at ${brief.audience}.`,
@@ -508,28 +521,19 @@ export function ResearchFindings({
   return (
     <div className="rc-report">
       <section className="rc-decision">
-        <h2>
-          {quoted
-            ? 'Review the quoted allocation'
-            : infeasible
-              ? 'No verified combination fits'
-              : privateMatch
-                ? 'Review the company evidence'
-                : report.research.direct_count
-                  ? 'Review matched publications'
-                  : 'No direct evidence for this brief'}
-        </h2>
-        <p>
-          {quoted && first
-            ? `${first.selected.length} selected at ${amount(first.allocated_minor ?? 0, first.currency)} for your full-budget option.`
-            : infeasible
-              ? 'Current firm quotes and the required creator count do not fit this cap. Compare another channel, change the cap or adjust the count.'
-              : privateMatch
-                ? 'Relevant company content is available. Compare the options to inspect missing eligibility evidence.'
-                : report.research.direct_count
-                  ? `${report.research.direct_count} ${report.research.direct_count === 1 ? 'publication matches' : 'publications match'} your discovery criteria. ${first ? statuses[first.status] : 'A firm quote is needed'} for the campaign allocation.`
-                  : `No eligible publication supports a direct creator recommendation. ${report.research.examples.length ? 'Background sources are available separately.' : 'Try another channel or a broader discovery focus.'}`}
+        <h2>Research findings</h2>
+        <p>{report.research.direct_count} direct {report.research.direct_count === 1 ? 'example' : 'examples'} in the returned report.
+          {' '}{hasCompanyEvidence ? 'Company-authorized creator profiles were reviewed for one or more strategies.'
+            : 'The strategies record no company-authorized profiles reviewed.'}
+          {' '}{allocation ? allocation.name + ' returned a quoted allocation.' : 'No usable quoted allocation was returned.'}
         </p>
+        <div className="rc-actions">
+          {allocation && <button className="studio-primary" onClick={() => viewStrategy(allocationIndex)}>Review quoted allocation</button>}
+          {report.strategies.length > 0 && !allocation && (
+            <button className="studio-secondary" onClick={() => viewStrategy()}>Compare strategies and evidence gaps</button>
+          )}
+          {!lead && <button className="studio-secondary" onClick={onAdjust}>Adjust discovery criteria</button>}
+        </div>
         {report.next_steps.length > 0 && (
           <details className="rc-request">
             <summary>Evidence still needed</summary>
@@ -540,12 +544,7 @@ export function ResearchFindings({
             </ul>
           </details>
         )}
-        {!quoted && !lead && (
-          <button className="studio-secondary rc-next" onClick={onAdjust}>
-            Adjust discovery criteria
-          </button>
-        )}
-        {!quoted && lead && (
+        {!allocation && lead && (
           <details className="rc-request">
             <summary>Prepare a quote and evidence request</summary>
             <label>
@@ -569,18 +568,31 @@ export function ResearchFindings({
           </details>
         )}
       </section>
+      <Panel title="Research scope">
+        <div className="rc-inset">
+          <p>Requested channels · {channels || 'None recorded'}</p>
+          <p>Discovery scope · {brief.discovery_scope === 'all_sources' ? 'Any eligible publishing source' :
+            brief.discovery_scope === 'campaign_channels' ? 'Requested campaign channels' : 'Unknown'}</p>
+          {resolution ? <details className="rc-method">
+            <summary>Approved research criteria</summary>
+            <CriteriaSummary resolution={resolution} />
+          </details> : <p>Publication age · {report.research.publication_window_days != null
+            ? 'Past ' + report.research.publication_window_days + ' days' : 'No publication window recorded'}</p>}
+        </div>
+      </Panel>
+      <ResearchSourceAvailability sources={run.sources} onRefresh={onRefreshEvidence} refreshing={refreshing} />
       <div className="rc-switch" aria-label="Report section">
         <button aria-pressed={view === 'sources'} onClick={() => setView('sources')}>
-          Source evidence <span>{report.research.examples.length}</span>
+          Public examples <span>{report.research.examples.length}</span>
         </button>
-        <button aria-pressed={view === 'strategy'} onClick={() => setView('strategy')}>
+        <button aria-pressed={view === 'strategy'} onClick={() => viewStrategy()}>
           Compare strategies <span>{report.strategies.length}</span>
         </button>
       </div>
       {view === 'sources' ? (
         <EvidenceList report={report} />
       ) : (
-        <Options report={report} onUse={onUse} />
+        <Options key={optionIndex} report={report} initialIndex={optionIndex} onUse={onUse} />
       )}
       <p className="rc-footnote">
         {report.outcome_basis} Last analyzed {date(report.analyzed_at)}.

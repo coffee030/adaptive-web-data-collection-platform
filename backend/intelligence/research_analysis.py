@@ -10,7 +10,8 @@ from .catalog import Catalog
 from .analytics import scenario
 from .recommend import recommend
 from .research_contracts import BusinessBrief
-from .research_match import classify, evidence_intent
+from .research_match import classify, confirmed_evidence_intent, evidence_intent
+from .research_preparation_contracts import ConfirmedCriteriaSnapshot
 from .retrieval import query_topics, required_words
 from .semantic import character_grams, embed, tfidf_scores
 from .store import Scope
@@ -158,9 +159,15 @@ def collect_due(sessions, states):
     return errors
 
 
-def public_examples(store, brief, as_of):
+def _evidence_scope(brief, focus, confirmed):
+    if confirmed is None:
+        return evidence_intent(brief, focus)
+    return confirmed_evidence_intent(brief, focus, confirmed.proposal.finalized)
+
+
+def public_examples(store, brief, as_of, *, confirmed=None):
     focus, queries = discovery_queries(brief)
-    intent = evidence_intent(brief, focus)
+    intent = _evidence_scope(brief, focus, confirmed)
     hits = {}
     full_matches = set()
     for query in queries:
@@ -436,9 +443,9 @@ def saved_review(result, analyzed_at):
     }
 
 
-def reviewed_catalog(snapshot, brief):
+def reviewed_catalog(snapshot, brief, *, confirmed=None):
     catalog = Catalog(snapshot)
-    intent = evidence_intent(brief, discovery_queries(brief)[0])
+    intent = _evidence_scope(brief, discovery_queries(brief)[0], confirmed)
     for key, creator in catalog.creators.items():
         supported = []
         for post in creator.posts:
@@ -460,12 +467,18 @@ def reviewed_catalog(snapshot, brief):
     return catalog
 
 
-def analyze(store, company_id: str, brief: BusinessBrief):
+def analyze(
+    store,
+    company_id: str,
+    brief: BusinessBrief,
+    *,
+    confirmed: ConfirmedCriteriaSnapshot | None = None,
+):
     scope = Scope("partner", company_id)
     before = publication_version(source_states(store.sessions))
     snapshot = store.snapshot(scope)
-    catalog = reviewed_catalog(snapshot, brief)
-    examples = public_examples(store, brief, snapshot.as_of)
+    catalog = reviewed_catalog(snapshot, brief, confirmed=confirmed)
+    examples = public_examples(store, brief, snapshot.as_of, confirmed=confirmed)
     campaign = brief.campaign
     strategies = [strategy(catalog, campaign, store.config.model_dir, "Full budget")]
     test = campaign.model_copy(
@@ -530,4 +543,9 @@ def analyze(store, company_id: str, brief: BusinessBrief):
         else None,
         "outcome_basis": "No campaign outcomes are predicted. Each allocation uses current firm quotes for the stated deliverable.",
     }
-    return result, digest(result)
+    revision = digest(
+        result
+        if confirmed is None
+        else {"proposal": confirmed.proposal.fingerprint, "report": result}
+    )
+    return result, revision

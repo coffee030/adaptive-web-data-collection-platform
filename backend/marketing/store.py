@@ -30,10 +30,11 @@ DISCOVERY_QUEUE_LIMIT = 10
 
 
 class MarketingError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, **details):
         super().__init__(message)
         self.status = status
         self.code = code
+        self.details = details
 
 
 @dataclass(frozen=True)

@@ -12,6 +12,13 @@ from backend.marketing.store import MarketingError
 from . import research_analysis
 from .research_contracts import BusinessBrief, NewResearch
 from .research_models import ResearchRunRow
+from .research_preparation import (
+    read_snapshot,
+    request_fingerprint,
+    snapshot_metadata,
+    validate_confirmation,
+)
+from .research_preparation_contracts import ConfirmedCriteriaSnapshot, ConfirmedResearch
 from .store import IntelligenceStore
 
 
@@ -44,10 +51,11 @@ def receipt(row):
         "sources": row.sources,
         "error": row.error,
         "last_review": row.review,
+        **snapshot_metadata(read_snapshot(row)),
     }
 
 
-def start(session, company_id, body: NewResearch):
+def start(session, company_id, body: NewResearch | ConfirmedResearch):
     session.get(CompanyRow, company_id, with_for_update=True)
     if (
         body.campaign_id is not None
@@ -57,6 +65,8 @@ def start(session, company_id, body: NewResearch):
             404, "campaign_unavailable", "Campaign unavailable in this company"
         )
     request = body.brief.model_dump(mode="json")
+    confirmed = isinstance(body, ConfirmedResearch)
+    fingerprint = request_fingerprint(body) if confirmed else None
     existing = session.scalar(
         select(ResearchRunRow).where(
             ResearchRunRow.company_id == company_id,
@@ -64,17 +74,23 @@ def start(session, company_id, body: NewResearch):
         )
     )
     if existing:
-        if (
-            request
-            != BusinessBrief.model_validate(existing.brief).model_dump(mode="json")
-            or body.campaign_id != existing.campaign_id
-        ):
+        previous = read_snapshot(existing)
+        exact = (
+            confirmed and fingerprint == previous.request_fingerprint
+            if previous is not None
+            else not confirmed
+            and request
+            == BusinessBrief.model_validate(existing.brief).model_dump(mode="json")
+            and body.campaign_id == existing.campaign_id
+        )
+        if not exact:
             raise MarketingError(
                 409,
                 "research_request_changed",
                 "This request key already belongs to a different brief",
             )
         return receipt(existing)
+    proposal = validate_confirmation(company_id, body) if confirmed else None
     active = session.scalar(
         select(func.count())
         .select_from(ResearchRunRow)
@@ -89,12 +105,24 @@ def start(session, company_id, body: NewResearch):
             "Finish or cancel an active research run before starting another",
         )
     now = database_now(session)
+    snapshot = (
+        ConfirmedCriteriaSnapshot(
+            proposal=proposal,
+            confirmation=body.confirmation,
+            confirmed_at=now,
+            request_fingerprint=fingerprint,
+        )
+        if proposal is not None
+        else None
+    )
     row = ResearchRunRow(
         id=uuid4(),
         company_id=company_id,
         campaign_id=body.campaign_id,
         request_key=body.request_key,
         brief=request,
+        criteria_version=snapshot.confirmation.version if snapshot else None,
+        confirmed_criteria=snapshot.model_dump(mode="json") if snapshot else None,
         state="queued",
         created_at=now,
         updated_at=now,
@@ -206,15 +234,20 @@ class ResearchRuns(IntelligenceStore):
                 return
             ticket = row.claim = uuid4()
             row.due_at = now + LEASE
-            phase, since, brief, company_id = (
+            phase, since, company_id = (
                 row.state,
                 row.updated_at,
-                BusinessBrief.model_validate(row.brief),
                 row.company_id,
             )
         error, revision, sources, delay = None, None, None, timedelta()
         review = None
         try:
+            snapshot = read_snapshot(row)
+            brief = (
+                snapshot.proposal.effective_brief
+                if snapshot is not None
+                else BusinessBrief.model_validate(row.brief)
+            )
             if phase == "queued":
                 sources = summarize(
                     research_analysis.planned_sources(
@@ -244,7 +277,9 @@ class ResearchRuns(IntelligenceStore):
                 elif waiting:
                     error = "collection_still_pending"
             else:
-                report, revision = research_analysis.analyze(self, company_id, brief)
+                report, revision = research_analysis.analyze(
+                    self, company_id, brief, confirmed=snapshot
+                )
                 review = research_analysis.saved_review(report, now)
                 following = "ready"
         except MarketingError as exc:
@@ -284,8 +319,14 @@ class ResearchRuns(IntelligenceStore):
             raise MarketingError(
                 409, "research_pending", "This research run has no finished report yet"
             )
+        snapshot = read_snapshot(row)
+        brief = (
+            snapshot.proposal.effective_brief
+            if snapshot is not None
+            else BusinessBrief.model_validate(row.brief)
+        )
         result, revision = research_analysis.analyze(
-            self, company_id, BusinessBrief.model_validate(row.brief)
+            self, company_id, brief, confirmed=snapshot
         )
         if row.revision != revision:
             raise MarketingError(
@@ -298,4 +339,9 @@ class ResearchRuns(IntelligenceStore):
             raise MarketingError(
                 409, "research_pending", "This research run was reopened"
             )
-        return {"run_id": run_id, "analyzed_at": row.updated_at, **result}
+        return {
+            "run_id": run_id,
+            "analyzed_at": row.updated_at,
+            **result,
+            **snapshot_metadata(snapshot),
+        }

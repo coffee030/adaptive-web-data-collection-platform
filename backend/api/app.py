@@ -235,7 +235,7 @@ def create_app(*, engine=None, evidence_root: Path | None = None) -> FastAPI:
 
     @app.exception_handler(MarketingError)
     async def marketing_error(_: Request, error: MarketingError):
-        response = error_response(error.status, error.code, str(error))
+        response = error_response(error.status, error.code, str(error), **error.details)
         response.headers["Cache-Control"] = "no-store"
         if error.code in {"pilot_customer_login", "pilot_operator_login"}:
             realm = (

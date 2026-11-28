@@ -77,7 +77,7 @@
 .rc-example {
   color: var(--studio-accent, #91c3ff);
 }
-.rc-page :is(button, a, select, input, textarea, summary):focus-visible {
+.rc-page :is(button, a, select, input, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--studio-accent, #91c3ff);
   outline-offset: 3px;
 }
@@ -94,14 +94,14 @@
   display: grid;
   gap: 18px;
 }
-.rc-form label {
+:is(.rc-form, .rc-review) label {
   display: grid;
   gap: 6px;
   font-size: 0.93rem;
   font-weight: 560;
   min-width: 0;
 }
-.rc-form :is(input:not([type='checkbox']), textarea, select) {
+:is(.rc-form, .rc-review) :is(input:not([type='checkbox']), textarea, select) {
   box-sizing: border-box;
   min-height: 44px;
   width: 100%;
@@ -151,7 +151,7 @@
 .rc-settings[open] > :not(summary) {
   margin-top: 14px;
 }
-.rc-form .rc-check {
+:is(.rc-form, .rc-review) .rc-check {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -348,6 +348,55 @@
 .rc-footnote {
   margin-bottom: 0;
 }
+.rc-form-fields,
+.rc-review form {
+  display: grid;
+  gap: 18px;
+  min-inline-size: 0;
+}
+.rc-form-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rc-review form {
+  padding-block: 16px;
+  border-top: 1px solid var(--studio-border);
+}
+.rc-review fieldset {
+  min-inline-size: 0;
+  border: 1px solid var(--studio-border);
+}
+.rc-review fieldset label {
+  padding-block: 4px;
+}
+.rc-criteria {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 12px 20px;
+  margin: 0 0 16px;
+}
+.rc-criteria dt {
+  font-weight: 600;
+}
+.rc-criteria dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.rc-criteria small,
+.rc-availability li span {
+  display: block;
+  color: var(--studio-muted);
+}
+.rc-review .rc-method,
+.rc-review .rc-actions,
+.rc-decision .rc-actions {
+  padding-inline: 0;
+}
+.rc-availability li + li,
+.rc-blockers li + li {
+  margin-top: 8px;
+}
 @media (max-width: 1060px) {
   .rc-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -404,8 +453,7 @@
   }
   .rc-coverage-table {
     width: 100%;
-    min-width: 0;
-    table-layout: fixed;
+    min-width: 360px;
   }
   .rc-coverage-table :is(th, td) {
     padding: 8px 4px;
